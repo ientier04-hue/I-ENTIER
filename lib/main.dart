@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
 import 'cycle_tracking_page.dart';
@@ -1651,6 +1652,7 @@ class HealthService {
   final String backgroundColor;
   final String accentColor;
   final String actionLabel;
+  final String? externalUrl;
 
   const HealthService({
     required this.id,
@@ -1660,6 +1662,7 @@ class HealthService {
     required this.backgroundColor,
     required this.accentColor,
     this.actionLabel = 'Accéder',
+    this.externalUrl,
   });
 
   /// Format attendu, par exemple depuis Firebase :
@@ -1674,6 +1677,7 @@ class HealthService {
         backgroundColor: data['backgroundColor']?.toString() ?? '#FFFFFF',
         accentColor: data['accentColor']?.toString() ?? '#1769F5',
         actionLabel: data['actionLabel']?.toString() ?? 'Accéder',
+        externalUrl: data['externalUrl']?.toString() ?? data['url']?.toString(),
       );
 
   bool get hasRemoteImage =>
@@ -1706,6 +1710,7 @@ const _homeServices = <HealthService>[
     imagePath: 'sang.png',
     backgroundColor: '#FFA2A8',
     accentColor: '#F01924',
+    externalUrl: 'https://www.croixrouge.ht/donnez-votre-sang',
   ),
   HealthService(
     id: 'laboratoire',
@@ -1788,7 +1793,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _openService(HealthService service) {
+  Future<void> _openService(HealthService service) async {
+    final externalUrl = service.externalUrl;
+    if (externalUrl != null && externalUrl.isNotEmpty) {
+      final launched = await launchUrl(
+        Uri.parse(externalUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Impossible d’ouvrir ${service.title}.')),
+        );
+      }
+      return;
+    }
+
     if (service.id == 'pharmacie') {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -4621,17 +4640,156 @@ class _MagicBackdropPainter extends CustomPainter {
       oldDelegate.animation != animation;
 }
 
-class _EmergencyButton extends StatelessWidget {
+class _EmergencyButton extends StatefulWidget {
+  const _EmergencyButton();
+
   @override
-  Widget build(BuildContext context) => FloatingActionButton.extended(
-    onPressed: () {},
-    backgroundColor: const Color(0xFFFF3029),
-    foregroundColor: Colors.white,
-    elevation: 7,
-    icon: const Icon(Icons.emergency),
-    label: const Text(
-      'Urgences',
-      style: TextStyle(fontWeight: FontWeight.bold),
+  State<_EmergencyButton> createState() => _EmergencyButtonState();
+}
+
+class _EmergencyButtonState extends State<_EmergencyButton> {
+  static const _phoneChannel = MethodChannel('i_entier/phone');
+  Timer? _collapseTimer;
+  bool _isExpanded = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _collapseTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _isExpanded = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _collapseTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _openEmergencySheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Services d’urgence',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: _EmergencyServiceIcon(
+                  icon: Icons.local_hospital,
+                  color: const Color(0xFFFF3029),
+                ),
+                title: const Text(
+                  'CAN',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Text('Composer le 116'),
+                trailing: const Icon(Icons.phone_forwarded),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _dialNumber('116');
+                },
+              ),
+              const Divider(height: 10),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: _EmergencyServiceIcon(
+                  icon: Icons.airplanemode_active,
+                  color: AppColors.primary,
+                ),
+                title: const Text(
+                  'Air Ambulance',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Text('Numéro bientôt disponible'),
+                trailing: const Icon(Icons.chevron_right),
+                enabled: false,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _dialNumber(String number) async {
+    try {
+      await _phoneChannel.invokeMethod<void>('dial', {'number': number});
+    } on PlatformException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Impossible d'ouvrir le téléphone.")),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 220),
+    switchInCurve: Curves.easeOut,
+    switchOutCurve: Curves.easeIn,
+    transitionBuilder: (child, animation) => SizeTransition(
+      sizeFactor: animation,
+      axis: Axis.horizontal,
+      child: FadeTransition(opacity: animation, child: child),
     ),
+    child: _isExpanded
+        ? FloatingActionButton.extended(
+            key: const ValueKey('emergency-expanded'),
+            onPressed: _openEmergencySheet,
+            backgroundColor: const Color(0xFFFF3029),
+            foregroundColor: Colors.white,
+            elevation: 7,
+            icon: const Icon(Icons.emergency),
+            label: const Text(
+              'Urgences',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          )
+        : FloatingActionButton(
+            key: const ValueKey('emergency-collapsed'),
+            onPressed: _openEmergencySheet,
+            backgroundColor: const Color(0xFFFF3029),
+            foregroundColor: Colors.white,
+            elevation: 7,
+            tooltip: 'Urgences',
+            child: const Icon(Icons.emergency),
+          ),
+  );
+}
+
+class _EmergencyServiceIcon extends StatelessWidget {
+  const _EmergencyServiceIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 44,
+    height: 44,
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Icon(icon, color: color),
   );
 }
