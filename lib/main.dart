@@ -1744,30 +1744,37 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
 
   Future<void> _openAiAssistant() async {
+    final navigator = Navigator.of(context, rootNavigator: true);
     final transitionController = AnimationController(
-      vsync: Navigator.of(context),
+      vsync: navigator,
       duration: const Duration(milliseconds: 620),
       reverseDuration: const Duration(milliseconds: 420),
     );
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: const Color(0xB30A1930),
-      elevation: 0,
-      enableDrag: true,
-      showDragHandle: false,
-      transitionAnimationController: transitionController,
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width,
-        maxHeight: MediaQuery.sizeOf(context).height,
-      ),
-      builder: (_) => const _AiAssistantSheet(),
-    );
-
-    transitionController.dispose();
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: const Color(0xB30A1930),
+        elevation: 0,
+        enableDrag: true,
+        showDragHandle: false,
+        transitionAnimationController: transitionController,
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width,
+          maxHeight: MediaQuery.sizeOf(context).height,
+        ),
+        builder: (sheetContext) => _AiAssistantSheet(
+          onClose: () =>
+              Navigator.of(sheetContext, rootNavigator: true).maybePop(),
+        ),
+      );
+    } finally {
+      transitionController.dispose();
+    }
   }
 
   void _openService(HealthService service) {
@@ -3914,7 +3921,9 @@ class _AssistantCard extends StatelessWidget {
 }
 
 class _AiAssistantSheet extends StatefulWidget {
-  const _AiAssistantSheet();
+  final VoidCallback onClose;
+
+  const _AiAssistantSheet({required this.onClose});
 
   @override
   State<_AiAssistantSheet> createState() => _AiAssistantSheetState();
@@ -3932,7 +3941,9 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
   final _focusNode = FocusNode();
   late final AnimationController _entranceController;
   late final AnimationController _magicController;
+  Timer? _focusTimer;
   String? _submittedMessage;
+  bool _isClosing = false;
 
   @override
   void initState() {
@@ -3946,13 +3957,22 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
       duration: const Duration(seconds: 7),
     )..repeat();
 
-    Future<void>.delayed(const Duration(milliseconds: 430), () {
+    _focusTimer = Timer(const Duration(milliseconds: 430), () {
       if (mounted) _focusNode.requestFocus();
     });
   }
 
+  void _close() {
+    if (_isClosing) return;
+    _isClosing = true;
+    _focusTimer?.cancel();
+    _focusNode.unfocus();
+    widget.onClose();
+  }
+
   @override
   void dispose() {
+    _focusTimer?.cancel();
     _messageController.dispose();
     _focusNode.dispose();
     _entranceController.dispose();
@@ -4032,9 +4052,7 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
                             ),
                           ),
                           const SizedBox(height: 12),
-                          _AiSheetHeader(
-                            onClose: () => Navigator.of(context).pop(),
-                          ),
+                          _AiSheetHeader(onClose: _close),
                           Expanded(
                             child: FadeTransition(
                               opacity: contentAnimation,
