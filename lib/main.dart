@@ -852,6 +852,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 760;
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F9FD),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -881,25 +882,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      _TopTabs(
-                        selectedIndex: _selectedTab,
-                        onChanged: (index) =>
-                            setState(() => _selectedTab = index),
-                      ),
-                      const SizedBox(height: 24),
                       if (_selectedTab == 0) ...[
                         const _SearchField(),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 20),
                         _Hero(wide: wide),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 30),
                         const _SectionHeading(
                           title: 'Services',
                           action: 'Voir tout',
                         ),
                         const SizedBox(height: 14),
                         _ServiceCarousel(wide: wide, services: _homeServices),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 30),
                         _AssistantCard(
                           open: _assistantOpen,
                           onToggle: () =>
@@ -915,7 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (_selectedTab == 0)
                   Positioned(
                     right: wide ? 32 : 20,
-                    bottom: 88,
+                    bottom: 18,
                     child: _EmergencyButton(),
                   ),
               ],
@@ -950,42 +944,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _TopTabs extends StatelessWidget {
-  final int selectedIndex;
-  final ValueChanged<int> onChanged;
-  const _TopTabs({required this.selectedIndex, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 42,
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: 3,
-      separatorBuilder: (context, index) => const SizedBox(width: 9),
-      itemBuilder: (context, index) {
-        const labels = ['Accueil', 'Personnel', 'Institutions'];
-        final selected = index == selectedIndex;
-        return ChoiceChip(
-          label: Text(labels[index]),
-          selected: selected,
-          onSelected: (_) => onChanged(index),
-          selectedColor: AppColors.primary,
-          labelStyle: TextStyle(
-            color: selected ? Colors.white : AppColors.navy,
-            fontWeight: FontWeight.w700,
-          ),
-          side: BorderSide(
-            color: selected ? AppColors.primary : AppColors.border,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(13),
-          ),
-        );
-      },
-    ),
-  );
-}
-
 class _SectionHeading extends StatelessWidget {
   final String title;
   final String? action;
@@ -998,7 +956,7 @@ class _SectionHeading extends StatelessWidget {
         child: Text(
           title,
           style: const TextStyle(
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: FontWeight.w800,
             color: AppColors.navy,
           ),
@@ -1009,7 +967,7 @@ class _SectionHeading extends StatelessWidget {
           onPressed: () {},
           child: Text(
             action!,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
           ),
         ),
     ],
@@ -1724,8 +1682,16 @@ class _SearchField extends StatelessWidget {
     height: 64,
     padding: const EdgeInsets.symmetric(horizontal: 20),
     decoration: BoxDecoration(
-      border: Border.all(color: AppColors.border),
+      color: Colors.white,
+      border: Border.all(color: const Color(0xFFE7ECF5)),
       borderRadius: BorderRadius.circular(22),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0A18345F),
+          blurRadius: 18,
+          offset: Offset(0, 7),
+        ),
+      ],
     ),
     child: Row(
       children: [
@@ -1753,9 +1719,19 @@ class _Hero extends StatelessWidget {
     padding: const EdgeInsets.all(26),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFFEAF7FF), Color(0xFFD9EFFF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFE9F8FF), Color(0xFFD8ECFF)],
       ),
+      border: Border.all(color: Colors.white.withValues(alpha: .75)),
       borderRadius: BorderRadius.circular(30),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x1A3474B9),
+          blurRadius: 24,
+          offset: Offset(0, 12),
+        ),
+      ],
     ),
     child: Stack(
       children: [
@@ -1876,7 +1852,7 @@ class _ServiceCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: wide ? 430 : 390,
+      height: wide ? 400 : 365,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -1887,7 +1863,7 @@ class _ServiceCarousel extends StatelessWidget {
         itemBuilder: (context, index) {
           final service = services[index];
           return SizedBox(
-            width: wide ? 312 : 286,
+            width: wide ? 292 : 266,
             child: _ServiceCard(service: service),
           );
         },
@@ -1952,7 +1928,7 @@ class _ServiceImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const imageSize = 190.0;
+    const imageSize = 172.0;
     if (service.hasRemoteImage) {
       return Image.network(
         service.imagePath,
@@ -1986,30 +1962,64 @@ class _AssistantCard extends StatelessWidget {
   final bool open;
   final VoidCallback onToggle;
   const _AssistantCard({required this.open, required this.onToggle});
+
   @override
   Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 220),
+    duration: const Duration(milliseconds: 260),
+    curve: Curves.easeOutCubic,
     width: double.infinity,
-    height: open ? 350 : 190,
-    padding: const EdgeInsets.all(24),
+    height: open ? 390 : 292,
+    padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFFF6F9FF), Color(0xFFEAF1FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF173C75), Color(0xFF2265B3)],
       ),
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(30),
+      borderRadius: BorderRadius.circular(28),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x33215FA9),
+          blurRadius: 26,
+          offset: Offset(0, 12),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const CircleAvatar(
-              radius: 27,
-              backgroundColor: Color(0xFFBED5FF),
-              child: Icon(Icons.smart_toy_outlined, color: AppColors.navy),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const CircleAvatar(
+                  radius: 25,
+                  backgroundColor: Color(0xFFCDEAFF),
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    color: Color(0xFF1559A5),
+                  ),
+                ),
+                Positioned(
+                  right: -1,
+                  bottom: -1,
+                  child: Container(
+                    width: 13,
+                    height: 13,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4EE29A),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF173C75),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 13),
+            const SizedBox(width: 12),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2018,58 +2028,107 @@ class _AssistantCard extends StatelessWidget {
                     'I-ENTIER AI',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      fontSize: 19,
-                      color: AppColors.navy,
+                      fontSize: 18,
+                      color: Colors.white,
                     ),
                   ),
+                  SizedBox(height: 2),
                   Text(
-                    'Votre assistant santé intelligent',
-                    style: TextStyle(color: AppColors.muted),
+                    'Assistant santé • En ligne',
+                    style: TextStyle(color: Color(0xFFCFE3FF)),
                   ),
                 ],
               ),
             ),
-            IconButton(
+            IconButton.filledTonal(
               onPressed: onToggle,
-              icon: Icon(open ? Icons.expand_less : Icons.more_horiz),
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0x33FFFFFF),
+                foregroundColor: Colors.white,
+              ),
+              icon: Icon(open ? Icons.expand_less : Icons.expand_more),
             ),
           ],
         ),
-        const Spacer(),
-        Center(
-          child: Column(
-            children: const [
-              Text(
-                'Kijan mwen ka ede w 👋',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navy,
-                ),
-              ),
-              SizedBox(height: 10),
-              Text(
-                'Je suis là pour vous aider',
-                style: TextStyle(color: AppColors.muted),
-              ),
-            ],
+        const SizedBox(height: 18),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
           ),
-        ),
-        const Spacer(),
-        if (open)
-          TextField(
-            decoration: InputDecoration(
-              hintText: 'Écrivez votre message...',
-              suffixIcon: const Icon(Icons.send, color: AppColors.primary),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(22),
-                borderSide: BorderSide.none,
-              ),
+          child: const Text(
+            'Bonjour 👋 Comment puis-je vous aider aujourd’hui ?',
+            style: TextStyle(
+              fontSize: 16,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF173052),
             ),
           ),
+        ),
+        if (open) ...[
+          const SizedBox(height: 14),
+          const Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _AssistantSuggestion(label: 'Trouver une pharmacie'),
+              _AssistantSuggestion(label: 'Parler à un médecin'),
+              _AssistantSuggestion(label: 'Mes examens'),
+            ],
+          ),
+        ],
+        const Spacer(),
+        TextField(
+          decoration: InputDecoration(
+            hintText: 'Écrivez votre message...',
+            hintStyle: const TextStyle(color: Color(0xFF75849C)),
+            suffixIcon: Container(
+              margin: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_upward_rounded,
+                color: Colors.white,
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
       ],
+    ),
+  );
+}
+
+class _AssistantSuggestion extends StatelessWidget {
+  final String label;
+  const _AssistantSuggestion({required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0x26FFFFFF),
+      border: Border.all(color: const Color(0x52FFFFFF)),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+      ),
     ),
   );
 }
