@@ -9,6 +9,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'firebase_options.dart';
+import 'health_tracking_page.dart';
+import 'pharmacy_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1729,6 +1731,20 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
 
+  void _openService(HealthService service) {
+    if (service.id == 'pharmacie') {
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const PharmacyPage()));
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Le service « ${service.title} » arrive bientôt.'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
@@ -1778,11 +1794,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           action: 'Voir tout',
                         ),
                         const SizedBox(height: 14),
-                        _ServiceCarousel(wide: wide, services: _homeServices),
+                        _ServiceCarousel(
+                          wide: wide,
+                          services: _homeServices,
+                          onServiceTap: _openService,
+                        ),
                       ] else if (_selectedTab == 1)
                         const _PersonnelPage()
-                      else
+                      else if (_selectedTab == 2)
                         const _InstitutionsPage(),
+                      if (_selectedTab == 3)
+                        HealthTrackingPage(patientId: widget.user.uid),
                     ],
                   ),
                 ),
@@ -1837,6 +1859,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: Icon(Icons.local_hospital_outlined),
                     selectedIcon: Icon(Icons.local_hospital_rounded),
                     label: 'Institutions',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.monitor_heart_outlined),
+                    selectedIcon: Icon(Icons.monitor_heart_rounded),
+                    label: 'Suivi',
                   ),
                 ],
               ),
@@ -1944,19 +1971,10 @@ class _PersonnelPage extends StatelessWidget {
                   'Ajoutez des documents dans personnelMedical depuis Firebase.',
             );
           }
-          return Column(
+          return _DirectoryGrid(
             children: [
-              for (final record in records) ...[
-                _ProfessionalCard(
-                  name: record.name,
-                  role: record.role,
-                  distance: record.distance,
-                  color: record.color,
-                  initials: record.initials,
-                  available: record.available,
-                ),
-                const SizedBox(height: 12),
-              ],
+              for (final record in records)
+                _ProfessionalCard(professional: record),
             ],
           );
         },
@@ -2016,18 +2034,10 @@ class _InstitutionsPage extends StatelessWidget {
                   'Ajoutez des documents dans institution depuis Firebase.',
             );
           }
-          return Column(
+          return _DirectoryGrid(
             children: [
-              for (final record in records) ...[
-                _InstitutionCard(
-                  name: record.name,
-                  type: record.type,
-                  distance: record.distance,
-                  icon: record.icon,
-                  color: record.color,
-                ),
-                const SizedBox(height: 12),
-              ],
+              for (final record in records)
+                _InstitutionCard(institution: record),
             ],
           );
         },
@@ -2056,92 +2066,282 @@ class _FilterChip extends StatelessWidget {
   );
 }
 
-class _ProfessionalCard extends StatelessWidget {
-  final String name, role, distance, initials;
-  final Color color;
-  final bool available;
-  const _ProfessionalCard({
-    required this.name,
-    required this.role,
-    required this.distance,
-    required this.color,
-    required this.initials,
-    required this.available,
+class _DirectoryCardTapTarget extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final Widget child;
+  const _DirectoryCardTapTarget({
+    required this.label,
+    required this.onTap,
+    required this.child,
   });
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(20),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: child,
+      ),
     ),
-    child: Row(
-      children: [
-        CircleAvatar(
-          radius: 29,
-          backgroundColor: color,
-          child: Text(
-            initials,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: AppColors.navy,
-            ),
+  );
+}
+
+class _ProfessionalCard extends StatelessWidget {
+  final _Professional professional;
+  const _ProfessionalCard({required this.professional});
+
+  @override
+  Widget build(BuildContext context) => _DirectoryCardTapTarget(
+    label: 'Voir le profil de ${professional.name}',
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ProfessionalDetailPage(professional: professional),
+      ),
+    ),
+    child: Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D173B66),
+            blurRadius: 22,
+            offset: Offset(0, 8),
           ),
-        ),
-        const SizedBox(width: 13),
-        Expanded(
-          child: Column(
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navy,
+              Container(
+                width: 58,
+                height: 58,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: professional.color,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Text(
+                  professional.initials,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
-              const SizedBox(height: 3),
-              Text(role, style: const TextStyle(color: AppColors.muted)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.verified,
-                    size: 15,
-                    color: available
-                        ? const Color(0xFF23A67A)
-                        : AppColors.muted,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    available ? 'Disponible' : 'Indisponible',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: available
-                          ? const Color(0xFF23A67A)
-                          : AppColors.muted,
-                      fontWeight: FontWeight.w700,
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      professional.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        height: 1.18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  const Icon(
-                    Icons.location_on_outlined,
-                    size: 15,
-                    color: AppColors.muted,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    distance,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    _StatusBadge(available: professional.available),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
+              const _OpenProfileIndicator(),
             ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F8FD),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: _InformationLine(
+              icon: Icons.medical_services_outlined,
+              text: professional.role,
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (professional.workplace.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _InformationLine(
+              icon: Icons.local_hospital_outlined,
+              text: professional.workplace,
+            ),
+          ],
+          if (professional.address.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _InformationLine(
+              icon: Icons.location_on_outlined,
+              text: professional.address,
+            ),
+          ],
+          if (professional.distance.isNotEmpty ||
+              professional.phone.isNotEmpty) ...[
+            const SizedBox(height: 13),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (professional.distance.isNotEmpty)
+                  _DetailPill(
+                    icon: Icons.near_me_outlined,
+                    label: professional.distance,
+                  ),
+                if (professional.phone.isNotEmpty)
+                  _DetailPill(
+                    icon: Icons.phone_outlined,
+                    label: professional.phone,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _DirectoryGrid extends StatelessWidget {
+  final List<Widget> children;
+  const _DirectoryGrid({required this.children});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const spacing = 14.0;
+      final columns = constraints.maxWidth >= 760 ? 2 : 1;
+      final itemWidth =
+          (constraints.maxWidth - (columns - 1) * spacing) / columns;
+      return Wrap(
+        spacing: spacing,
+        runSpacing: spacing,
+        children: [
+          for (final child in children)
+            SizedBox(width: itemWidth, child: child),
+        ],
+      );
+    },
+  );
+}
+
+class _StatusBadge extends StatelessWidget {
+  final bool available;
+  const _StatusBadge({required this.available});
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = available
+        ? const Color(0xFF13795B)
+        : const Color(0xFF667085);
+    final background = available
+        ? const Color(0xFFE7F7F0)
+        : const Color(0xFFF0F2F5);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: foreground,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            available ? 'Disponible' : 'Indisponible',
+            style: TextStyle(
+              color: foreground,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InformationLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  final FontWeight fontWeight;
+  const _InformationLine({
+    required this.icon,
+    required this.text,
+    this.color = AppColors.muted,
+    this.fontWeight = FontWeight.w500,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 17, color: color),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          text,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: color, fontWeight: fontWeight, height: 1.3),
+        ),
+      ),
+    ],
+  );
+}
+
+class _DetailPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _DetailPill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF7F9FC),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(width: 1),
+        Icon(icon, size: 15, color: AppColors.primary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -2203,7 +2403,16 @@ class _DirectoryFeedback extends StatelessWidget {
 class _Professional {
   final String name;
   final String role;
+  final String workplace;
+  final String biography;
+  final String experience;
+  final String qualification;
+  final String schedule;
+  final String services;
+  final String address;
   final String distance;
+  final String phone;
+  final String email;
   final String initials;
   final Color color;
   final bool available;
@@ -2211,7 +2420,16 @@ class _Professional {
   const _Professional({
     required this.name,
     required this.role,
+    required this.workplace,
+    required this.biography,
+    required this.experience,
+    required this.qualification,
+    required this.schedule,
+    required this.services,
+    required this.address,
     required this.distance,
+    required this.phone,
+    required this.email,
     required this.initials,
     required this.color,
     required this.available,
@@ -2233,26 +2451,74 @@ class _Professional {
         ? fullName
         : [firstName, lastName].where((value) => value.isNotEmpty).join(' ');
     final resolvedName = name.isEmpty ? 'Professionnel de santé' : name;
+    final role = _field(data, [
+      'specialite',
+      'spécialité',
+      'specialty',
+      'role',
+      'profession',
+      'titre',
+      'title',
+    ]);
     return _Professional(
       name: resolvedName,
-      role:
-          _field(data, [
-            'specialite',
-            'specialty',
-            'role',
-            'profession',
-          ]).isEmpty
-          ? 'Professionnel de santé'
-          : _field(data, ['specialite', 'specialty', 'role', 'profession']),
-      distance:
-          _field(data, [
-            'distance',
-            'distanceLabel',
-            'adresse',
-            'address',
-          ]).isEmpty
-          ? 'À proximité'
-          : _field(data, ['distance', 'distanceLabel', 'adresse', 'address']),
+      role: role.isEmpty ? 'Professionnel de santé' : role,
+      workplace: _field(data, [
+        'etablissement',
+        'établissement',
+        'institution',
+        'clinique',
+        'clinic',
+        'hospital',
+        'workplace',
+      ]),
+      biography: _field(data, [
+        'biographie',
+        'biography',
+        'bio',
+        'description',
+        'aPropos',
+        'about',
+      ]),
+      experience: _field(data, [
+        'experience',
+        'expérience',
+        'anneesExperience',
+        'annéesExpérience',
+        'yearsExperience',
+      ]),
+      qualification: _field(data, [
+        'qualification',
+        'qualifications',
+        'diplome',
+        'diplôme',
+        'degree',
+        'formation',
+      ]),
+      schedule: _field(data, [
+        'horaires',
+        'horaire',
+        'disponibilites',
+        'disponibilités',
+        'schedule',
+        'availability',
+      ]),
+      services: _field(data, [
+        'services',
+        'prestations',
+        'expertises',
+        'expertise',
+      ]),
+      address: _field(data, ['adresse', 'address', 'localisation', 'location']),
+      distance: _field(data, ['distance', 'distanceLabel', 'distance_label']),
+      phone: _field(data, [
+        'telephone',
+        'téléphone',
+        'phone',
+        'phoneNumber',
+        'contact',
+      ]),
+      email: _field(data, ['email', 'e-mail', 'courriel', 'mail']),
       initials: _initials(resolvedName),
       color: const Color(0xFFE7F1FF),
       available: _boolean(data, [
@@ -2267,14 +2533,26 @@ class _Professional {
 class _Institution {
   final String name;
   final String type;
+  final String description;
+  final String services;
+  final String address;
   final String distance;
+  final String schedule;
+  final String phone;
+  final String email;
   final IconData icon;
   final Color color;
 
   const _Institution({
     required this.name,
     required this.type,
+    required this.description,
+    required this.services,
+    required this.address,
     required this.distance,
+    required this.schedule,
+    required this.phone,
+    required this.email,
     required this.icon,
     required this.color,
   });
@@ -2286,28 +2564,53 @@ class _Institution {
     final category = _field(data, [
       'type',
       'categorie',
+      'catégorie',
       'category',
-    ]).toLowerCase();
+    ]);
+    final normalizedCategory = category.toLowerCase();
     final name = _field(data, ['nom', 'name', 'nomInstitution', 'displayName']);
-    final schedule = _field(data, ['horaires', 'openingHours', 'schedule']);
+    final schedule = _field(data, [
+      'horaires',
+      'horaire',
+      'openingHours',
+      'opening_hours',
+      'schedule',
+    ]);
     final type = category.isEmpty ? 'Institution de santé' : category;
-    final isPharmacy = category.contains('pharm');
+    final isPharmacy = normalizedCategory.contains('pharm');
     final isHospital =
-        category.contains('hôpital') ||
-        category.contains('hopital') ||
-        category.contains('hospital');
+        normalizedCategory.contains('hôpital') ||
+        normalizedCategory.contains('hopital') ||
+        normalizedCategory.contains('hospital');
     return _Institution(
       name: name.isEmpty ? 'Institution de santé' : name,
-      type: schedule.isEmpty ? type : '$type · $schedule',
-      distance:
-          _field(data, [
-            'distance',
-            'distanceLabel',
-            'adresse',
-            'address',
-          ]).isEmpty
-          ? 'À proximité'
-          : _field(data, ['distance', 'distanceLabel', 'adresse', 'address']),
+      type: type,
+      description: _field(data, [
+        'description',
+        'aPropos',
+        'about',
+        'presentation',
+        'présentation',
+      ]),
+      services: _field(data, [
+        'services',
+        'specialites',
+        'spécialités',
+        'prestations',
+        'departements',
+        'départements',
+      ]),
+      address: _field(data, ['adresse', 'address', 'localisation', 'location']),
+      distance: _field(data, ['distance', 'distanceLabel', 'distance_label']),
+      schedule: schedule,
+      phone: _field(data, [
+        'telephone',
+        'téléphone',
+        'phone',
+        'phoneNumber',
+        'contact',
+      ]),
+      email: _field(data, ['email', 'e-mail', 'courriel', 'mail']),
       icon: isPharmacy
           ? Icons.medication_rounded
           : isHospital
@@ -2325,6 +2628,29 @@ class _Institution {
 String _field(Map<String, dynamic> data, List<String> keys) {
   for (final key in keys) {
     final value = data[key];
+    if (value is Map) {
+      for (final nestedKey in const [
+        'label',
+        'formatted',
+        'fullAddress',
+        'name',
+        'value',
+      ]) {
+        final nestedValue = value[nestedKey];
+        if (nestedValue != null && nestedValue.toString().trim().isNotEmpty) {
+          return nestedValue.toString().trim();
+        }
+      }
+      continue;
+    }
+    if (value is Iterable) {
+      final result = value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .join(', ');
+      if (result.isNotEmpty) return result;
+      continue;
+    }
     if (value != null && value.toString().trim().isNotEmpty) {
       return value.toString().trim();
     }
@@ -2355,75 +2681,580 @@ String _initials(String value) => value
     .join();
 
 class _InstitutionCard extends StatelessWidget {
-  final String name, type, distance;
-  final IconData icon;
-  final Color color;
-  const _InstitutionCard({
-    required this.name,
-    required this.type,
-    required this.distance,
-    required this.icon,
-    required this.color,
-  });
+  final _Institution institution;
+  const _InstitutionCard({required this.institution});
+
+  @override
+  Widget build(BuildContext context) => _DirectoryCardTapTarget(
+    label: 'Voir les détails de ${institution.name}',
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _InstitutionDetailPage(institution: institution),
+      ),
+    ),
+    child: Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D173B66),
+            blurRadius: 22,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: institution.color,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  institution.icon,
+                  color: AppColors.primary,
+                  size: 29,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      institution.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        height: 1.18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: institution.color,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        institution.type,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const _OpenProfileIndicator(),
+            ],
+          ),
+          if (institution.address.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F8FD),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: _InformationLine(
+                icon: Icons.location_on_outlined,
+                text: institution.address,
+                color: AppColors.navy,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (institution.schedule.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _InformationLine(
+              icon: Icons.schedule_outlined,
+              text: institution.schedule,
+            ),
+          ],
+          if (institution.distance.isNotEmpty ||
+              institution.phone.isNotEmpty) ...[
+            const SizedBox(height: 13),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (institution.distance.isNotEmpty)
+                  _DetailPill(
+                    icon: Icons.near_me_outlined,
+                    label: institution.distance,
+                  ),
+                if (institution.phone.isNotEmpty)
+                  _DetailPill(
+                    icon: Icons.phone_outlined,
+                    label: institution.phone,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _OpenProfileIndicator extends StatelessWidget {
+  const _OpenProfileIndicator();
+
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
+    width: 32,
+    height: 32,
+    decoration: const BoxDecoration(
+      color: Color(0xFFF1F5FB),
+      shape: BoxShape.circle,
+    ),
+    child: const Icon(
+      Icons.arrow_forward_ios_rounded,
+      size: 14,
+      color: AppColors.primary,
+    ),
+  );
+}
+
+class _ProfessionalDetailPage extends StatelessWidget {
+  final _Professional professional;
+  const _ProfessionalDetailPage({required this.professional});
+
+  @override
+  Widget build(BuildContext context) => _DirectoryDetailScaffold(
+    pageTitle: 'Profil du personnel',
+    children: [
+      _DirectoryDetailHero(
+        color: professional.color,
+        leading: Text(
+          professional.initials,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: AppColors.primary,
+          ),
+        ),
+        title: professional.name,
+        subtitle: professional.role,
+        status: _StatusBadge(available: professional.available),
+      ),
+      if (professional.biography.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        _DetailSection(
+          title: 'À propos',
+          children: [
+            _DetailEntry(
+              icon: Icons.person_outline_rounded,
+              label: 'Présentation',
+              value: professional.biography,
+            ),
+          ],
+        ),
+      ],
+      const SizedBox(height: 18),
+      _DetailSection(
+        title: 'Informations professionnelles',
+        children: [
+          _DetailEntry(
+            icon: Icons.medical_services_outlined,
+            label: 'Spécialité',
+            value: professional.role,
+          ),
+          if (professional.workplace.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.local_hospital_outlined,
+              label: 'Établissement',
+              value: professional.workplace,
+            ),
+          if (professional.experience.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.workspace_premium_outlined,
+              label: 'Expérience',
+              value: professional.experience,
+            ),
+          if (professional.qualification.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.school_outlined,
+              label: 'Formation et qualifications',
+              value: professional.qualification,
+            ),
+          if (professional.schedule.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.schedule_outlined,
+              label: 'Horaires',
+              value: professional.schedule,
+            ),
+          if (professional.services.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.health_and_safety_outlined,
+              label: 'Services et expertises',
+              value: professional.services,
+            ),
+        ],
+      ),
+      if (professional.address.isNotEmpty ||
+          professional.distance.isNotEmpty ||
+          professional.phone.isNotEmpty ||
+          professional.email.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        _DetailSection(
+          title: 'Coordonnées',
+          children: [
+            if (professional.address.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.location_on_outlined,
+                label: 'Adresse',
+                value: professional.address,
+              ),
+            if (professional.distance.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.near_me_outlined,
+                label: 'Distance',
+                value: professional.distance,
+              ),
+            if (professional.phone.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.phone_outlined,
+                label: 'Téléphone',
+                value: professional.phone,
+                copyValue: professional.phone,
+              ),
+            if (professional.email.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.email_outlined,
+                label: 'E-mail',
+                value: professional.email,
+                copyValue: professional.email,
+              ),
+          ],
+        ),
+      ],
+    ],
+  );
+}
+
+class _InstitutionDetailPage extends StatelessWidget {
+  final _Institution institution;
+  const _InstitutionDetailPage({required this.institution});
+
+  @override
+  Widget build(BuildContext context) => _DirectoryDetailScaffold(
+    pageTitle: 'Détails de l’institution',
+    children: [
+      _DirectoryDetailHero(
+        color: institution.color,
+        leading: Icon(institution.icon, size: 38, color: AppColors.primary),
+        title: institution.name,
+        subtitle: institution.type,
+      ),
+      if (institution.description.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        _DetailSection(
+          title: 'À propos',
+          children: [
+            _DetailEntry(
+              icon: Icons.info_outline_rounded,
+              label: 'Présentation',
+              value: institution.description,
+            ),
+          ],
+        ),
+      ],
+      const SizedBox(height: 18),
+      _DetailSection(
+        title: 'Informations',
+        children: [
+          _DetailEntry(
+            icon: Icons.category_outlined,
+            label: 'Type d’institution',
+            value: institution.type,
+          ),
+          if (institution.services.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.medical_services_outlined,
+              label: 'Services et spécialités',
+              value: institution.services,
+            ),
+          if (institution.schedule.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.schedule_outlined,
+              label: 'Horaires',
+              value: institution.schedule,
+            ),
+        ],
+      ),
+      if (institution.address.isNotEmpty ||
+          institution.distance.isNotEmpty ||
+          institution.phone.isNotEmpty ||
+          institution.email.isNotEmpty) ...[
+        const SizedBox(height: 18),
+        _DetailSection(
+          title: 'Localisation et contact',
+          children: [
+            if (institution.address.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.location_on_outlined,
+                label: 'Adresse',
+                value: institution.address,
+              ),
+            if (institution.distance.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.near_me_outlined,
+                label: 'Distance',
+                value: institution.distance,
+              ),
+            if (institution.phone.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.phone_outlined,
+                label: 'Téléphone',
+                value: institution.phone,
+                copyValue: institution.phone,
+              ),
+            if (institution.email.isNotEmpty)
+              _DetailEntry(
+                icon: Icons.email_outlined,
+                label: 'E-mail',
+                value: institution.email,
+                copyValue: institution.email,
+              ),
+          ],
+        ),
+      ],
+    ],
+  );
+}
+
+class _DirectoryDetailScaffold extends StatelessWidget {
+  final String pageTitle;
+  final List<Widget> children;
+  const _DirectoryDetailScaffold({
+    required this.pageTitle,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.canvas,
+    appBar: AppBar(title: Text(pageTitle)),
+    body: SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: children,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _DirectoryDetailHero extends StatelessWidget {
+  final Color color;
+  final Widget leading;
+  final String title;
+  final String subtitle;
+  final Widget? status;
+  const _DirectoryDetailHero({
+    required this.color,
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    this.status,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
-      color: Colors.white,
+      gradient: const LinearGradient(
+        colors: [Colors.white, Color(0xFFF3F7FD)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(28),
       border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(20),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x10173B66),
+          blurRadius: 28,
+          offset: Offset(0, 10),
+        ),
+      ],
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: 76,
+          height: 76,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(23),
           ),
-          child: Icon(icon, color: AppColors.primary, size: 30),
+          child: leading,
         ),
-        const SizedBox(width: 13),
+        const SizedBox(width: 17),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                name,
+                title,
                 style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
                   color: AppColors.navy,
+                  fontSize: 23,
+                  height: 1.15,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 7),
               Text(
-                type,
-                style: const TextStyle(color: AppColors.muted, height: 1.3),
+                subtitle,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              const SizedBox(height: 9),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 3),
-                  Text(
-                    distance,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+              if (status != null) ...[const SizedBox(height: 11), status!],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DetailSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+  const _DetailSection({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0) const Divider(height: 1, color: AppColors.border),
+          children[index],
+        ],
+      ],
+    ),
+  );
+}
+
+class _DetailEntry extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? copyValue;
+  const _DetailEntry({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.copyValue,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 13),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5FB),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 20, color: AppColors.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 3),
+              SelectableText(
+                value,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 14.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
         ),
+        if (copyValue != null) ...[
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'Copier',
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: copyValue!));
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('$label copié')));
+            },
+            icon: const Icon(Icons.copy_rounded, size: 19),
+            color: AppColors.primary,
+          ),
+        ],
       ],
     ),
   );
@@ -2739,7 +3570,12 @@ class _CareIllustration extends StatelessWidget {
 class _ServiceCarousel extends StatelessWidget {
   final bool wide;
   final List<HealthService> services;
-  const _ServiceCarousel({required this.wide, required this.services});
+  final ValueChanged<HealthService> onServiceTap;
+  const _ServiceCarousel({
+    required this.wide,
+    required this.services,
+    required this.onServiceTap,
+  });
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -2759,7 +3595,10 @@ class _ServiceCarousel extends StatelessWidget {
           separatorBuilder: (context, index) => const SizedBox(width: gap),
           itemBuilder: (context, index) => SizedBox(
             width: cardWidth,
-            child: _ServiceCard(service: services[index]),
+            child: _ServiceCard(
+              service: services[index],
+              onTap: () => onServiceTap(services[index]),
+            ),
           ),
         ),
       );
@@ -2769,63 +3608,70 @@ class _ServiceCarousel extends StatelessWidget {
 
 class _ServiceCard extends StatelessWidget {
   final HealthService service;
-  const _ServiceCard({required this.service});
+  final VoidCallback onTap;
+  const _ServiceCard({required this.service, required this.onTap});
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final compact = constraints.maxWidth <= 180;
       final imageSize = constraints.maxWidth * .64;
-      return Container(
-        padding: EdgeInsets.fromLTRB(
-          compact ? 10 : 18,
-          compact ? 9 : 16,
-          compact ? 10 : 18,
-          compact ? 10 : 20,
-        ),
-        decoration: BoxDecoration(
-          color: service.background,
-          borderRadius: BorderRadius.circular(compact ? 17 : 25),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Center(
-                child: _ServiceImage(service: service, size: imageSize),
-              ),
+      final radius = BorderRadius.circular(compact ? 17 : 25);
+      return Material(
+        color: service.background,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? 10 : 18,
+              compact ? 9 : 16,
+              compact ? 10 : 18,
+              compact ? 10 : 20,
             ),
-            Text(
-              service.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: compact ? 14 : 19,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF172033),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Center(
+                    child: _ServiceImage(service: service, size: imageSize),
+                  ),
+                ),
+                Text(
+                  service.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 14 : 19,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF172033),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  service.summary,
+                  maxLines: compact ? 3 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 10.5 : 14,
+                    height: 1.2,
+                    color: const Color(0xFF283648),
+                  ),
+                ),
+                SizedBox(height: compact ? 7 : 13),
+                Text(
+                  '${service.actionLabel}  →',
+                  style: TextStyle(
+                    fontSize: compact ? 12 : 16,
+                    fontWeight: FontWeight.bold,
+                    color: service.accent,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 3),
-            Text(
-              service.summary,
-              maxLines: compact ? 3 : 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: compact ? 10.5 : 14,
-                height: 1.2,
-                color: const Color(0xFF283648),
-              ),
-            ),
-            SizedBox(height: compact ? 7 : 13),
-            Text(
-              '${service.actionLabel}  →',
-              style: TextStyle(
-                fontSize: compact ? 12 : 16,
-                fontWeight: FontWeight.bold,
-                color: service.accent,
-              ),
-            ),
-          ],
+          ),
         ),
       );
     },

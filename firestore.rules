@@ -50,6 +50,63 @@ service cloud.firestore {
         ]);
 
       allow delete: if false;
+
+      // Time-series health data remains private to the patient. Measurements
+      // are immutable after creation; a patient may remove an incorrect entry.
+      match /healthMeasurements/{measurementId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+
+        allow create: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.keys().hasOnly([
+            'kind', 'value', 'secondaryValue', 'pulseBpm', 'unit', 'context',
+            'note', 'measuredAt', 'createdAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'kind', 'value', 'unit', 'measuredAt', 'createdAt'
+          ])
+          && request.resource.data.kind in [
+            'bloodPressure', 'bloodGlucose', 'weight', 'temperature', 'oxygen'
+          ]
+          && request.resource.data.value is number
+          && request.resource.data.measuredAt is timestamp
+          && request.resource.data.measuredAt <= request.time
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.unit is string
+          && (!request.resource.data.keys().hasAny(['context'])
+            || request.resource.data.context is string)
+          && (!request.resource.data.keys().hasAny(['note'])
+            || (request.resource.data.note is string
+              && request.resource.data.note.size() <= 300))
+          && (!request.resource.data.keys().hasAny(['pulseBpm'])
+            || (request.resource.data.pulseBpm is number
+              && request.resource.data.pulseBpm >= 20
+              && request.resource.data.pulseBpm <= 250))
+          && (
+            (request.resource.data.kind == 'bloodPressure'
+              && request.resource.data.value >= 40
+              && request.resource.data.value <= 300
+              && request.resource.data.keys().hasAll(['secondaryValue'])
+              && request.resource.data.secondaryValue is number
+              && request.resource.data.secondaryValue >= 20
+              && request.resource.data.secondaryValue <= 200)
+            || (request.resource.data.kind == 'bloodGlucose'
+              && request.resource.data.value >= 10
+              && request.resource.data.value <= 1000)
+            || (request.resource.data.kind == 'weight'
+              && request.resource.data.value >= 1
+              && request.resource.data.value <= 500)
+            || (request.resource.data.kind == 'temperature'
+              && request.resource.data.value >= 25
+              && request.resource.data.value <= 45)
+            || (request.resource.data.kind == 'oxygen'
+              && request.resource.data.value >= 50
+              && request.resource.data.value <= 100)
+          );
+
+        allow update: if false;
+        allow delete: if signedIn() && request.auth.uid == patientId;
+      }
     }
 
     // Directories are readable after authentication, but data management must
