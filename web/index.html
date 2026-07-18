@@ -18,21 +18,246 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="I-ENTIER — vos services de santé accessibles partout.">
+  <meta name="theme-color" content="#176BFF">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="i_entier">
+  <meta name="apple-mobile-web-app-title" content="I-ENTIER">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>i_entier</title>
+  <title>I-ENTIER</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    #pwa-install-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(16, 42, 86, 0.48);
+      font-family: Arial, sans-serif;
+      box-sizing: border-box;
+    }
+
+    #pwa-install-overlay.is-visible {
+      display: flex;
+      animation: pwa-fade-in 180ms ease-out;
+    }
+
+    .pwa-install-card {
+      width: min(100%, 440px);
+      padding: 24px;
+      border: 1px solid #e4eaf2;
+      border-radius: 24px;
+      background: #ffffff;
+      box-shadow: 0 24px 64px rgba(16, 42, 86, 0.24);
+      color: #344054;
+      box-sizing: border-box;
+      animation: pwa-slide-up 220ms ease-out;
+    }
+
+    .pwa-install-heading {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .pwa-install-icon {
+      width: 52px;
+      height: 52px;
+      flex: 0 0 52px;
+      border-radius: 14px;
+    }
+
+    .pwa-install-title {
+      margin: 0;
+      color: #102a56;
+      font-size: 21px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    .pwa-install-copy {
+      margin: 0 0 20px;
+      color: #667085;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .pwa-install-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .pwa-install-button {
+      min-height: 48px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 14px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .pwa-install-button:focus-visible {
+      outline: 3px solid rgba(23, 107, 255, 0.3);
+      outline-offset: 2px;
+    }
+
+    #pwa-install-later {
+      flex: 1;
+      background: #eaf1ff;
+      color: #176bff;
+    }
+
+    #pwa-install-confirm {
+      flex: 1.35;
+      background: #176bff;
+      color: #ffffff;
+    }
+
+    @media (min-width: 700px) {
+      #pwa-install-overlay {
+        align-items: center;
+      }
+    }
+
+    @keyframes pwa-fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes pwa-slide-up {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #pwa-install-overlay.is-visible,
+      .pwa-install-card {
+        animation: none;
+      }
+    }
+  </style>
 </head>
 <body>
+  <div id="pwa-install-overlay" role="dialog" aria-modal="true"
+       aria-labelledby="pwa-install-title" aria-describedby="pwa-install-copy">
+    <div class="pwa-install-card">
+      <div class="pwa-install-heading">
+        <img class="pwa-install-icon" src="icons/Icon-192.png" alt="">
+        <h2 class="pwa-install-title" id="pwa-install-title">Installer I-ENTIER</h2>
+      </div>
+      <p class="pwa-install-copy" id="pwa-install-copy">
+        Ajoutez I-ENTIER à votre écran d’accueil pour y accéder plus rapidement, comme une application.
+      </p>
+      <div class="pwa-install-actions">
+        <button class="pwa-install-button" id="pwa-install-later" type="button">Plus tard</button>
+        <button class="pwa-install-button" id="pwa-install-confirm" type="button">Installer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const dismissKey = 'i-entier-pwa-install-dismissed-at';
+      const dismissDuration = 7 * 24 * 60 * 60 * 1000;
+      const overlay = document.getElementById('pwa-install-overlay');
+      const confirmButton = document.getElementById('pwa-install-confirm');
+      const laterButton = document.getElementById('pwa-install-later');
+      const copy = document.getElementById('pwa-install-copy');
+      const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
+      let deferredPrompt = null;
+      let showTimer = null;
+
+      const recentlyDismissed = () => {
+        try {
+          const dismissedAt = Number(localStorage.getItem(dismissKey) || 0);
+          return Date.now() - dismissedAt < dismissDuration;
+        } catch (_) {
+          return false;
+        }
+      };
+
+      const rememberDismissal = () => {
+        try {
+          localStorage.setItem(dismissKey, String(Date.now()));
+        } catch (_) {}
+      };
+
+      const hide = () => {
+        overlay.classList.remove('is-visible');
+      };
+
+      const show = () => {
+        if (isStandalone || recentlyDismissed() || (!deferredPrompt && !isIos)) return;
+
+        if (isIos && !deferredPrompt) {
+          copy.textContent = 'Dans Safari, touchez Partager puis « Sur l’écran d’accueil » pour installer I-ENTIER.';
+          confirmButton.textContent = 'Compris';
+        }
+
+        overlay.classList.add('is-visible');
+        confirmButton.focus();
+      };
+
+      const scheduleShow = () => {
+        if (showTimer !== null) return;
+        showTimer = window.setTimeout(show, 1400);
+      };
+
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredPrompt = event;
+        scheduleShow();
+      });
+
+      window.addEventListener('load', () => {
+        if (isIos) scheduleShow();
+      });
+
+      window.addEventListener('appinstalled', () => {
+        deferredPrompt = null;
+        hide();
+        try {
+          localStorage.removeItem(dismissKey);
+        } catch (_) {}
+      });
+
+      laterButton.addEventListener('click', () => {
+        rememberDismissal();
+        hide();
+      });
+
+      confirmButton.addEventListener('click', async () => {
+        if (!deferredPrompt) {
+          rememberDismissal();
+          hide();
+          return;
+        }
+
+        const prompt = deferredPrompt;
+        deferredPrompt = null;
+        hide();
+        await prompt.prompt();
+        const choice = await prompt.userChoice;
+        if (choice.outcome !== 'accepted') rememberDismissal();
+      });
+    })();
+  </script>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

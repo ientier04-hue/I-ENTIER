@@ -32,14 +32,20 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == patientId
         && request.resource.data.keys().hasOnly([
-          'sex', 'birthDate', 'medicalConditions', 'allergies', 'profileComplete',
+          'sex', 'birthDate', 'weightKg', 'heightCm', 'phone',
+          'emergencyContact', 'address', 'bloodType', 'medicalConditions',
+          'allergies', 'currentMedications', 'previousSurgeries', 'specialNeeds',
+          'pregnancyStatus', 'primaryDoctor', 'insurance', 'profileComplete',
           'createdAt', 'updatedAt'
         ]);
 
       allow update: if signedIn()
         && request.auth.uid == patientId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'sex', 'birthDate', 'medicalConditions', 'allergies', 'profileComplete',
+          'sex', 'birthDate', 'weightKg', 'heightCm', 'phone',
+          'emergencyContact', 'address', 'bloodType', 'medicalConditions',
+          'allergies', 'currentMedications', 'previousSurgeries', 'specialNeeds',
+          'pregnancyStatus', 'primaryDoctor', 'insurance', 'profileComplete',
           'updatedAt'
         ]);
 

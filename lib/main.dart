@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -811,9 +812,23 @@ class PatientProfileScreen extends StatefulWidget {
 class _PatientProfileScreenState extends State<PatientProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  late final TextEditingController _weightController;
+  late final TextEditingController _heightController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _emergencyNameController;
+  late final TextEditingController _emergencyRelationshipController;
+  late final TextEditingController _emergencyPhoneController;
+  late final TextEditingController _addressController;
   late final TextEditingController _conditionsController;
   late final TextEditingController _allergiesController;
+  late final TextEditingController _medicationsController;
+  late final TextEditingController _surgeriesController;
+  late final TextEditingController _specialNeedsController;
+  late final TextEditingController _primaryDoctorController;
+  late final TextEditingController _insuranceController;
   String? _sex;
+  String? _bloodType;
+  String? _pregnancyStatus;
   DateTime? _birthDate;
   bool _saving = false;
   final Set<String> _selectedConditions = <String>{};
@@ -822,6 +837,23 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     'Hypertension',
     'Asthme',
     'Cardiopathie',
+  ];
+  static const _bloodTypeOptions = [
+    'A+',
+    'A−',
+    'B+',
+    'B−',
+    'AB+',
+    'AB−',
+    'O+',
+    'O−',
+    'Je ne sais pas',
+  ];
+  static const _pregnancyOptions = [
+    'Oui',
+    'Non',
+    'Non applicable',
+    'Préfère ne pas répondre',
   ];
 
   @override
@@ -847,6 +879,42 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     );
     _sex = _profileText(data, ['sex', 'sexe']);
     _birthDate = _profileDate(data['birthDate'] ?? data['dateNaissance']);
+    _weightController = TextEditingController(
+      text: _profileMeasurementText(data['weightKg'] ?? data['poids']),
+    );
+    _heightController = TextEditingController(
+      text: _profileMeasurementText(data['heightCm'] ?? data['taille']),
+    );
+    _phoneController = TextEditingController(
+      text: _profileText(data, ['phone', 'telephone']),
+    );
+    final emergencyValue = data['emergencyContact'];
+    final emergencyContact = emergencyValue is Map
+        ? emergencyValue.map((key, value) => MapEntry(key.toString(), value))
+        : const <String, dynamic>{};
+    _emergencyNameController = TextEditingController(
+      text: _profileText(emergencyContact, ['name', 'nom']).isNotEmpty
+          ? _profileText(emergencyContact, ['name', 'nom'])
+          : _profileText(data, ['emergencyContactName']),
+    );
+    _emergencyRelationshipController = TextEditingController(
+      text: _profileText(emergencyContact, ['relationship', 'lien']).isNotEmpty
+          ? _profileText(emergencyContact, ['relationship', 'lien'])
+          : _profileText(data, ['emergencyContactRelationship']),
+    );
+    _emergencyPhoneController = TextEditingController(
+      text: _profileText(emergencyContact, ['phone', 'telephone']).isNotEmpty
+          ? _profileText(emergencyContact, ['phone', 'telephone'])
+          : _profileText(data, ['emergencyContactPhone']),
+    );
+    _addressController = TextEditingController(
+      text: _profileText(data, ['address', 'adresse', 'commune']),
+    );
+    _bloodType = _profileText(data, ['bloodType', 'groupeSanguin']);
+    _pregnancyStatus = _profileText(data, [
+      'pregnancyStatus',
+      'statutGrossesse',
+    ]);
     final conditions = _profileStrings(
       data['medicalConditions'] ?? data['maladies'],
     );
@@ -859,13 +927,44 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     _allergiesController = TextEditingController(
       text: _profileStrings(data['allergies']).join(', '),
     );
+    _medicationsController = TextEditingController(
+      text: _profileStrings(
+        data['currentMedications'] ?? data['medicaments'],
+      ).join(', '),
+    );
+    _surgeriesController = TextEditingController(
+      text: _profileStrings(
+        data['previousSurgeries'] ?? data['interventions'],
+      ).join(', '),
+    );
+    _specialNeedsController = TextEditingController(
+      text: _profileText(data, ['specialNeeds', 'besoinsParticuliers']),
+    );
+    _primaryDoctorController = TextEditingController(
+      text: _profileText(data, ['primaryDoctor', 'medecinTraitant']),
+    );
+    _insuranceController = TextEditingController(
+      text: _profileText(data, ['insurance', 'assurance']),
+    );
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _weightController.dispose();
+    _heightController.dispose();
+    _phoneController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyRelationshipController.dispose();
+    _emergencyPhoneController.dispose();
+    _addressController.dispose();
     _conditionsController.dispose();
     _allergiesController.dispose();
+    _medicationsController.dispose();
+    _surgeriesController.dispose();
+    _specialNeedsController.dispose();
+    _primaryDoctorController.dispose();
+    _insuranceController.dispose();
     super.dispose();
   }
 
@@ -897,6 +996,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList();
+    final medications = _profileCommaSeparated(_medicationsController.text);
+    final surgeries = _profileCommaSeparated(_surgeriesController.text);
     try {
       final accountReference = FirebaseFirestore.instance
           .collection('user')
@@ -904,6 +1005,37 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       final patientReference = FirebaseFirestore.instance
           .collection('patients')
           .doc(widget.user.uid);
+      final patientData = <String, dynamic>{
+        'sex': _sex,
+        'birthDate': Timestamp.fromDate(_birthDate!),
+        'weightKg': _profileMeasurement(_weightController.text),
+        'heightCm': _profileMeasurement(_heightController.text),
+        'phone': _phoneController.text.trim(),
+        'emergencyContact': {
+          'name': _emergencyNameController.text.trim(),
+          'relationship': _emergencyRelationshipController.text.trim(),
+          'phone': _emergencyPhoneController.text.trim(),
+        },
+        if (!widget.isOnboarding) ...{
+          'address': _addressController.text.trim(),
+          'bloodType': _bloodType ?? '',
+          'medicalConditions': {
+            ..._selectedConditions,
+            ...customConditions,
+          }.toList(),
+          'allergies': allergies,
+          'currentMedications': medications,
+          'previousSurgeries': surgeries,
+          'specialNeeds': _specialNeedsController.text.trim(),
+          'pregnancyStatus': _pregnancyStatus ?? '',
+          'primaryDoctor': _primaryDoctorController.text.trim(),
+          'insurance': _insuranceController.text.trim(),
+        },
+        'profileComplete': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (widget.initialProfile.isEmpty)
+          'createdAt': FieldValue.serverTimestamp(),
+      };
       await Future.wait([
         accountReference.set({
           'displayName': _nameController.text.trim(),
@@ -914,19 +1046,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           if (widget.accountProfile.isEmpty)
             'createdAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true)),
-        patientReference.set({
-          'sex': _sex,
-          'birthDate': Timestamp.fromDate(_birthDate!),
-          'medicalConditions': {
-            ..._selectedConditions,
-            ...customConditions,
-          }.toList(),
-          'allergies': allergies,
-          'profileComplete': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (widget.initialProfile.isEmpty)
-            'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true)),
+        patientReference.set(patientData, SetOptions(merge: true)),
       ]);
       if (mounted && !widget.isOnboarding) Navigator.of(context).pop();
     } on FirebaseException {
@@ -946,6 +1066,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final age = _birthDate == null ? null : _ageFrom(_birthDate!);
+    final bodyMassIndex = _bodyMassIndex(
+      _weightController.text,
+      _heightController.text,
+    );
     return Scaffold(
       appBar: widget.isOnboarding
           ? null
@@ -978,7 +1102,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     const SizedBox(height: 9),
                     Text(
                       widget.isOnboarding
-                          ? 'Ces informations nous aident à vous proposer des services adaptés.'
+                          ? 'Renseignez uniquement les informations essentielles. Vous pourrez compléter votre dossier plus tard dans votre profil.'
                           : 'Gardez vos informations de santé à jour.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -1070,43 +1194,267 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           ),
                         ),
                       ),
-                    const SizedBox(height: 24),
-                    _profileLabel('Maladies ou antécédents'),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _conditionOptions
-                          .map(
-                            (condition) => FilterChip(
-                              label: Text(condition),
-                              selected: _selectedConditions.contains(condition),
-                              onSelected: (selected) => setState(
-                                () => selected
-                                    ? _selectedConditions.add(condition)
-                                    : _selectedConditions.remove(condition),
-                              ),
-                              selectedColor: const Color(0xFFE7F0FF),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
+                    _profileLabel('Poids'),
                     TextFormField(
-                      controller: _conditionsController,
-                      maxLines: 2,
+                      controller: _weightController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                      ],
                       decoration: _profileDecoration(
-                        'Autres maladies, séparées par des virgules (facultatif)',
+                        'Votre poids',
+                      ).copyWith(suffixText: 'kg'),
+                      onChanged: (_) => setState(() {}),
+                      validator: (value) => _profileMeasurementError(
+                        value,
+                        label: 'Le poids',
+                        minimum: 1,
+                        maximum: 500,
                       ),
                     ),
                     const SizedBox(height: 18),
-                    _profileLabel('Allergies'),
+                    _profileLabel('Taille'),
                     TextFormField(
-                      controller: _allergiesController,
-                      maxLines: 2,
+                      controller: _heightController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                      ],
                       decoration: _profileDecoration(
-                        'Allergies, séparées par des virgules (facultatif)',
+                        'Votre taille',
+                      ).copyWith(suffixText: 'cm'),
+                      onChanged: (_) => setState(() {}),
+                      validator: (value) => _profileMeasurementError(
+                        value,
+                        label: 'La taille',
+                        minimum: 30,
+                        maximum: 300,
                       ),
                     ),
+                    if (bodyMassIndex != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'IMC calculé : ${bodyMassIndex.toStringAsFixed(1)}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    _profileLabel('Numéro de téléphone'),
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [_phoneInputFormatter],
+                      decoration: _profileDecoration(
+                        'Votre numéro de téléphone',
+                      ),
+                      validator: (value) => _phoneError(
+                        value,
+                        requiredMessage: 'Votre numéro est requis.',
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    _profileSectionTitle(
+                      'Contact d’urgence',
+                      'Cette personne pourra être contactée en cas de besoin.',
+                    ),
+                    _profileLabel('Nom complet'),
+                    TextFormField(
+                      controller: _emergencyNameController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: _profileDecoration(
+                        'Nom du contact d’urgence',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Le nom du contact est requis.'
+                          : null,
+                    ),
+                    const SizedBox(height: 18),
+                    _profileLabel('Lien avec vous'),
+                    TextFormField(
+                      controller: _emergencyRelationshipController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: _profileDecoration(
+                        'Ex. parent, conjoint(e), ami(e)',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Le lien avec le contact est requis.'
+                          : null,
+                    ),
+                    const SizedBox(height: 18),
+                    _profileLabel('Téléphone du contact'),
+                    TextFormField(
+                      controller: _emergencyPhoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [_phoneInputFormatter],
+                      decoration: _profileDecoration(
+                        'Numéro du contact d’urgence',
+                      ),
+                      validator: (value) => _phoneError(
+                        value,
+                        requiredMessage:
+                            'Le numéro du contact d’urgence est requis.',
+                      ),
+                    ),
+                    if (!widget.isOnboarding) ...[
+                      const SizedBox(height: 34),
+                      _profileSectionTitle(
+                        'Informations complémentaires',
+                        'Ces renseignements sont facultatifs et peuvent être modifiés à tout moment.',
+                      ),
+                      _profileLabel('Adresse ou commune'),
+                      TextFormField(
+                        controller: _addressController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: _profileDecoration(
+                          'Votre adresse ou votre commune (facultatif)',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Groupe sanguin'),
+                      DropdownButtonFormField<String>(
+                        initialValue: _bloodTypeOptions.contains(_bloodType)
+                            ? _bloodType
+                            : null,
+                        decoration: _profileDecoration(
+                          'Sélectionnez votre groupe (facultatif)',
+                        ),
+                        items: _bloodTypeOptions
+                            .map(
+                              (option) => DropdownMenuItem(
+                                value: option,
+                                child: Text(option),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => _bloodType = value),
+                      ),
+                      const SizedBox(height: 24),
+                      _profileLabel('Maladies ou antécédents'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _conditionOptions
+                            .map(
+                              (condition) => FilterChip(
+                                label: Text(condition),
+                                selected: _selectedConditions.contains(
+                                  condition,
+                                ),
+                                onSelected: (selected) => setState(
+                                  () => selected
+                                      ? _selectedConditions.add(condition)
+                                      : _selectedConditions.remove(condition),
+                                ),
+                                selectedColor: const Color(0xFFE7F0FF),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _conditionsController,
+                        maxLines: 2,
+                        decoration: _profileDecoration(
+                          'Autres maladies, séparées par des virgules (facultatif)',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Allergies'),
+                      TextFormField(
+                        controller: _allergiesController,
+                        maxLines: 2,
+                        decoration: _profileDecoration(
+                          'Allergies médicamenteuses ou alimentaires (facultatif)',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Médicaments actuels'),
+                      TextFormField(
+                        controller: _medicationsController,
+                        maxLines: 2,
+                        decoration: _profileDecoration(
+                          'Médicaments séparés par des virgules (facultatif)',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Interventions chirurgicales antérieures'),
+                      TextFormField(
+                        controller: _surgeriesController,
+                        maxLines: 2,
+                        decoration: _profileDecoration(
+                          'Interventions séparées par des virgules (facultatif)',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Handicap ou besoin particulier'),
+                      TextFormField(
+                        controller: _specialNeedsController,
+                        maxLines: 2,
+                        decoration: _profileDecoration(
+                          'Besoin d’accessibilité ou accompagnement (facultatif)',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Grossesse'),
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            _pregnancyOptions.contains(_pregnancyStatus)
+                            ? _pregnancyStatus
+                            : null,
+                        decoration: _profileDecoration(
+                          'Sélectionnez une option (facultatif)',
+                        ),
+                        items: _pregnancyOptions
+                            .map(
+                              (option) => DropdownMenuItem(
+                                value: option,
+                                child: Text(option),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => _pregnancyStatus = value),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Médecin traitant'),
+                      TextFormField(
+                        controller: _primaryDoctorController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: _profileDecoration(
+                          'Nom du médecin traitant (facultatif)',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _profileLabel('Assurance ou couverture médicale'),
+                      TextFormField(
+                        controller: _insuranceController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: _profileDecoration(
+                          'Nom de l’assurance ou couverture (facultatif)',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 30),
                     FilledButton(
                       onPressed: _saving ? null : _save,
@@ -1149,6 +1497,25 @@ Widget _profileLabel(String value) => Padding(
   ),
 );
 
+Widget _profileSectionTitle(String title, String description) => Padding(
+  padding: const EdgeInsets.only(bottom: 20),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: const TextStyle(
+          color: AppColors.navy,
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      const SizedBox(height: 5),
+      Text(description, style: const TextStyle(color: AppColors.muted)),
+    ],
+  ),
+);
+
 InputDecoration _profileDecoration(String hint) => InputDecoration(
   hintText: hint,
   filled: true,
@@ -1178,10 +1545,72 @@ List<String> _profileStrings(dynamic value) {
   return const [];
 }
 
+List<String> _profileCommaSeparated(String value) => value
+    .split(',')
+    .map((entry) => entry.trim())
+    .where((entry) => entry.isNotEmpty)
+    .toList();
+
+final _phoneInputFormatter = FilteringTextInputFormatter.allow(
+  RegExp(r'[0-9+() -]'),
+);
+
+String? _phoneError(String? value, {required String requiredMessage}) {
+  if (value == null || value.trim().isEmpty) return requiredMessage;
+  final digitCount = RegExp(r'\d').allMatches(value).length;
+  if (digitCount < 8 || digitCount > 15) {
+    return 'Entrez un numéro de téléphone valide.';
+  }
+  return null;
+}
+
 DateTime? _profileDate(dynamic value) {
   if (value is Timestamp) return value.toDate();
   if (value is DateTime) return value;
   if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+double? _profileMeasurement(String value) =>
+    double.tryParse(value.trim().replaceAll(',', '.'));
+
+double? _bodyMassIndex(String weightValue, String heightValue) {
+  final weight = _profileMeasurement(weightValue);
+  final heightCm = _profileMeasurement(heightValue);
+  if (weight == null ||
+      heightCm == null ||
+      weight <= 0 ||
+      weight > 500 ||
+      heightCm < 30 ||
+      heightCm > 300) {
+    return null;
+  }
+  final heightMeters = heightCm / 100;
+  return weight / (heightMeters * heightMeters);
+}
+
+String _profileMeasurementText(dynamic value) {
+  if (value == null) return '';
+  final measurement = value is num
+      ? value.toDouble()
+      : _profileMeasurement(value.toString());
+  if (measurement == null) return '';
+  return measurement == measurement.roundToDouble()
+      ? measurement.toInt().toString()
+      : measurement.toString();
+}
+
+String? _profileMeasurementError(
+  String? value, {
+  required String label,
+  required double minimum,
+  required double maximum,
+}) {
+  if (value == null || value.trim().isEmpty) return '$label est requis.';
+  final measurement = _profileMeasurement(value);
+  if (measurement == null || measurement < minimum || measurement > maximum) {
+    return 'Entrez une valeur valide.';
+  }
   return null;
 }
 
@@ -1299,7 +1728,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
-  bool _assistantOpen = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1339,6 +1767,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         const _SearchField(),
                         const SizedBox(height: 20),
                         _Hero(wide: wide),
+                        const SizedBox(height: 18),
+                        const AspectRatio(
+                          aspectRatio: 18 / 9,
+                          child: _AssistantCard(),
+                        ),
                         const SizedBox(height: 30),
                         const _SectionHeading(
                           title: 'Services',
@@ -1346,12 +1779,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 14),
                         _ServiceCarousel(wide: wide, services: _homeServices),
-                        const SizedBox(height: 30),
-                        _AssistantCard(
-                          open: _assistantOpen,
-                          onToggle: () =>
-                              setState(() => _assistantOpen = !_assistantOpen),
-                        ),
                       ] else if (_selectedTab == 1)
                         const _PersonnelPage()
                       else
@@ -1643,7 +2070,7 @@ class _ProfessionalCard extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     decoration: BoxDecoration(
       color: Colors.white,
       border: Border.all(color: AppColors.border),
@@ -2317,10 +2744,9 @@ class _ServiceCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      const gap = 14.0;
-      // Deux cartes restent visibles, sans déformer leur ratio 266 x 365.
-      final halfAvailableWidth = (constraints.maxWidth - gap) / 2;
-      final cardWidth = halfAvailableWidth > 220 ? 220.0 : halfAvailableWidth;
+      const gap = 12.0;
+      // Au moins 2,5 cartes restent visibles, sans déformer leur ratio 266 x 365.
+      final cardWidth = (constraints.maxWidth - (gap * 2)) / 2.5;
       final cardHeight = cardWidth * (365 / 266);
       return SizedBox(
         height: cardHeight,
@@ -2348,18 +2774,18 @@ class _ServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final compact = constraints.maxWidth <= 220;
+      final compact = constraints.maxWidth <= 180;
       final imageSize = constraints.maxWidth * .64;
       return Container(
         padding: EdgeInsets.fromLTRB(
-          compact ? 14 : 18,
-          compact ? 12 : 16,
-          compact ? 14 : 18,
-          compact ? 15 : 20,
+          compact ? 10 : 18,
+          compact ? 9 : 16,
+          compact ? 10 : 18,
+          compact ? 10 : 20,
         ),
         decoration: BoxDecoration(
           color: service.background,
-          borderRadius: BorderRadius.circular(compact ? 22 : 25),
+          borderRadius: BorderRadius.circular(compact ? 17 : 25),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2374,7 +2800,7 @@ class _ServiceCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: compact ? 17 : 19,
+                fontSize: compact ? 14 : 19,
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFF172033),
               ),
@@ -2382,19 +2808,19 @@ class _ServiceCard extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               service.summary,
-              maxLines: 2,
+              maxLines: compact ? 3 : 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: compact ? 12 : 14,
+                fontSize: compact ? 10.5 : 14,
                 height: 1.2,
                 color: const Color(0xFF283648),
               ),
             ),
-            SizedBox(height: compact ? 10 : 13),
+            SizedBox(height: compact ? 7 : 13),
             Text(
               '${service.actionLabel}  →',
               style: TextStyle(
-                fontSize: compact ? 14 : 16,
+                fontSize: compact ? 12 : 16,
                 fontWeight: FontWeight.bold,
                 color: service.accent,
               ),
@@ -2443,17 +2869,12 @@ class _ServiceImage extends StatelessWidget {
 }
 
 class _AssistantCard extends StatelessWidget {
-  final bool open;
-  final VoidCallback onToggle;
-  const _AssistantCard({required this.open, required this.onToggle});
+  const _AssistantCard();
 
   @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 260),
-    curve: Curves.easeOutCubic,
+  Widget build(BuildContext context) => Container(
     width: double.infinity,
-    height: open ? 390 : 292,
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
@@ -2478,7 +2899,7 @@ class _AssistantCard extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 const CircleAvatar(
-                  radius: 25,
+                  radius: 20,
                   backgroundColor: Color(0xFFCDEAFF),
                   child: Icon(
                     Icons.auto_awesome_rounded,
@@ -2489,8 +2910,8 @@ class _AssistantCard extends StatelessWidget {
                   right: -1,
                   bottom: -1,
                   child: Container(
-                    width: 13,
-                    height: 13,
+                    width: 11,
+                    height: 11,
                     decoration: BoxDecoration(
                       color: const Color(0xFF4EE29A),
                       shape: BoxShape.circle,
@@ -2503,7 +2924,7 @@ class _AssistantCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2512,65 +2933,43 @@ class _AssistantCard extends StatelessWidget {
                     'I-ENTIER AI',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      fontSize: 18,
+                      fontSize: 16,
                       color: Colors.white,
                     ),
                   ),
-                  SizedBox(height: 2),
                   Text(
                     'Assistant santé • En ligne',
-                    style: TextStyle(color: Color(0xFFCFE3FF)),
+                    style: TextStyle(color: Color(0xFFCFE3FF), fontSize: 12),
                   ),
                 ],
               ),
             ),
-            IconButton.filledTonal(
-              onPressed: onToggle,
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0x33FFFFFF),
-                foregroundColor: Colors.white,
-              ),
-              icon: Icon(open ? Icons.expand_less : Icons.expand_more),
+            const Icon(
+              Icons.auto_awesome_rounded,
+              color: Color(0xFFCFE3FF),
+              size: 22,
             ),
           ],
         ),
-        const SizedBox(height: 18),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+        const SizedBox(height: 6),
+        const Text(
+          'Bonjour 👋 Comment puis-je vous aider aujourd’hui ?',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
             color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: const Text(
-            'Bonjour 👋 Comment puis-je vous aider aujourd’hui ?',
-            style: TextStyle(
-              fontSize: 16,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF173052),
-            ),
           ),
         ),
-        if (open) ...[
-          const SizedBox(height: 14),
-          const Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _AssistantSuggestion(label: 'Trouver une pharmacie'),
-              _AssistantSuggestion(label: 'Parler à un médecin'),
-              _AssistantSuggestion(label: 'Mes examens'),
-            ],
-          ),
-        ],
         const Spacer(),
         TextField(
           decoration: InputDecoration(
             hintText: 'Écrivez votre message...',
             hintStyle: const TextStyle(color: Color(0xFF75849C)),
             suffixIcon: Container(
-              margin: const EdgeInsets.all(6),
+              margin: const EdgeInsets.all(5),
               decoration: const BoxDecoration(
                 color: AppColors.primary,
                 shape: BoxShape.circle,
@@ -2584,35 +2983,12 @@ class _AssistantCard extends StatelessWidget {
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(15),
               borderSide: BorderSide.none,
             ),
           ),
         ),
       ],
-    ),
-  );
-}
-
-class _AssistantSuggestion extends StatelessWidget {
-  final String label;
-  const _AssistantSuggestion({required this.label});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-    decoration: BoxDecoration(
-      color: const Color(0x26FFFFFF),
-      border: Border.all(color: const Color(0x52FFFFFF)),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(
-      label,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-      ),
     ),
   );
 }
