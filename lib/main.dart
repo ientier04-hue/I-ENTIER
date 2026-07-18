@@ -1767,10 +1767,7 @@ class _HomeScreenState extends State<HomeScreen> {
           maxWidth: MediaQuery.sizeOf(context).width,
           maxHeight: MediaQuery.sizeOf(context).height,
         ),
-        builder: (sheetContext) => _AiAssistantSheet(
-          onClose: () =>
-              Navigator.of(sheetContext, rootNavigator: true).maybePop(),
-        ),
+        builder: (_) => _AiAssistantSheet(onClose: navigator.pop),
       );
     } finally {
       transitionController.dispose();
@@ -3966,7 +3963,6 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
     if (_isClosing) return;
     _isClosing = true;
     _focusTimer?.cancel();
-    _focusNode.unfocus();
     widget.onClose();
   }
 
