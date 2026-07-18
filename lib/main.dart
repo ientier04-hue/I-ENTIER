@@ -1745,6 +1745,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openAiAssistant() async {
     final navigator = Navigator.of(context, rootNavigator: true);
+    Route<dynamic>? assistantRoute;
     final transitionController = AnimationController(
       vsync: navigator,
       duration: const Duration(milliseconds: 620),
@@ -1767,7 +1768,20 @@ class _HomeScreenState extends State<HomeScreen> {
           maxWidth: MediaQuery.sizeOf(context).width,
           maxHeight: MediaQuery.sizeOf(context).height,
         ),
-        builder: (_) => _AiAssistantSheet(onClose: navigator.pop),
+        builder: (sheetContext) {
+          assistantRoute ??= ModalRoute.of(sheetContext);
+          return _AiAssistantSheet(
+            onClose: () async {
+              if (transitionController.status != AnimationStatus.dismissed) {
+                await transitionController.reverse();
+              }
+              final route = assistantRoute;
+              if (route != null && route.isActive) {
+                navigator.removeRoute(route);
+              }
+            },
+          );
+        },
       );
     } finally {
       transitionController.dispose();
@@ -1855,7 +1869,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 26),
                         AspectRatio(
-                          aspectRatio: 18 / 9,
+                          aspectRatio: 18 / 10,
                           child: _AssistantCard(onComposeTap: _openAiAssistant),
                         ),
                       ] else if (_selectedTab == 1)
@@ -3367,28 +3381,35 @@ class _Header extends StatelessWidget {
       children: [
         const _BrandMark(),
         const SizedBox(width: 12),
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'I-ENTIER',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 21,
-                color: AppColors.navy,
-                letterSpacing: .5,
+        const SizedBox(
+          width: 145,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'I-ENTIER',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 21,
+                  color: AppColors.navy,
+                  letterSpacing: .5,
+                ),
               ),
-            ),
-            SizedBox(height: 1),
-            Text(
-              'Votre espace santé',
-              style: TextStyle(
-                fontSize: 11.5,
-                color: AppColors.muted,
-                fontWeight: FontWeight.w600,
+              SizedBox(height: 1),
+              Text(
+                'Votre espace santé',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -3963,6 +3984,7 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
     if (_isClosing) return;
     _isClosing = true;
     _focusTimer?.cancel();
+    _focusNode.unfocus();
     widget.onClose();
   }
 
@@ -4024,10 +4046,13 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
                   ),
                 ),
               ),
-              Scaffold(
-                resizeToAvoidBottomInset: true,
-                backgroundColor: Colors.transparent,
-                body: Padding(
+              AnimatedPadding(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Padding(
                   padding: EdgeInsets.fromLTRB(
                     compact ? 16 : 32,
                     10,
@@ -4149,9 +4174,13 @@ class _AiSheetHeader extends StatelessWidget {
               children: [
                 _OnlineDot(),
                 SizedBox(width: 6),
-                Text(
-                  'Assistant santé • En ligne',
-                  style: TextStyle(color: Color(0xFFC6DDF5), fontSize: 12),
+                Expanded(
+                  child: Text(
+                    'Assistant santé • En ligne',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Color(0xFFC6DDF5), fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -4344,12 +4373,16 @@ class _AiSuggestionChip extends StatelessWidget {
           children: [
             Icon(icon, color: const Color(0xFF91D8FF), size: 18),
             const SizedBox(width: 7),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
