@@ -125,6 +125,89 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('ajoute une période en cours depuis une seule action', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final savedEntries = <CycleEntry>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CycleTrackingPage(
+          patientId: 'patient-test',
+          now: DateTime(2026, 3, 5),
+          initialEntries: const [],
+          onSaveEntry: (entry) async => savedEntries.add(entry),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('cycle-add-period')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ajouter mes règles'), findsWidgets);
+    expect(find.text('Premier jour des règles'), findsOneWidget);
+    expect(find.text('Mes règles sont toujours en cours'), findsOneWidget);
+    expect(find.textContaining('modifier la date de fin'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('cycle-save-period')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('cycle-save-period')));
+    await tester.pumpAndSettle();
+
+    expect(savedEntries, hasLength(1));
+    expect(savedEntries.single.date, DateTime(2026, 3, 5));
+    expect(savedEntries.single.isPeriod, isTrue);
+    expect(find.text('Historique des règles'), findsOneWidget);
+    expect(find.text('1 jour enregistré'), findsOneWidget);
+  });
+
+  testWidgets('permet de corriger la date de fin d’une période', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final savedEntries = <CycleEntry>[];
+    final entries = _period(DateTime(2026, 1, 1), 3);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CycleTrackingPage(
+          patientId: 'patient-test',
+          now: DateTime(2026, 3, 5),
+          initialEntries: entries,
+          onSaveEntry: (entry) async => savedEntries.add(entry),
+        ),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('cycle-edit-period-2026-01-01')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('cycle-edit-period-2026-01-01')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Modifier mes règles'), findsOneWidget);
+    expect(find.text('1 janv. – 3 janvier 2026'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('cycle-range-end')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('4').last);
+    await tester.tap(find.text('Choisir'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('cycle-save-period')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('cycle-save-period')));
+    await tester.pumpAndSettle();
+
+    expect(savedEntries, hasLength(1));
+    expect(savedEntries.single.date, DateTime(2026, 1, 4));
+    expect(savedEntries.single.isPeriod, isTrue);
+    expect(find.text('4 jours enregistrés'), findsOneWidget);
+  });
+
   testWidgets('reste utilisable sur un petit écran mobile', (tester) async {
     await tester.binding.setSurfaceSize(const Size(360, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));

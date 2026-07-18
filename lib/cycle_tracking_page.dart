@@ -132,6 +132,52 @@ class CycleEntry {
       isPeriod || symptoms.isNotEmpty || mood.isNotEmpty || note.isNotEmpty;
 }
 
+class _PeriodEpisode {
+  final DateTime start;
+  final DateTime end;
+  final List<CycleEntry> entries;
+
+  const _PeriodEpisode({
+    required this.start,
+    required this.end,
+    required this.entries,
+  });
+
+  int get length => _calendarDayDifference(end, start) + 1;
+}
+
+List<_PeriodEpisode> _periodEpisodes(Iterable<CycleEntry> entries) {
+  final periodEntries = entries.where((entry) => entry.isPeriod).toList()
+    ..sort((first, second) => first.date.compareTo(second.date));
+  final groups = <List<CycleEntry>>[];
+  for (final entry in periodEntries) {
+    if (groups.isEmpty ||
+        _calendarDayDifference(entry.date, groups.last.first.date) >= 15) {
+      groups.add([entry]);
+    } else {
+      groups.last.add(entry);
+    }
+  }
+  return groups
+      .map(
+        (group) => _PeriodEpisode(
+          start: _dateOnly(group.first.date),
+          end: _dateOnly(group.last.date),
+          entries: group,
+        ),
+      )
+      .toList();
+}
+
+Iterable<DateTime> _datesInRange(DateTime start, DateTime end) sync* {
+  var date = _dateOnly(start);
+  final last = _dateOnly(end);
+  while (!date.isAfter(last)) {
+    yield date;
+    date = _addCalendarDays(date, 1);
+  }
+}
+
 class CycleInsights {
   final DateTime today;
   final List<DateTime> periodStarts;
@@ -311,6 +357,151 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
     });
   }
 
+  Future<void> _openPeriodForm(
+    List<CycleEntry> entries, {
+    _PeriodEpisode? episode,
+  }) async {
+    final insights = CycleInsights.fromEntries(entries, now: _today);
+    final result = await showModalBottomSheet<_PeriodRangeResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _PeriodRangeForm(
+        today: _today,
+        episode: episode,
+        suggestedLength: insights.averagePeriodLength,
+      ),
+    );
+    if (result == null || !mounted) return;
+    await _savePeriodRange(result, entries, previousEpisode: episode);
+  }
+
+  Future<void> _savePeriodRange(
+    _PeriodRangeResult range,
+    List<CycleEntry> entries, {
+    _PeriodEpisode? previousEpisode,
+  }) async {
+    final newDates = range.delete
+        ? <DateTime>[]
+        : _datesInRange(range.start!, range.end!).toList();
+    final newKeys = newDates.map(cycleDateKey).toSet();
+    final oldEntries = previousEpisode?.entries ?? const <CycleEntry>[];
+    final oldIds = oldEntries.map((entry) => entry.id).toSet();
+    final entriesByDay = <String, CycleEntry>{
+      for (final entry in entries) cycleDateKey(entry.date): entry,
+    };
+    final overlapsAnotherPeriod = entries.any(
+      (entry) =>
+          entry.isPeriod &&
+          !oldIds.contains(entry.id) &&
+          newKeys.contains(cycleDateKey(entry.date)),
+    );
+    if (overlapsAnotherPeriod) {
+      _showMessage('Cette plage chevauche une autre période enregistrée.');
+      return;
+    }
+
+    try {
+      if (_localEntries != null) {
+        final updatedEntries = List<CycleEntry>.from(_localEntries!);
+
+        for (final oldEntry in oldEntries) {
+          if (newKeys.contains(cycleDateKey(oldEntry.date))) continue;
+          final updated = oldEntry.copyWith(isPeriod: false, flow: '');
+          updatedEntries.removeWhere((entry) => entry.id == oldEntry.id);
+          if (updated.hasDetails) {
+            await widget.onSaveEntry?.call(updated);
+            updatedEntries.add(updated);
+          } else {
+            await widget.onDeleteEntry?.call(oldEntry);
+          }
+        }
+
+        for (final date in newDates) {
+          final key = cycleDateKey(date);
+          final existing = entriesByDay[key];
+          if (existing?.isPeriod ?? false) continue;
+          final updated =
+              existing?.copyWith(isPeriod: true, flow: '') ??
+              CycleEntry(id: key, date: date, isPeriod: true);
+          await widget.onSaveEntry?.call(updated);
+          updatedEntries.removeWhere((entry) => entry.id == updated.id);
+          updatedEntries.add(updated);
+        }
+
+        if (mounted) setState(() => _localEntries = updatedEntries);
+      } else {
+        final batch = FirebaseFirestore.instance.batch();
+        var hasWrites = false;
+
+        for (final oldEntry in oldEntries) {
+          if (newKeys.contains(cycleDateKey(oldEntry.date))) continue;
+          final reference = _entriesReference.doc(oldEntry.id);
+          if (oldEntry.symptoms.isNotEmpty ||
+              oldEntry.mood.isNotEmpty ||
+              oldEntry.note.isNotEmpty) {
+            batch.update(reference, {
+              'isPeriod': false,
+              'flow': '',
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          } else {
+            batch.delete(reference);
+          }
+          hasWrites = true;
+        }
+
+        for (final date in newDates) {
+          final key = cycleDateKey(date);
+          final existing = entriesByDay[key];
+          if (existing?.isPeriod ?? false) continue;
+          final reference = _entriesReference.doc(existing?.id ?? key);
+          if (existing == null) {
+            batch.set(reference, {
+              'date': Timestamp.fromDate(date),
+              'isPeriod': true,
+              'flow': '',
+              'symptoms': <String>[],
+              'mood': '',
+              'note': '',
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          } else {
+            batch.update(reference, {
+              'isPeriod': true,
+              'flow': '',
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+          hasWrites = true;
+        }
+
+        if (hasWrites) await batch.commit();
+      }
+      if (mounted) {
+        _showMessage(
+          range.delete
+              ? 'La période a été supprimée.'
+              : previousEpisode == null
+              ? 'Votre période a été enregistrée.'
+              : 'Les dates de vos règles ont été corrigées.',
+        );
+      }
+    } on FirebaseException catch (error) {
+      if (mounted) {
+        _showMessage(
+          error.code.contains('permission')
+              ? 'L’accès à votre suivi de cycle n’est pas autorisé.'
+              : 'Impossible d’enregistrer cette période pour le moment.',
+        );
+      }
+    } catch (_) {
+      if (mounted) _showMessage('Impossible d’enregistrer cette période.');
+    }
+  }
+
   Future<void> _openEntryForm(DateTime date, List<CycleEntry> entries) async {
     final normalizedDate = _dateOnly(date);
     if (normalizedDate.isAfter(_today)) {
@@ -455,6 +646,15 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
 
   Widget _buildDashboard(List<CycleEntry> entries) {
     final insights = CycleInsights.fromEntries(entries, now: _today);
+    final episodes = _periodEpisodes(entries);
+    final journalEntries = entries
+        .where(
+          (entry) =>
+              entry.symptoms.isNotEmpty ||
+              entry.mood.isNotEmpty ||
+              entry.note.isNotEmpty,
+        )
+        .toList();
     final entriesByDay = <String, CycleEntry>{
       for (final entry in entries) cycleDateKey(entry.date): entry,
     };
@@ -470,7 +670,8 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
             children: [
               _CycleHero(
                 insights: insights,
-                hasEntries: entries.isNotEmpty,
+                hasEntries: episodes.isNotEmpty,
+                onAddPeriod: () => _openPeriodForm(entries),
                 onLogToday: () => _openEntryForm(_today, entries),
               ),
               const SizedBox(height: 18),
@@ -517,13 +718,21 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
                 entry: selectedEntry,
                 onTap: () => _openEntryForm(_selectedDate, entries),
               ),
-              if (entries.isEmpty) ...[
+              if (episodes.isEmpty) ...[
                 const SizedBox(height: 18),
-                _GettingStarted(onStart: () => _openEntryForm(_today, entries)),
+                _GettingStarted(onStart: () => _openPeriodForm(entries)),
               ] else ...[
                 const SizedBox(height: 26),
+                _PeriodHistorySection(
+                  episodes: episodes,
+                  onEdit: (episode) =>
+                      _openPeriodForm(entries, episode: episode),
+                ),
+              ],
+              if (journalEntries.isNotEmpty) ...[
+                const SizedBox(height: 26),
                 _HistorySection(
-                  entries: entries,
+                  entries: journalEntries,
                   onEntryTap: (entry) => _openEntryForm(entry.date, entries),
                 ),
               ],
@@ -540,11 +749,13 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
 class _CycleHero extends StatelessWidget {
   final CycleInsights insights;
   final bool hasEntries;
+  final VoidCallback onAddPeriod;
   final VoidCallback onLogToday;
 
   const _CycleHero({
     required this.insights,
     required this.hasEntries,
+    required this.onAddPeriod,
     required this.onLogToday,
   });
 
@@ -607,18 +818,32 @@ class _CycleHero extends StatelessWidget {
               style: const TextStyle(color: _ink, height: 1.4),
             ),
             const SizedBox(height: 18),
-            FilledButton.icon(
-              key: const Key('cycle-log-today'),
-              onPressed: onLogToday,
-              style: FilledButton.styleFrom(
-                backgroundColor: _purple,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 15,
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.icon(
+                  key: const Key('cycle-add-period'),
+                  onPressed: onAddPeriod,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _purple,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 15,
+                    ),
+                  ),
+                  icon: const Icon(Icons.date_range_rounded),
+                  label: const Text('Ajouter mes règles'),
                 ),
-              ),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Renseigner aujourd’hui'),
+                TextButton.icon(
+                  key: const Key('cycle-log-today'),
+                  onPressed: onLogToday,
+                  style: TextButton.styleFrom(foregroundColor: _purple),
+                  icon: const Icon(Icons.spa_outlined),
+                  label: const Text('Noter mes symptômes'),
+                ),
+              ],
             ),
           ],
         );
@@ -1205,18 +1430,106 @@ class _GettingStarted extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Sélectionnez dans le calendrier le premier jour de vos dernières règles, activez « Règles ce jour » puis enregistrez. Plus votre historique est complet, plus les tendances reflètent votre cycle.',
+          'Ajoutez la date de début et la date de fin de vos dernières règles. Si elles sont encore en cours, vous pourrez corriger la date de fin plus tard. Plus votre historique est complet, plus les tendances reflètent votre cycle.',
           style: TextStyle(color: _ink, height: 1.45),
         ),
         const SizedBox(height: 14),
         OutlinedButton.icon(
           onPressed: onStart,
           icon: const Icon(Icons.edit_calendar_outlined),
-          label: const Text('Ajouter une première journée'),
+          label: const Text('Ajouter mes dernières règles'),
         ),
       ],
     ),
   );
+}
+
+class _PeriodHistorySection extends StatelessWidget {
+  final List<_PeriodEpisode> episodes;
+  final ValueChanged<_PeriodEpisode> onEdit;
+
+  const _PeriodHistorySection({required this.episodes, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final recent = episodes.reversed.take(6);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Historique des règles',
+          style: TextStyle(
+            color: _navy,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 5),
+        const Text(
+          'Vous pouvez corriger le début ou la fin à tout moment.',
+          style: TextStyle(color: _muted, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        ...recent.map(
+          (episode) => Padding(
+            padding: const EdgeInsets.only(bottom: 9),
+            child: Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(color: _border),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _roseSoft,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.water_drop_outlined, color: _rose),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          episode.start == episode.end
+                              ? _longDate(episode.start)
+                              : '${_shortDate(episode.start)} – ${_longDate(episode.end)}',
+                          style: const TextStyle(
+                            color: _navy,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${episode.length} jour${episode.length == 1 ? '' : 's'} enregistré${episode.length == 1 ? '' : 's'}',
+                          style: const TextStyle(color: _muted, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    key: Key(
+                      'cycle-edit-period-${cycleDateKey(episode.start)}',
+                    ),
+                    onPressed: () => onEdit(episode),
+                    icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                    label: const Text('Modifier'),
+                    style: TextButton.styleFrom(foregroundColor: _purple),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _HistorySection extends StatelessWidget {
@@ -1233,7 +1546,7 @@ class _HistorySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Journal récent',
+          'Symptômes et notes',
           style: TextStyle(
             color: _navy,
             fontSize: 20,
@@ -1350,6 +1663,406 @@ class _MedicalNotice extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+class _PeriodRangeResult {
+  final DateTime? start;
+  final DateTime? end;
+  final bool delete;
+
+  const _PeriodRangeResult.save({required this.start, required this.end})
+    : delete = false;
+  const _PeriodRangeResult.delete() : start = null, end = null, delete = true;
+}
+
+class _PeriodRangeForm extends StatefulWidget {
+  final DateTime today;
+  final _PeriodEpisode? episode;
+  final int suggestedLength;
+
+  const _PeriodRangeForm({
+    required this.today,
+    required this.episode,
+    required this.suggestedLength,
+  });
+
+  @override
+  State<_PeriodRangeForm> createState() => _PeriodRangeFormState();
+}
+
+class _PeriodRangeFormState extends State<_PeriodRangeForm> {
+  late DateTime _start;
+  late DateTime _end;
+  late bool _ongoing;
+  late bool _suggestedEnd;
+  String? _error;
+
+  bool get _editing => widget.episode != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _start = widget.episode?.start ?? widget.today;
+    _end = widget.episode?.end ?? widget.today;
+    _ongoing = !_editing || _sameDay(_end, widget.today);
+    _suggestedEnd = false;
+  }
+
+  DateTime get _firstAllowedDate {
+    final recentLimit = DateTime(
+      widget.today.year - 3,
+      widget.today.month,
+      widget.today.day,
+    );
+    final existingStart = widget.episode?.start;
+    return existingStart != null && existingStart.isBefore(recentLimit)
+        ? existingStart
+        : recentLimit;
+  }
+
+  Future<void> _pickStart() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _start,
+      firstDate: _firstAllowedDate,
+      lastDate: widget.today,
+      helpText: 'Date de début des règles',
+      cancelText: 'Annuler',
+      confirmText: 'Choisir',
+    );
+    if (picked == null) return;
+    setState(() {
+      _start = _dateOnly(picked);
+      _error = null;
+      if (!_editing) {
+        final estimatedEnd = _addCalendarDays(
+          _start,
+          widget.suggestedLength - 1,
+        );
+        if (estimatedEnd.isAfter(widget.today)) {
+          _ongoing = true;
+          _end = widget.today;
+          _suggestedEnd = false;
+        } else {
+          _ongoing = false;
+          _end = estimatedEnd;
+          _suggestedEnd = true;
+        }
+      } else if (_end.isBefore(_start)) {
+        _end = _start;
+        _ongoing = _sameDay(_end, widget.today);
+        _suggestedEnd = false;
+      }
+    });
+  }
+
+  Future<void> _pickEnd() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _end.isBefore(_start) ? _start : _end,
+      firstDate: _start,
+      lastDate: widget.today,
+      helpText: 'Date de fin des règles',
+      cancelText: 'Annuler',
+      confirmText: 'Choisir',
+    );
+    if (picked == null) return;
+    setState(() {
+      _end = _dateOnly(picked);
+      _ongoing = false;
+      _suggestedEnd = false;
+      _error = null;
+    });
+  }
+
+  void _toggleOngoing(bool value) {
+    setState(() {
+      _ongoing = value;
+      _error = null;
+      if (value) {
+        _end = widget.today;
+        _suggestedEnd = false;
+      } else if (_end.isBefore(_start) || _sameDay(_end, widget.today)) {
+        final estimatedEnd = _addCalendarDays(
+          _start,
+          widget.suggestedLength - 1,
+        );
+        _end = estimatedEnd.isAfter(widget.today) ? widget.today : estimatedEnd;
+        _suggestedEnd = true;
+      }
+    });
+  }
+
+  void _save() {
+    final end = _ongoing ? widget.today : _end;
+    final length = _calendarDayDifference(end, _start) + 1;
+    if (end.isBefore(_start)) {
+      setState(() => _error = 'La date de fin doit suivre la date de début.');
+      return;
+    }
+    if (length > 90) {
+      setState(
+        () => _error =
+            'La période sélectionnée dépasse 90 jours. Vérifiez les dates.',
+      );
+      return;
+    }
+    Navigator.pop(context, _PeriodRangeResult.save(start: _start, end: end));
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer cette période ?'),
+        content: const Text(
+          'Les symptômes et notes de ces journées seront conservés.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD92D20),
+            ),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      Navigator.pop(context, const _PeriodRangeResult.delete());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveEnd = _ongoing ? widget.today : _end;
+    final length = _calendarDayDifference(effectiveEnd, _start) + 1;
+    return Container(
+      decoration: const BoxDecoration(
+        color: _canvas,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 30),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCD3DE),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _editing ? 'Modifier mes règles' : 'Ajouter mes règles',
+                        style: const TextStyle(
+                          color: _navy,
+                          fontSize: 23,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      const Text(
+                        'Indiquez une seule fois le début et la fin. Tous les jours compris seront marqués automatiquement.',
+                        style: TextStyle(color: _muted, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Fermer',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            _RangeDateTile(
+              key: const Key('cycle-range-start'),
+              label: 'Premier jour des règles',
+              value: _longDate(_start),
+              icon: Icons.play_circle_outline_rounded,
+              onTap: _pickStart,
+            ),
+            const SizedBox(height: 12),
+            _RangeDateTile(
+              key: const Key('cycle-range-end'),
+              label: _ongoing
+                  ? 'Fin'
+                  : _suggestedEnd
+                  ? 'Dernier jour estimé · modifiable'
+                  : 'Dernier jour des règles',
+              value: _ongoing
+                  ? 'Toujours en cours · jusqu’à aujourd’hui'
+                  : _longDate(_end),
+              icon: Icons.stop_circle_outlined,
+              onTap: _ongoing ? null : _pickEnd,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(color: _border),
+              ),
+              child: SwitchListTile.adaptive(
+                key: const Key('cycle-range-ongoing'),
+                contentPadding: EdgeInsets.zero,
+                value: _ongoing,
+                activeTrackColor: _rose,
+                title: const Text(
+                  'Mes règles sont toujours en cours',
+                  style: TextStyle(color: _navy, fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Text(
+                  'Vous pourrez modifier la date de fin lorsqu’elles seront terminées.',
+                ),
+                onChanged: _toggleOngoing,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: _roseSoft,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.date_range_rounded, color: _rose, size: 20),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      '$length jour${length == 1 ? '' : 's'} seront marqués dans le calendrier.',
+                      style: const TextStyle(
+                        color: Color(0xFFA52F5C),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: Color(0xFFD92D20),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              key: const Key('cycle-save-period'),
+              onPressed: _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: _purple,
+                minimumSize: const Size.fromHeight(54),
+              ),
+              icon: const Icon(Icons.check_rounded),
+              label: Text(
+                _editing
+                    ? 'Enregistrer les nouvelles dates'
+                    : 'Enregistrer la période',
+              ),
+            ),
+            if (_editing) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                key: const Key('cycle-delete-period'),
+                onPressed: _delete,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFD92D20),
+                ),
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('Supprimer cette période'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RangeDateTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _RangeDateTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: onTap == null ? const Color(0xFFF1F2F6) : Colors.white,
+    borderRadius: BorderRadius.circular(17),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(17),
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: _border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: onTap == null ? _muted : _rose),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(color: _muted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: _navy,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              const Icon(Icons.edit_calendar_outlined, color: _purple),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -1527,14 +2240,14 @@ class _CycleEntryFormState extends State<_CycleEntryForm> {
                     contentPadding: EdgeInsets.zero,
                     activeTrackColor: _rose,
                     title: const Text(
-                      'Règles ce jour',
+                      'Inclure ce jour dans mes règles',
                       style: TextStyle(
                         color: _navy,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     subtitle: const Text(
-                      'Activez pour marquer un jour de saignement.',
+                      'Correction ponctuelle d’un jour de la période.',
                     ),
                     secondary: const Icon(
                       Icons.water_drop_outlined,
