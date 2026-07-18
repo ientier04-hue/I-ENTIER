@@ -24,13 +24,87 @@ class IEntierApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: AppColors.canvas,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
+        secondary: AppColors.teal,
+        error: const Color(0xFFD92D20),
         surface: Colors.white,
       ),
       fontFamily: 'Arial',
+      textTheme: const TextTheme(
+        headlineLarge: TextStyle(
+          fontWeight: FontWeight.w800,
+          color: AppColors.navy,
+          letterSpacing: -.8,
+        ),
+        headlineMedium: TextStyle(
+          fontWeight: FontWeight.w800,
+          color: AppColors.navy,
+          letterSpacing: -.5,
+        ),
+        titleLarge: TextStyle(
+          fontWeight: FontWeight.w800,
+          color: AppColors.navy,
+        ),
+        bodyLarge: TextStyle(color: AppColors.ink, height: 1.45),
+        bodyMedium: TextStyle(color: AppColors.muted, height: 1.4),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.canvas,
+        foregroundColor: AppColors.navy,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        titleTextStyle: TextStyle(
+          color: AppColors.navy,
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 17,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+      navigationBarTheme: const NavigationBarThemeData(
+        backgroundColor: Colors.white,
+        indicatorColor: AppColors.primarySoft,
+        surfaceTintColor: Colors.transparent,
+        labelTextStyle: WidgetStatePropertyAll(
+          TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
     ),
     home: const AuthGate(),
   );
@@ -221,121 +295,496 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 78,
-                    height: 78,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5F5FF),
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: const Icon(
-                      Icons.all_inclusive_rounded,
-                      color: Color(0xFF13B7C4),
-                      size: 50,
-                    ),
-                  ),
+    backgroundColor: AppColors.navy,
+    body: Stack(
+      fit: StackFit.expand,
+      children: [
+        const _SignInBackdrop(),
+        SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final desktop = constraints.maxWidth >= 900;
+              final horizontalPadding = desktop ? 48.0 : 20.0;
+              return SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: desktop ? 32 : 20,
                 ),
-                const SizedBox(height: 27),
-                const Text(
-                  'Bienvenue sur I-ENTIER',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 29,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Connectez-vous pour retrouver vos services de santé et votre dossier personnel.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    height: 1.45,
-                    color: AppColors.muted,
-                  ),
-                ),
-                const SizedBox(height: 34),
-                if (_error != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF0F0),
-                      borderRadius: BorderRadius.circular(14),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 1180,
+                      minHeight: constraints.maxHeight - (desktop ? 64 : 40),
                     ),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Color(0xFFB3261E)),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                SizedBox(
-                  height: 56,
-                  child: OutlinedButton.icon(
-                    onPressed: _isSigningIn ? null : _signInWithGoogle,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                    icon: _isSigningIn
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                    child: desktop
+                        ? Row(
+                            children: [
+                              const Expanded(flex: 11, child: _SignInStory()),
+                              const SizedBox(width: 70),
+                              Expanded(
+                                flex: 9,
+                                child: _SignInCard(
+                                  isSigningIn: _isSigningIn,
+                                  error: _error,
+                                  onGoogleTap: _signInWithGoogle,
+                                ),
+                              ),
+                            ],
                           )
-                        : const _GoogleMark(),
-                    label: Text(
-                      _isSigningIn
-                          ? 'Connexion en cours...'
-                          : 'Continuer avec Google',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.navy,
-                      ),
-                    ),
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const _MobileSignInBrand(),
+                              const SizedBox(height: 26),
+                              _SignInCard(
+                                isSigningIn: _isSigningIn,
+                                error: _error,
+                                onGoogleTap: _signInWithGoogle,
+                              ),
+                              const SizedBox(height: 20),
+                              const _SignInFooter(light: true),
+                            ],
+                          ),
                   ),
                 ),
-                const SizedBox(height: 22),
-                const Text(
-                  'En continuant, vous acceptez les conditions d’utilisation et la politique de confidentialité.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.4,
-                    color: AppColors.muted,
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _SignInBackdrop extends StatelessWidget {
+  const _SignInBackdrop();
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF081B3A), Color(0xFF0B3263), Color(0xFF075B70)],
+        stops: [0, .55, 1],
+      ),
+    ),
+    child: Stack(
+      children: [
+        Positioned(
+          left: -100,
+          top: -130,
+          child: _GlowOrb(size: 390, color: Color(0x2915BFCB)),
+        ),
+        Positioned(
+          right: -90,
+          bottom: -120,
+          child: _GlowOrb(size: 430, color: Color(0x241E7BFF)),
+        ),
+        Positioned(
+          right: 28,
+          top: 34,
+          child: _HealthCross(color: Color(0x12FFFFFF), size: 94),
+        ),
+      ],
+    ),
+  );
+}
+
+class _GlowOrb extends StatelessWidget {
+  final double size;
+  final Color color;
+  const _GlowOrb({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: color,
+      boxShadow: [BoxShadow(color: color, blurRadius: 90, spreadRadius: 28)],
+    ),
+  );
+}
+
+class _SignInStory extends StatelessWidget {
+  const _SignInStory();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 22),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const _BrandLockup(light: true),
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Eyebrow(label: 'VOTRE SANTÉ, SIMPLEMENT'),
+            SizedBox(height: 20),
+            Text(
+              'Toute votre santé,\nau même endroit.',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 48,
+                height: 1.04,
+                letterSpacing: -1.8,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            SizedBox(height: 22),
+            SizedBox(
+              width: 510,
+              child: Text(
+                'Trouvez les bons professionnels, accédez aux services essentiels et gardez vos informations de santé à portée de main.',
+                style: TextStyle(
+                  color: Color(0xFFD5E7F6),
+                  fontSize: 17,
+                  height: 1.55,
+                ),
+              ),
+            ),
+            SizedBox(height: 30),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _FeaturePill(
+                  icon: Icons.verified_user_outlined,
+                  label: 'Données sécurisées',
+                ),
+                _FeaturePill(
+                  icon: Icons.favorite_border_rounded,
+                  label: 'Services personnalisés',
+                ),
+              ],
+            ),
+          ],
+        ),
+        const _SignInFooter(light: true),
+      ],
+    ),
+  );
+}
+
+class _MobileSignInBrand extends StatelessWidget {
+  const _MobileSignInBrand();
+
+  @override
+  Widget build(BuildContext context) => const Column(
+    children: [
+      _BrandLockup(light: true, centered: true),
+      SizedBox(height: 12),
+      Text(
+        'Votre santé, simplement.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Color(0xFFBDD7E9), fontSize: 15),
+      ),
+    ],
+  );
+}
+
+class _SignInCard extends StatelessWidget {
+  final bool isSigningIn;
+  final String? error;
+  final VoidCallback onGoogleTap;
+  const _SignInCard({
+    required this.isSigningIn,
+    required this.error,
+    required this.onGoogleTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 480),
+    padding: const EdgeInsets.fromLTRB(34, 36, 34, 30),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(30),
+      border: Border.all(color: const Color(0x26FFFFFF)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x3800122D),
+          blurRadius: 46,
+          offset: Offset(0, 24),
+        ),
+      ],
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            width: 54,
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: const Icon(
+              Icons.lock_open_rounded,
+              color: AppColors.primary,
+              size: 27,
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        const Text(
+          'Bienvenue sur I-ENTIER',
+          style: TextStyle(
+            fontSize: 30,
+            height: 1.12,
+            letterSpacing: -.7,
+            fontWeight: FontWeight.w800,
+            color: AppColors.navy,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Connectez-vous pour retrouver votre espace santé personnel.',
+          style: TextStyle(color: AppColors.muted, fontSize: 15, height: 1.5),
+        ),
+        const SizedBox(height: 28),
+        if (error != null) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1F0),
+              border: Border.all(color: const Color(0xFFFDC9C5)),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  color: Color(0xFFD92D20),
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    error!,
+                    style: const TextStyle(
+                      color: Color(0xFF9E231B),
+                      height: 1.35,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 16),
+        ],
+        SizedBox(
+          height: 58,
+          child: FilledButton.icon(
+            onPressed: isSigningIn ? null : onGoogleTap,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.navy,
+              disabledBackgroundColor: const Color(0xFFB7C1D0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: isSigningIn
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const _GoogleMark(),
+            label: Text(
+              isSigningIn ? 'Connexion en cours...' : 'Continuer avec Google',
+            ),
+          ),
         ),
-      ),
+        const SizedBox(height: 22),
+        const _TrustLine(),
+        const SizedBox(height: 24),
+        const Divider(color: AppColors.border),
+        const SizedBox(height: 18),
+        const Text(
+          'En continuant, vous acceptez nos conditions d’utilisation et notre politique de confidentialité.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11.5,
+            height: 1.45,
+            color: AppColors.muted,
+          ),
+        ),
+      ],
     ),
   );
+}
+
+class _BrandLockup extends StatelessWidget {
+  final bool light;
+  final bool centered;
+  const _BrandLockup({required this.light, this.centered = false});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: centered ? MainAxisSize.min : MainAxisSize.max,
+    children: [
+      _BrandMark(light: light),
+      const SizedBox(width: 13),
+      Text(
+        'I-ENTIER',
+        style: TextStyle(
+          color: light ? Colors.white : AppColors.navy,
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          letterSpacing: .7,
+        ),
+      ),
+    ],
+  );
+}
+
+class _BrandMark extends StatelessWidget {
+  final bool light;
+  const _BrandMark({this.light = false});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 50,
+    height: 50,
+    decoration: BoxDecoration(
+      color: light ? const Color(0x1FFFFFFF) : AppColors.primarySoft,
+      borderRadius: BorderRadius.circular(16),
+      border: light ? Border.all(color: const Color(0x35FFFFFF)) : null,
+    ),
+    child: Icon(
+      Icons.all_inclusive_rounded,
+      color: light ? const Color(0xFF6DE5DD) : AppColors.teal,
+      size: 32,
+    ),
+  );
+}
+
+class _Eyebrow extends StatelessWidget {
+  final String label;
+  const _Eyebrow({required this.label});
+
+  @override
+  Widget build(BuildContext context) => Text(
+    label,
+    style: const TextStyle(
+      color: Color(0xFF6DE5DD),
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 1.8,
+    ),
+  );
+}
+
+class _FeaturePill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _FeaturePill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    decoration: BoxDecoration(
+      color: const Color(0x14FFFFFF),
+      border: Border.all(color: const Color(0x26FFFFFF)),
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: const Color(0xFF8DE6DF), size: 18),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _TrustLine extends StatelessWidget {
+  const _TrustLine();
+
+  @override
+  Widget build(BuildContext context) => const Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Icon(Icons.shield_outlined, size: 17, color: AppColors.teal),
+      SizedBox(width: 7),
+      Flexible(
+        child: Text(
+          'Connexion sécurisée et confidentielle',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.ink,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _SignInFooter extends StatelessWidget {
+  final bool light;
+  const _SignInFooter({required this.light});
+
+  @override
+  Widget build(BuildContext context) => Text(
+    '© ${DateTime.now().year} I-ENTIER  •  Santé accessible, partout.',
+    textAlign: TextAlign.center,
+    style: TextStyle(
+      color: light ? const Color(0xFF9AB8CE) : AppColors.muted,
+      fontSize: 11.5,
+    ),
+  );
+}
+
+class _HealthCross extends StatelessWidget {
+  final Color color;
+  final double size;
+  const _HealthCross({required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) =>
+      Icon(Icons.health_and_safety_rounded, color: color, size: size);
 }
 
 class _GoogleMark extends StatelessWidget {
   const _GoogleMark();
 
   @override
-  Widget build(BuildContext context) => const Text(
-    'G',
-    style: TextStyle(
-      color: Color(0xFF4285F4),
-      fontSize: 22,
-      fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) => Container(
+    width: 26,
+    height: 26,
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+    ),
+    child: const Text(
+      'G',
+      style: TextStyle(
+        color: Color(0xFF4285F4),
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+      ),
     ),
   );
 }
@@ -747,10 +1196,14 @@ int _ageFrom(DateTime birthDate) {
 }
 
 class AppColors {
-  static const primary = Color(0xFF1769F5);
-  static const navy = Color(0xFF102B5C);
-  static const muted = Color(0xFF74809A);
-  static const border = Color(0xFFE9EDF5);
+  static const primary = Color(0xFF176BFF);
+  static const primarySoft = Color(0xFFEAF1FF);
+  static const teal = Color(0xFF0AA6A6);
+  static const navy = Color(0xFF102A56);
+  static const ink = Color(0xFF344054);
+  static const muted = Color(0xFF667085);
+  static const border = Color(0xFFE4EAF2);
+  static const canvas = Color(0xFFF5F8FC);
 }
 
 /// Données indépendantes du rendu. La même structure peut venir plus tard
@@ -850,21 +1303,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 760;
+    final wide = MediaQuery.sizeOf(context).width >= 900;
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FD),
+      backgroundColor: AppColors.canvas,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
+            constraints: const BoxConstraints(maxWidth: 1120),
             child: Stack(
               children: [
                 SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
-                    wide ? 32 : 20,
-                    18,
-                    wide ? 32 : 20,
-                    104,
+                    wide ? 42 : 20,
+                    wide ? 28 : 18,
+                    wide ? 42 : 20,
+                    118,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,8 +1361,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 if (_selectedTab == 0)
                   Positioned(
-                    right: wide ? 32 : 20,
-                    bottom: 18,
+                    right: wide ? 42 : 20,
+                    bottom: 12,
                     child: _EmergencyButton(),
                   ),
               ],
@@ -917,28 +1370,52 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        height: 76,
-        selectedIndex: _selectedTab,
-        onDestinationSelected: (index) => setState(() => _selectedTab = index),
-        indicatorColor: const Color(0xFFE8F0FF),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Accueil',
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AppColors.border),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x17132D52),
+                    blurRadius: 24,
+                    offset: Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: NavigationBar(
+                height: 70,
+                selectedIndex: _selectedTab,
+                onDestinationSelected: (index) =>
+                    setState(() => _selectedTab = index),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home_rounded),
+                    label: 'Accueil',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.medical_information_outlined),
+                    selectedIcon: Icon(Icons.medical_information_rounded),
+                    label: 'Personnel',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.local_hospital_outlined),
+                    selectedIcon: Icon(Icons.local_hospital_rounded),
+                    label: 'Institutions',
+                  ),
+                ],
+              ),
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.medical_information_outlined),
-            selectedIcon: Icon(Icons.medical_information),
-            label: 'Personnel',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.local_hospital_outlined),
-            selectedIcon: Icon(Icons.local_hospital),
-            label: 'Institutions',
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1547,19 +2024,7 @@ class _Header extends StatelessWidget {
         : accountName;
     return Row(
       children: [
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE5F5FF),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: const Icon(
-            Icons.all_inclusive_rounded,
-            color: Color(0xFF13B7C4),
-            size: 35,
-          ),
-        ),
+        const _BrandMark(),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -1576,7 +2041,7 @@ class _Header extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'Salut $greetingName',
+                'Bonjour, $greetingName',
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 13, color: AppColors.muted),
               ),
@@ -1850,26 +2315,30 @@ class _ServiceCarousel extends StatelessWidget {
   const _ServiceCarousel({required this.wide, required this.services});
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: wide ? 400 : 365,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        clipBehavior: Clip.none,
-        padding: const EdgeInsets.only(right: 4),
-        itemCount: services.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 18),
-        itemBuilder: (context, index) {
-          final service = services[index];
-          return SizedBox(
-            width: wide ? 292 : 266,
-            child: _ServiceCard(service: service),
-          );
-        },
-      ),
-    );
-  }
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const gap = 14.0;
+      // Deux cartes restent visibles, sans déformer leur ratio 266 x 365.
+      final halfAvailableWidth = (constraints.maxWidth - gap) / 2;
+      final cardWidth = halfAvailableWidth > 220 ? 220.0 : halfAvailableWidth;
+      final cardHeight = cardWidth * (365 / 266);
+      return SizedBox(
+        height: cardHeight,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          clipBehavior: Clip.none,
+          padding: const EdgeInsets.only(right: 4),
+          itemCount: services.length,
+          separatorBuilder: (context, index) => const SizedBox(width: gap),
+          itemBuilder: (context, index) => SizedBox(
+            width: cardWidth,
+            child: _ServiceCard(service: services[index]),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _ServiceCard extends StatelessWidget {
@@ -1877,63 +2346,78 @@ class _ServiceCard extends StatelessWidget {
   const _ServiceCard({required this.service});
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
-    decoration: BoxDecoration(
-      color: service.background,
-      borderRadius: BorderRadius.circular(27),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Center(child: _ServiceImage(service: service)),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact = constraints.maxWidth <= 220;
+      final imageSize = constraints.maxWidth * .64;
+      return Container(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 14 : 18,
+          compact ? 12 : 16,
+          compact ? 14 : 18,
+          compact ? 15 : 20,
         ),
-        Text(
-          service.title,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF172033),
-          ),
+        decoration: BoxDecoration(
+          color: service.background,
+          borderRadius: BorderRadius.circular(compact ? 22 : 25),
         ),
-        const SizedBox(height: 4),
-        Text(
-          service.summary,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 17,
-            height: 1.2,
-            color: Color(0xFF283648),
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Center(
+                child: _ServiceImage(service: service, size: imageSize),
+              ),
+            ),
+            Text(
+              service.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: compact ? 17 : 19,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF172033),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              service.summary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: compact ? 12 : 14,
+                height: 1.2,
+                color: const Color(0xFF283648),
+              ),
+            ),
+            SizedBox(height: compact ? 10 : 13),
+            Text(
+              '${service.actionLabel}  →',
+              style: TextStyle(
+                fontSize: compact ? 14 : 16,
+                fontWeight: FontWeight.bold,
+                color: service.accent,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 17),
-        Text(
-          '${service.actionLabel}  →',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: service.accent,
-          ),
-        ),
-      ],
-    ),
+      );
+    },
   );
 }
 
 class _ServiceImage extends StatelessWidget {
   final HealthService service;
-  const _ServiceImage({required this.service});
+  final double size;
+  const _ServiceImage({required this.service, required this.size});
 
   @override
   Widget build(BuildContext context) {
-    const imageSize = 172.0;
     if (service.hasRemoteImage) {
       return Image.network(
         service.imagePath,
-        width: imageSize,
-        height: imageSize,
+        width: size,
+        height: size,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.high,
         errorBuilder: (context, error, stackTrace) => const Icon(
@@ -1945,8 +2429,8 @@ class _ServiceImage extends StatelessWidget {
     }
     return Image.asset(
       service.imagePath,
-      width: imageSize,
-      height: imageSize,
+      width: size,
+      height: size,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
       errorBuilder: (context, error, stackTrace) => const Icon(
