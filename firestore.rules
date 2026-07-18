@@ -6,6 +6,25 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Account data: identity and preferences, separate from health records.
+    match /user/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'photoUrl', 'provider', 'createdAt', 'updatedAt'
+        ]);
+
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'email', 'photoUrl', 'provider', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
     // Medical profile: only its authenticated owner can access it.
     match /patients/{patientId} {
       allow read: if signedIn() && request.auth.uid == patientId;
@@ -13,15 +32,15 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == patientId
         && request.resource.data.keys().hasOnly([
-          'fullName', 'sex', 'birthDate', 'medicalConditions', 'allergies',
-          'photoUrl', 'profileComplete', 'createdAt', 'updatedAt'
+          'sex', 'birthDate', 'medicalConditions', 'allergies', 'profileComplete',
+          'createdAt', 'updatedAt'
         ]);
 
       allow update: if signedIn()
         && request.auth.uid == patientId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'fullName', 'sex', 'birthDate', 'medicalConditions', 'allergies',
-          'photoUrl', 'profileComplete', 'updatedAt'
+          'sex', 'birthDate', 'medicalConditions', 'allergies', 'profileComplete',
+          'updatedAt'
         ]);
 
       allow delete: if false;

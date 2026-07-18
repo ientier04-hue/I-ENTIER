@@ -47,15 +47,90 @@ class AuthGate extends StatelessWidget {
         return const _LoadingScreen();
       }
       return snapshot.hasData
-          ? PatientProfileGate(user: snapshot.data!)
+          ? AccountBootstrap(user: snapshot.data!)
           : const SignInScreen();
     },
   );
 }
 
+class AccountBootstrap extends StatefulWidget {
+  final User user;
+  const AccountBootstrap({super.key, required this.user});
+
+  @override
+  State<AccountBootstrap> createState() => _AccountBootstrapState();
+}
+
+class _AccountBootstrapState extends State<AccountBootstrap> {
+  late final Future<Map<String, dynamic>> _account = _loadAccount();
+
+  Future<Map<String, dynamic>> _loadAccount() async {
+    final reference = FirebaseFirestore.instance
+        .collection('user')
+        .doc(widget.user.uid);
+    final snapshot = await reference.get();
+    final existing = snapshot.data() ?? const <String, dynamic>{};
+    await reference.set({
+      'displayName': _profileText(existing, ['displayName']).isEmpty
+          ? (widget.user.displayName ?? '')
+          : _profileText(existing, ['displayName']),
+      'email': widget.user.email ?? _profileText(existing, ['email']),
+      'photoUrl': widget.user.photoURL ?? _profileText(existing, ['photoUrl']),
+      'provider': 'google.com',
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (!snapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    return {
+      ...existing,
+      'displayName':
+          widget.user.displayName ?? _profileText(existing, ['displayName']),
+      'email': widget.user.email ?? _profileText(existing, ['email']),
+      'photoUrl': widget.user.photoURL ?? _profileText(existing, ['photoUrl']),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+    future: _account,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const _LoadingScreen();
+      }
+      if (snapshot.hasError) {
+        return const _AccountAccessError();
+      }
+      return PatientProfileGate(user: widget.user, account: snapshot.data!);
+    },
+  );
+}
+
+class _AccountAccessError extends StatelessWidget {
+  const _AccountAccessError();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    body: Center(
+      child: Padding(
+        padding: EdgeInsets.all(28),
+        child: _DirectoryFeedback(
+          icon: Icons.lock_outline,
+          title: 'Accès au compte requis',
+          message:
+              'Autorisez chaque utilisateur connecté à lire et écrire son document user/{uid}.',
+        ),
+      ),
+    ),
+  );
+}
+
 class PatientProfileGate extends StatelessWidget {
   final User user;
-  const PatientProfileGate({super.key, required this.user});
+  final Map<String, dynamic> account;
+  const PatientProfileGate({
+    super.key,
+    required this.user,
+    required this.account,
+  });
 
   @override
   Widget build(BuildContext context) =>
@@ -72,12 +147,17 @@ class PatientProfileGate extends StatelessWidget {
           if (snapshot.hasError || profile['profileComplete'] != true) {
             return PatientProfileScreen(
               user: user,
+              accountProfile: account,
               isOnboarding: true,
               initialProfile: profile,
               storageError: snapshot.hasError,
             );
           }
-          return HomeScreen(user: user, profile: profile);
+          return HomeScreen(
+            user: user,
+            account: account,
+            patientProfile: profile,
+          );
         },
       );
 }
@@ -262,12 +342,14 @@ class _GoogleMark extends StatelessWidget {
 
 class PatientProfileScreen extends StatefulWidget {
   final User user;
+  final Map<String, dynamic> accountProfile;
   final bool isOnboarding;
   final bool storageError;
   final Map<String, dynamic> initialProfile;
   const PatientProfileScreen({
     super.key,
     required this.user,
+    this.accountProfile = const <String, dynamic>{},
     this.isOnboarding = false,
     this.storageError = false,
     this.initialProfile = const <String, dynamic>{},
@@ -297,10 +379,22 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   void initState() {
     super.initState();
     final data = widget.initialProfile;
+    final accountName = _profileText(widget.accountProfile, [
+      'displayName',
+      'fullName',
+      'name',
+    ]);
+    final legacyPatientName = _profileText(data, [
+      'fullName',
+      'nomComplet',
+      'name',
+    ]);
     _nameController = TextEditingController(
-      text: _profileText(data, ['fullName', 'nomComplet', 'name']).isEmpty
-          ? (widget.user.displayName ?? '')
-          : _profileText(data, ['fullName', 'nomComplet', 'name']),
+      text: accountName.isNotEmpty
+          ? accountName
+          : legacyPatientName.isNotEmpty
+          ? legacyPatientName
+          : (widget.user.displayName ?? ''),
     );
     _sex = _profileText(data, ['sex', 'sexe']);
     _birthDate = _profileDate(data['birthDate'] ?? data['dateNaissance']);
@@ -355,24 +449,36 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         .where((value) => value.isNotEmpty)
         .toList();
     try {
-      await FirebaseFirestore.instance
+      final accountReference = FirebaseFirestore.instance
+          .collection('user')
+          .doc(widget.user.uid);
+      final patientReference = FirebaseFirestore.instance
           .collection('patients')
-          .doc(widget.user.uid)
-          .set({
-            'fullName': _nameController.text.trim(),
-            'sex': _sex,
-            'birthDate': Timestamp.fromDate(_birthDate!),
-            'medicalConditions': {
-              ..._selectedConditions,
-              ...customConditions,
-            }.toList(),
-            'allergies': allergies,
-            'photoUrl': widget.user.photoURL,
-            'profileComplete': true,
-            'updatedAt': FieldValue.serverTimestamp(),
-            if (widget.initialProfile.isEmpty)
-              'createdAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+          .doc(widget.user.uid);
+      await Future.wait([
+        accountReference.set({
+          'displayName': _nameController.text.trim(),
+          'email': widget.user.email ?? '',
+          'photoUrl': widget.user.photoURL,
+          'provider': 'google.com',
+          'updatedAt': FieldValue.serverTimestamp(),
+          if (widget.accountProfile.isEmpty)
+            'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)),
+        patientReference.set({
+          'sex': _sex,
+          'birthDate': Timestamp.fromDate(_birthDate!),
+          'medicalConditions': {
+            ..._selectedConditions,
+            ...customConditions,
+          }.toList(),
+          'allergies': allergies,
+          'profileComplete': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+          if (widget.initialProfile.isEmpty)
+            'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)),
+      ]);
       if (mounted && !widget.isOnboarding) Navigator.of(context).pop();
     } on FirebaseException {
       if (!mounted) return;
@@ -649,8 +755,14 @@ class AppColors {
 
 class HomeScreen extends StatefulWidget {
   final User user;
-  final Map<String, dynamic> profile;
-  const HomeScreen({super.key, required this.user, required this.profile});
+  final Map<String, dynamic> account;
+  final Map<String, dynamic> patientProfile;
+  const HomeScreen({
+    super.key,
+    required this.user,
+    required this.account,
+    required this.patientProfile,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -682,12 +794,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _Header(
                         user: widget.user,
-                        profile: widget.profile,
+                        account: widget.account,
                         onProfileTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => PatientProfileScreen(
                               user: widget.user,
-                              initialProfile: widget.profile,
+                              accountProfile: widget.account,
+                              initialProfile: widget.patientProfile,
                             ),
                           ),
                         ),
@@ -1380,20 +1493,24 @@ class _InstitutionCard extends StatelessWidget {
 
 class _Header extends StatelessWidget {
   final User user;
-  final Map<String, dynamic> profile;
+  final Map<String, dynamic> account;
   final VoidCallback onProfileTap;
   const _Header({
     required this.user,
-    required this.profile,
+    required this.account,
     required this.onProfileTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final profileName = _profileText(profile, ['fullName', 'name']);
-    final greetingName = profileName.isEmpty
+    final accountName = _profileText(account, [
+      'displayName',
+      'fullName',
+      'name',
+    ]);
+    final greetingName = accountName.isEmpty
         ? (user.displayName ?? 'à vous')
-        : profileName;
+        : accountName;
     return Row(
       children: [
         Container(
