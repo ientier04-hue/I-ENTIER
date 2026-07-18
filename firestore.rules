@@ -108,6 +108,72 @@ service cloud.firestore {
         allow delete: if signedIn() && request.auth.uid == patientId;
       }
 
+      // Menstrual cycle journal. Each day can be edited as symptoms evolve;
+      // predictions are calculated locally and are never stored as medical facts.
+      match /cycleEntries/{entryId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+
+        allow create: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.keys().hasOnly([
+            'date', 'isPeriod', 'flow', 'symptoms', 'mood', 'note',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'date', 'isPeriod', 'flow', 'symptoms', 'mood', 'note',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.date is timestamp
+          && request.resource.data.isPeriod is bool
+          && request.resource.data.flow is string
+          && request.resource.data.flow in ['', 'light', 'medium', 'heavy']
+          && (request.resource.data.isPeriod
+            || request.resource.data.flow == '')
+          && request.resource.data.symptoms is list
+          && request.resource.data.symptoms.size() <= 8
+          && request.resource.data.symptoms.hasOnly([
+            'cramps', 'headache', 'fatigue', 'bloating', 'backache',
+            'tenderBreasts', 'nausea', 'acne'
+          ])
+          && request.resource.data.mood is string
+          && request.resource.data.mood in [
+            '', 'great', 'calm', 'sensitive', 'irritable', 'sad'
+          ]
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 500
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isPeriod', 'flow', 'symptoms', 'mood', 'note', 'updatedAt'
+          ])
+          && request.resource.data.date is timestamp
+          && request.resource.data.date == resource.data.date
+          && request.resource.data.isPeriod is bool
+          && request.resource.data.flow is string
+          && request.resource.data.flow in ['', 'light', 'medium', 'heavy']
+          && (request.resource.data.isPeriod
+            || request.resource.data.flow == '')
+          && request.resource.data.symptoms is list
+          && request.resource.data.symptoms.size() <= 8
+          && request.resource.data.symptoms.hasOnly([
+            'cramps', 'headache', 'fatigue', 'bloating', 'backache',
+            'tenderBreasts', 'nausea', 'acne'
+          ])
+          && request.resource.data.mood is string
+          && request.resource.data.mood in [
+            '', 'great', 'calm', 'sensitive', 'irritable', 'sad'
+          ]
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 500
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if signedIn() && request.auth.uid == patientId;
+      }
+
       // Scanned prescriptions belong to the patient. A trusted backend can
       // later create records with source == 'doctor' through the Admin SDK.
       match /prescriptions/{prescriptionId} {

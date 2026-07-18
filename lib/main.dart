@@ -9,7 +9,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'firebase_options.dart';
+import 'cycle_tracking_page.dart';
 import 'health_tracking_page.dart';
+import 'laboratory_page.dart';
 import 'pharmacy_page.dart';
 
 Future<void> main() async {
@@ -1711,6 +1713,14 @@ const _homeServices = <HealthService>[
     backgroundColor: '#DDF6F4',
     accentColor: '#009B88',
   ),
+  HealthService(
+    id: 'suivi-cycle',
+    title: 'Suivi de cycle',
+    summary: 'Comprenez votre cycle et vos symptômes',
+    imagePath: 'regles.png',
+    backgroundColor: '#F0E8FF',
+    accentColor: '#7C5CE5',
+  ),
 ];
 
 class HomeScreen extends StatefulWidget {
@@ -1736,6 +1746,20 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => PharmacyPage(patientId: widget.user.uid),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'laboratoire') {
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const LaboratoryPage()));
+      return;
+    }
+    if (service.id == 'suivi-cycle') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CycleTrackingPage(patientId: widget.user.uid),
         ),
       );
       return;
@@ -1781,16 +1805,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 24),
                       if (_selectedTab == 0) ...[
                         const _SearchField(),
-                        const SizedBox(height: 20),
-                        _Hero(wide: wide),
-                        const SizedBox(height: 18),
-                        const AspectRatio(
-                          aspectRatio: 18 / 9,
-                          child: _AssistantCard(),
-                        ),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 26),
                         const _SectionHeading(
                           title: 'Services',
                           action: 'Voir tout',
@@ -1800,6 +1818,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           wide: wide,
                           services: _homeServices,
                           onServiceTap: _openService,
+                        ),
+                        const SizedBox(height: 26),
+                        const AspectRatio(
+                          aspectRatio: 18 / 9,
+                          child: _AssistantCard(),
                         ),
                       ] else if (_selectedTab == 1)
                         const _PersonnelPage()
@@ -3282,44 +3305,129 @@ class _Header extends StatelessWidget {
     final greetingName = accountName.isEmpty
         ? (user.displayName ?? 'à vous')
         : accountName;
-    return Row(
+    final brand = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         const _BrandMark(),
         const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'I-ENTIER',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 23,
-                  color: AppColors.navy,
-                  letterSpacing: .4,
-                ),
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'I-ENTIER',
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 21,
+                color: AppColors.navy,
+                letterSpacing: .5,
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Bonjour, $greetingName',
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+            SizedBox(height: 1),
+            Text(
+              'Votre espace santé',
+              style: TextStyle(
+                fontSize: 11.5,
+                color: AppColors.muted,
+                fontWeight: FontWeight.w600,
               ),
-            ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final greeting = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Bonjour, $greetingName 👋',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 17,
+            color: AppColors.navy,
+            fontWeight: FontWeight.w800,
           ),
         ),
-        const _RoundIcon(icon: Icons.notifications_none, badge: '3'),
-        const SizedBox(width: 10),
+        const SizedBox(height: 3),
+        const Text(
+          'Comment pouvons-nous vous aider aujourd’hui ?',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+        ),
+      ],
+    );
+    final actions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const _RoundIcon(icon: Icons.notifications_none_rounded, badge: '3'),
+        const SizedBox(width: 9),
         Semantics(
           button: true,
           label: 'Ouvrir le profil',
           child: InkWell(
             onTap: onProfileTap,
             customBorder: const CircleBorder(),
-            child: _GoogleAvatar(user: user, radius: 23),
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primarySoft, width: 2),
+              ),
+              child: _GoogleAvatar(user: user, radius: 20),
+            ),
           ),
         ),
       ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 650;
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(compact ? 14 : 17),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.border),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0B173B66),
+                blurRadius: 20,
+                offset: Offset(0, 7),
+              ),
+            ],
+          ),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: brand),
+                        actions,
+                      ],
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Divider(height: 1, color: AppColors.border),
+                    ),
+                    greeting,
+                  ],
+                )
+              : Row(
+                  children: [
+                    brand,
+                    const SizedBox(width: 24),
+                    Container(width: 1, height: 44, color: AppColors.border),
+                    const SizedBox(width: 24),
+                    Expanded(child: greeting),
+                    const SizedBox(width: 20),
+                    actions,
+                  ],
+                ),
+        );
+      },
     );
   }
 }
@@ -3365,13 +3473,14 @@ class _RoundIcon extends StatelessWidget {
     clipBehavior: Clip.none,
     children: [
       Container(
-        width: 50,
-        height: 50,
+        width: 46,
+        height: 46,
         decoration: BoxDecoration(
+          color: const Color(0xFFF6F8FC),
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.border),
         ),
-        child: Icon(icon, color: AppColors.navy),
+        child: Icon(icon, color: AppColors.navy, size: 22),
       ),
       if (badge != null)
         Positioned(
@@ -3404,165 +3513,54 @@ class _SearchField extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => Container(
-    height: 64,
-    padding: const EdgeInsets.symmetric(horizontal: 20),
+    height: 62,
+    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
     decoration: BoxDecoration(
       color: Colors.white,
-      border: Border.all(color: const Color(0xFFE7ECF5)),
-      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(20),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x0A18345F),
-          blurRadius: 18,
-          offset: Offset(0, 7),
+          color: Color(0x0D18345F),
+          blurRadius: 20,
+          offset: Offset(0, 8),
         ),
       ],
     ),
     child: Row(
       children: [
-        Icon(Icons.search, color: AppColors.muted, size: 28),
-        SizedBox(width: 16),
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(
+            Icons.search_rounded,
+            color: AppColors.primary,
+            size: 25,
+          ),
+        ),
+        const SizedBox(width: 13),
         Expanded(
           child: Text(
             hint,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: AppColors.muted, fontSize: 15),
-          ),
-        ),
-        Icon(Icons.tune, color: AppColors.muted),
-      ],
-    ),
-  );
-}
-
-class _Hero extends StatelessWidget {
-  final bool wide;
-  const _Hero({required this.wide});
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 270),
-    padding: const EdgeInsets.all(26),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFFE9F8FF), Color(0xFFD8ECFF)],
-      ),
-      border: Border.all(color: Colors.white.withValues(alpha: .75)),
-      borderRadius: BorderRadius.circular(30),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x1A3474B9),
-          blurRadius: 24,
-          offset: Offset(0, 12),
-        ),
-      ],
-    ),
-    child: Stack(
-      children: [
-        Positioned(
-          right: -20,
-          top: -30,
-          child: Container(
-            width: wide ? 360 : 220,
-            height: wide ? 360 : 220,
-            decoration: const BoxDecoration(
-              color: Color(0x66FFFFFF),
-              shape: BoxShape.circle,
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-        Row(
-          children: [
-            Expanded(
-              flex: wide ? 5 : 7,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'Votre santé,\nnotre priorité.',
-                    style: TextStyle(
-                      fontSize: 32,
-                      height: 1.12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Accédez à des services de santé fiables, proches de chez vous.',
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.45,
-                      color: Color(0xFF52698C),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  FilledButton(
-                    onPressed: () {},
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 19,
-                        vertical: 15,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                    ),
-                    child: const Text('Trouver un service'),
-                  ),
-                ],
-              ),
-            ),
-            if (wide) const Expanded(flex: 4, child: _CareIllustration()),
-          ],
-        ),
-        if (!wide)
-          const Positioned(
-            right: 12,
-            bottom: 16,
-            child: _CareIllustration(compact: true),
-          ),
-      ],
-    ),
-  );
-}
-
-class _CareIllustration extends StatelessWidget {
-  final bool compact;
-  const _CareIllustration({this.compact = false});
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: compact ? 76 : 210,
-    height: compact ? 76 : 210,
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF9DD7FF),
-            shape: BoxShape.circle,
-          ),
-        ),
-        Icon(
-          Icons.family_restroom,
-          size: compact ? 54 : 142,
-          color: AppColors.navy,
-        ),
-        Positioned(
-          right: 0,
-          bottom: 10,
-          child: CircleAvatar(
-            radius: compact ? 15 : 30,
-            backgroundColor: const Color(0xFF3B9BFF),
-            child: Icon(
-              Icons.add,
-              color: Colors.white,
-              size: compact ? 20 : 38,
-            ),
-          ),
+        const SizedBox(width: 8),
+        Container(width: 1, height: 24, color: AppColors.border),
+        const SizedBox(width: 5),
+        const SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(Icons.tune_rounded, color: AppColors.navy, size: 21),
         ),
       ],
     ),
