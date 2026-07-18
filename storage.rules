@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /prescriptions/{patientId}/{fileName} {
+      allow read: if request.auth != null
+        && request.auth.uid == patientId;
+
+      allow create: if request.auth != null
+        && request.auth.uid == patientId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow update: if false;
+      allow delete: if request.auth != null
+        && request.auth.uid == patientId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

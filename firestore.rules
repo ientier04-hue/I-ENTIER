@@ -107,6 +107,36 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if signedIn() && request.auth.uid == patientId;
       }
+
+      // Scanned prescriptions belong to the patient. A trusted backend can
+      // later create records with source == 'doctor' through the Admin SDK.
+      match /prescriptions/{prescriptionId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+
+        allow create: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.keys().hasOnly([
+            'fileName', 'storagePath', 'source', 'status', 'doctorId',
+            'doctorName', 'issuedAt', 'expiresAt', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'fileName', 'storagePath', 'source', 'status', 'createdAt',
+            'updatedAt'
+          ])
+          && request.resource.data.fileName is string
+          && request.resource.data.fileName.size() <= 250
+          && request.resource.data.storagePath is string
+          && request.resource.data.storagePath.matches(
+            'prescriptions/' + patientId + '/.*'
+          )
+          && request.resource.data.source == 'scan'
+          && request.resource.data.status == 'available'
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if false;
+        allow delete: if signedIn() && request.auth.uid == patientId;
+      }
     }
 
     // Directories are readable after authentication, but data management must

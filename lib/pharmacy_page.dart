@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -17,9 +18,16 @@ const _border = Color(0xFFE4EAF2);
 const _canvas = Color(0xFFF5F8FC);
 
 class PharmacyPage extends StatefulWidget {
+  final String patientId;
   final Stream<QuerySnapshot<Map<String, dynamic>>>? institutionStream;
+  final Stream<QuerySnapshot<Map<String, dynamic>>>? prescriptionStream;
 
-  const PharmacyPage({super.key, this.institutionStream});
+  const PharmacyPage({
+    super.key,
+    required this.patientId,
+    this.institutionStream,
+    this.prescriptionStream,
+  });
 
   @override
   State<PharmacyPage> createState() => _PharmacyPageState();
@@ -27,19 +35,29 @@ class PharmacyPage extends StatefulWidget {
 
 class _PharmacyPageState extends State<PharmacyPage> {
   final _searchController = TextEditingController();
+  _PharmacySection _section = _PharmacySection.medications;
   String _category = 'Tous';
   bool _prescriptionOnly = false;
   bool _availableOnly = true;
-  XFile? _prescription;
-  Uint8List? _prescriptionBytes;
   Position? _position;
   bool _locating = false;
+  bool _savingPrescription = false;
   String? _locationMessage;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _institutions =>
       widget.institutionStream ??
       FirebaseFirestore.instance
           .collection('institution')
+          .limit(100)
+          .snapshots();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _prescriptions =>
+      widget.prescriptionStream ??
+      FirebaseFirestore.instance
+          .collection('patients')
+          .doc(widget.patientId)
+          .collection('prescriptions')
+          .orderBy('createdAt', descending: true)
           .limit(100)
           .snapshots();
 
@@ -91,15 +109,13 @@ class _PharmacyPageState extends State<PharmacyPage> {
       if (file == null) return;
       final bytes = await file.readAsBytes();
       if (!mounted) return;
-      setState(() {
-        _prescription = file;
-        _prescriptionBytes = bytes;
-      });
-      await showDialog<void>(
+      final shouldSave = await showDialog<bool>(
         context: context,
         builder: (context) =>
             _PrescriptionPreview(bytes: bytes, fileName: file.name),
       );
+      if (shouldSave != true || !mounted) return;
+      await _savePrescription(file: file, bytes: bytes);
     } on PlatformException catch (error) {
       if (!mounted) return;
       _showMessage(
@@ -110,6 +126,112 @@ class _PharmacyPageState extends State<PharmacyPage> {
     } catch (_) {
       if (mounted) {
         _showMessage('Impossible de lire cette ordonnance.');
+      }
+    }
+  }
+
+  Future<void> _savePrescription({
+    required XFile file,
+    required Uint8List bytes,
+  }) async {
+    setState(() {
+      _section = _PharmacySection.prescriptions;
+      _savingPrescription = true;
+    });
+
+    final document = FirebaseFirestore.instance
+        .collection('patients')
+        .doc(widget.patientId)
+        .collection('prescriptions')
+        .doc();
+    final extension = _safeImageExtension(file.name);
+    final storagePath =
+        'prescriptions/${widget.patientId}/${document.id}.$extension';
+    final reference = FirebaseStorage.instance.ref(storagePath);
+
+    try {
+      await reference.putData(
+        bytes,
+        SettableMetadata(
+          contentType: _imageContentType(extension),
+          customMetadata: {
+            'patientId': widget.patientId,
+            'prescriptionId': document.id,
+          },
+        ),
+      );
+      await document.set({
+        'fileName': file.name,
+        'storagePath': storagePath,
+        'source': 'scan',
+        'status': 'available',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        _showMessage('Ordonnance enregistrée dans votre dossier.');
+      }
+    } on FirebaseException catch (error) {
+      try {
+        await reference.delete();
+      } on FirebaseException {
+        // Nothing to clean up when the upload itself did not finish.
+      }
+      if (mounted) {
+        _showMessage(
+          error.code == 'unauthorized'
+              ? 'Le stockage sécurisé des ordonnances n’est pas autorisé.'
+              : 'Impossible d’enregistrer l’ordonnance pour le moment.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingPrescription = false);
+    }
+  }
+
+  Future<void> _deletePrescription(_PrescriptionRecord prescription) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer cette ordonnance ?'),
+        content: const Text(
+          'Le document sera définitivement supprimé de votre dossier.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      if (prescription.storagePath.isNotEmpty) {
+        try {
+          await FirebaseStorage.instance.ref(prescription.storagePath).delete();
+        } on FirebaseException catch (error) {
+          if (error.code != 'object-not-found') rethrow;
+        }
+      }
+      await FirebaseFirestore.instance
+          .collection('patients')
+          .doc(widget.patientId)
+          .collection('prescriptions')
+          .doc(prescription.id)
+          .delete();
+      if (mounted) _showMessage('Ordonnance supprimée.');
+    } on FirebaseException {
+      if (mounted) {
+        _showMessage('Impossible de supprimer cette ordonnance.');
       }
     }
   }
@@ -225,84 +347,22 @@ class _PharmacyPageState extends State<PharmacyPage> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1120),
-            child: CustomScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-                  sliver: SliverList.list(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                  child: _PharmacySectionSwitch(
+                    selected: _section,
+                    onSelected: (section) => setState(() => _section = section),
+                  ),
+                ),
+                Expanded(
+                  child: IndexedStack(
+                    index: _section.index,
                     children: [
-                      _PharmacyHero(onScan: _pickPrescription),
-                      if (_prescription != null) ...[
-                        const SizedBox(height: 14),
-                        _PrescriptionStatus(
-                          fileName: _prescription!.name,
-                          bytes: _prescriptionBytes,
-                          onReplace: _pickPrescription,
-                          onRemove: () => setState(() {
-                            _prescription = null;
-                            _prescriptionBytes = null;
-                          }),
-                        ),
-                      ],
-                      const SizedBox(height: 22),
-                      _SearchAndFilter(
-                        controller: _searchController,
-                        filterCount: _activeFilterCount,
-                        onChanged: (_) => setState(() {}),
-                        onFilter: _openFilters,
-                      ),
-                      const SizedBox(height: 18),
-                      _CategoryBar(
-                        selected: _category,
-                        onSelected: (category) =>
-                            setState(() => _category = category),
-                      ),
-                      const SizedBox(height: 26),
-                      _SectionTitle(
-                        title: 'Médicaments populaires',
-                        subtitle: medications.isEmpty
-                            ? 'Aucun résultat'
-                            : '${medications.length} produit${medications.length > 1 ? 's' : ''}',
-                      ),
-                      const SizedBox(height: 14),
-                      if (medications.isEmpty)
-                        _EmptyMedicationResult(
-                          onReset: () {
-                            _searchController.clear();
-                            setState(() {
-                              _category = 'Tous';
-                              _prescriptionOnly = false;
-                              _availableOnly = true;
-                            });
-                          },
-                        )
-                      else
-                        _MedicationGrid(
-                          medications: medications,
-                          onAdd: (medication) => _showMessage(
-                            '${medication.name} a été ajouté au panier.',
-                          ),
-                        ),
-                      const SizedBox(height: 34),
-                      _NearbyHeader(
-                        locating: _locating,
-                        hasPosition: _position != null,
-                        onLocate: _findNearbyPharmacies,
-                      ),
-                      if (_locationMessage != null) ...[
-                        const SizedBox(height: 10),
-                        _LocationNotice(
-                          message: _locationMessage!,
-                          success: _position != null,
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-                      _NearbyPharmacies(
-                        stream: _institutions,
-                        position: _position,
-                        onMessage: _showMessage,
-                      ),
+                      _buildMedicationsPage(medications),
+                      _buildPharmaciesPage(),
+                      _buildPrescriptionsPage(),
                     ],
                   ),
                 ),
@@ -313,6 +373,719 @@ class _PharmacyPageState extends State<PharmacyPage> {
       ),
     );
   }
+
+  Widget _pageScroll(String key, List<Widget> children) => CustomScrollView(
+    key: PageStorageKey<String>(key),
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    slivers: [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+        sliver: SliverList.list(children: children),
+      ),
+    ],
+  );
+
+  Widget _buildMedicationsPage(
+    List<_Medication> medications,
+  ) => _pageScroll('medications', [
+    _PharmacyHero(onScan: _pickPrescription),
+    const SizedBox(height: 22),
+    _SearchAndFilter(
+      controller: _searchController,
+      filterCount: _activeFilterCount,
+      onChanged: (_) => setState(() {}),
+      onFilter: _openFilters,
+    ),
+    const SizedBox(height: 18),
+    _CategoryBar(
+      selected: _category,
+      onSelected: (category) => setState(() => _category = category),
+    ),
+    const SizedBox(height: 26),
+    _SectionTitle(
+      title: 'Médicaments populaires',
+      subtitle: medications.isEmpty
+          ? 'Aucun résultat'
+          : '${medications.length} produit${medications.length > 1 ? 's' : ''}',
+    ),
+    const SizedBox(height: 14),
+    if (medications.isEmpty)
+      _EmptyMedicationResult(
+        onReset: () {
+          _searchController.clear();
+          setState(() {
+            _category = 'Tous';
+            _prescriptionOnly = false;
+            _availableOnly = true;
+          });
+        },
+      )
+    else
+      _MedicationGrid(
+        medications: medications,
+        onAdd: (medication) =>
+            _showMessage('${medication.name} a été ajouté au panier.'),
+      ),
+  ]);
+
+  Widget _buildPharmaciesPage() => _pageScroll('pharmacies', [
+    _PharmacyDirectoryIntro(
+      locating: _locating,
+      onLocate: _findNearbyPharmacies,
+    ),
+    const SizedBox(height: 26),
+    _NearbyHeader(
+      locating: _locating,
+      hasPosition: _position != null,
+      onLocate: _findNearbyPharmacies,
+    ),
+    if (_locationMessage != null) ...[
+      const SizedBox(height: 10),
+      _LocationNotice(message: _locationMessage!, success: _position != null),
+    ],
+    const SizedBox(height: 14),
+    _NearbyPharmacies(
+      stream: _institutions,
+      position: _position,
+      onMessage: _showMessage,
+    ),
+  ]);
+
+  Widget _buildPrescriptionsPage() => _pageScroll('prescriptions', [
+    _PrescriptionHubHeader(
+      saving: _savingPrescription,
+      onScan: _savingPrescription ? null : _pickPrescription,
+    ),
+    const SizedBox(height: 24),
+    _PrescriptionHistory(
+      stream: _prescriptions,
+      saving: _savingPrescription,
+      onScan: _pickPrescription,
+      onDelete: _deletePrescription,
+    ),
+  ]);
+}
+
+enum _PharmacySection { medications, pharmacies, prescriptions }
+
+extension _PharmacySectionDetails on _PharmacySection {
+  String get label => switch (this) {
+    _PharmacySection.medications => 'Médicaments',
+    _PharmacySection.pharmacies => 'Pharmacie',
+    _PharmacySection.prescriptions => 'Ordonnance',
+  };
+
+  IconData get icon => switch (this) {
+    _PharmacySection.medications => Icons.medication_outlined,
+    _PharmacySection.pharmacies => Icons.local_pharmacy_outlined,
+    _PharmacySection.prescriptions => Icons.description_outlined,
+  };
+
+  String get keyName => switch (this) {
+    _PharmacySection.medications => 'medications',
+    _PharmacySection.pharmacies => 'pharmacies',
+    _PharmacySection.prescriptions => 'prescriptions',
+  };
+}
+
+class _PharmacySectionSwitch extends StatelessWidget {
+  final _PharmacySection selected;
+  final ValueChanged<_PharmacySection> onSelected;
+
+  const _PharmacySectionSwitch({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(5),
+    decoration: BoxDecoration(
+      color: const Color(0xFFE9EEF6),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Row(
+      children: [
+        for (final section in _PharmacySection.values)
+          Expanded(
+            child: Semantics(
+              selected: selected == section,
+              button: true,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: Key('pharmacy-section-${section.keyName}'),
+                  onTap: () => onSelected(section),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 190),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected == section
+                          ? Colors.white
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: selected == section
+                          ? const [
+                              BoxShadow(
+                                color: Color(0x12102A56),
+                                blurRadius: 10,
+                                offset: Offset(0, 3),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          section.icon,
+                          size: 18,
+                          color: selected == section ? _green : _muted,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            section.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: selected == section ? _navy : _muted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _PharmacyDirectoryIntro extends StatelessWidget {
+  final bool locating;
+  final VoidCallback onLocate;
+
+  const _PharmacyDirectoryIntro({
+    required this.locating,
+    required this.onLocate,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFFE5F7F3), Color(0xFFEDF5FF)],
+      ),
+      borderRadius: BorderRadius.circular(26),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 62,
+          height: 62,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .82),
+            borderRadius: BorderRadius.circular(19),
+          ),
+          child: const Icon(
+            Icons.local_pharmacy_rounded,
+            color: _green,
+            size: 34,
+          ),
+        ),
+        const SizedBox(width: 16),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Une pharmacie près de vous',
+                style: TextStyle(
+                  fontSize: 21,
+                  height: 1.1,
+                  fontWeight: FontWeight.w900,
+                  color: _navy,
+                ),
+              ),
+              SizedBox(height: 7),
+              Text(
+                'Comparez la distance, les horaires et la disponibilité avant de choisir.',
+                style: TextStyle(fontSize: 13, height: 1.35, color: _ink),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        IconButton.filled(
+          tooltip: 'Me localiser',
+          onPressed: locating ? null : onLocate,
+          style: IconButton.styleFrom(
+            backgroundColor: _green,
+            foregroundColor: Colors.white,
+          ),
+          icon: locating
+              ? const SizedBox(
+                  width: 19,
+                  height: 19,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.my_location_rounded),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PrescriptionHubHeader extends StatelessWidget {
+  final bool saving;
+  final VoidCallback? onScan;
+
+  const _PrescriptionHubHeader({required this.saving, required this.onScan});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFEAF1FF), Color(0xFFF1ECFF)],
+      ),
+      borderRadius: BorderRadius.circular(26),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        final copy = const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Mes ordonnances',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: _navy,
+              ),
+            ),
+            SizedBox(height: 7),
+            Text(
+              'Retrouvez vos scans aujourd’hui et les ordonnances envoyées par vos médecins à l’avenir.',
+              style: TextStyle(fontSize: 13.5, height: 1.4, color: _ink),
+            ),
+          ],
+        );
+        final action = FilledButton.icon(
+          key: const Key('prescription-scan-button'),
+          onPressed: onScan,
+          style: FilledButton.styleFrom(
+            backgroundColor: _primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+          icon: saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.document_scanner_outlined),
+          label: Text(saving ? 'Enregistrement…' : 'Scanner'),
+        );
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [copy, const SizedBox(height: 17), action],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: copy),
+            const SizedBox(width: 24),
+            action,
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _PrescriptionHistory extends StatelessWidget {
+  final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
+  final bool saving;
+  final VoidCallback onScan;
+  final ValueChanged<_PrescriptionRecord> onDelete;
+
+  const _PrescriptionHistory({
+    required this.stream,
+    required this.saving,
+    required this.onScan,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+    stream: stream,
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return const _FeedbackCard(
+          icon: Icons.lock_outline_rounded,
+          title: 'Ordonnances indisponibles',
+          message:
+              'Votre historique privé ne peut pas être chargé pour le moment.',
+        );
+      }
+      if (!snapshot.hasData) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: Center(child: CircularProgressIndicator(color: _primary)),
+        );
+      }
+
+      final prescriptions = snapshot.data!.docs
+          .map(_PrescriptionRecord.fromFirestore)
+          .toList();
+      if (prescriptions.isEmpty && !saving) {
+        return _FeedbackCard(
+          icon: Icons.description_outlined,
+          title: 'Aucune ordonnance enregistrée',
+          message:
+              'Scannez votre première ordonnance pour la conserver dans votre dossier.',
+          actionLabel: 'Scanner une ordonnance',
+          onAction: onScan,
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Historique',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                    color: _navy,
+                  ),
+                ),
+              ),
+              Text(
+                '${prescriptions.length} document${prescriptions.length > 1 ? 's' : ''}',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: _muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          if (saving) ...[
+            const _SavingPrescriptionCard(),
+            const SizedBox(height: 10),
+          ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const gap = 12.0;
+              final columns = constraints.maxWidth >= 720 ? 2 : 1;
+              final width =
+                  (constraints.maxWidth - (columns - 1) * gap) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final prescription in prescriptions)
+                    SizedBox(
+                      width: width,
+                      child: _PrescriptionCard(
+                        prescription: prescription,
+                        onDelete: () => onDelete(prescription),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _SavingPrescriptionCard extends StatelessWidget {
+  const _SavingPrescriptionCard();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: _primarySoft,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: _primary.withValues(alpha: .2)),
+    ),
+    child: const Row(
+      children: [
+        SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2.5, color: _primary),
+        ),
+        SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enregistrement sécurisé',
+                style: TextStyle(fontWeight: FontWeight.w800, color: _navy),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'Votre document est en cours d’ajout au dossier.',
+                style: TextStyle(fontSize: 12.5, color: _muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PrescriptionCard extends StatelessWidget {
+  final _PrescriptionRecord prescription;
+  final VoidCallback onDelete;
+
+  const _PrescriptionCard({required this.prescription, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(21),
+      border: Border.all(color: _border),
+    ),
+    child: Row(
+      children: [
+        _PrescriptionThumbnail(prescription: prescription),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                prescription.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: _navy,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                prescription.sourceLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: _muted),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const _TinyBadge(
+                    label: 'Disponible',
+                    color: Color(0xFF13795B),
+                    background: _greenSoft,
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      prescription.dateLabel,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11.5, color: _muted),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        PopupMenuButton<String>(
+          tooltip: 'Actions',
+          onSelected: (value) {
+            if (value == 'delete') onDelete();
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline_rounded),
+                  SizedBox(width: 9),
+                  Text('Supprimer'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _PrescriptionThumbnail extends StatefulWidget {
+  final _PrescriptionRecord prescription;
+
+  const _PrescriptionThumbnail({required this.prescription});
+
+  @override
+  State<_PrescriptionThumbnail> createState() => _PrescriptionThumbnailState();
+}
+
+class _PrescriptionThumbnailState extends State<_PrescriptionThumbnail> {
+  late Future<Uint8List?> _bytes = _loadBytes();
+
+  Future<Uint8List?> _loadBytes() {
+    if (widget.prescription.storagePath.isEmpty) return Future.value();
+    return FirebaseStorage.instance
+        .ref(widget.prescription.storagePath)
+        .getData(8 * 1024 * 1024);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PrescriptionThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.prescription.storagePath != widget.prescription.storagePath) {
+      _bytes = _loadBytes();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+    future: _bytes,
+    builder: (context, snapshot) {
+      final bytes = snapshot.data;
+      return Material(
+        color: _primarySoft,
+        borderRadius: BorderRadius.circular(15),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: bytes == null
+              ? null
+              : () => showDialog<void>(
+                  context: context,
+                  builder: (context) => _StoredPrescriptionPreview(
+                    prescription: widget.prescription,
+                    bytes: bytes,
+                  ),
+                ),
+          child: SizedBox(
+            width: 68,
+            height: 82,
+            child: bytes == null
+                ? Center(
+                    child: snapshot.connectionState == ConnectionState.waiting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            widget.prescription.isFromDoctor
+                                ? Icons.medical_information_outlined
+                                : Icons.description_outlined,
+                            color: _primary,
+                            size: 31,
+                          ),
+                  )
+                : Image.memory(bytes, fit: BoxFit.cover),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _StoredPrescriptionPreview extends StatelessWidget {
+  final _PrescriptionRecord prescription;
+  final Uint8List bytes;
+
+  const _StoredPrescriptionPreview({
+    required this.prescription,
+    required this.bytes,
+  });
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    prescription.displayName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: _navy,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${prescription.sourceLabel} · ${prescription.dateLabel}',
+              style: const TextStyle(fontSize: 12.5, color: _muted),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _PharmacyHero extends StatelessWidget {
@@ -1031,8 +1804,8 @@ class _NearbyPharmacyCard extends StatelessWidget {
                         );
                         onMessage('Numéro copié : ${pharmacy.phone}');
                       },
-                    icon: const Icon(Icons.content_copy_rounded, size: 17),
-                    label: const Text('Copier'),
+                icon: const Icon(Icons.content_copy_rounded, size: 17),
+                label: const Text('Copier'),
               ),
             ),
             const SizedBox(width: 8),
@@ -1275,84 +2048,23 @@ class _PrescriptionPreview extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-                'Le document reste sur cet appareil et n’est pas encore envoyé.',
+            'Le document reste sur cet appareil et n’est pas encore envoyé.',
             style: TextStyle(fontSize: 12.5, color: _muted),
           ),
         ],
       ),
     ),
     actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context, false),
+        child: const Text('Annuler'),
+      ),
       FilledButton(
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => Navigator.pop(context, true),
         style: FilledButton.styleFrom(backgroundColor: _green),
-        child: const Text('Continuer'),
+        child: const Text('Enregistrer'),
       ),
     ],
-  );
-}
-
-class _PrescriptionStatus extends StatelessWidget {
-  final String fileName;
-  final Uint8List? bytes;
-  final VoidCallback onReplace;
-  final VoidCallback onRemove;
-
-  const _PrescriptionStatus({
-    required this.fileName,
-    required this.bytes,
-    required this.onReplace,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: _green.withValues(alpha: .35)),
-    ),
-    child: Row(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: bytes == null
-              ? const SizedBox(
-                  width: 46,
-                  height: 46,
-                  child: ColoredBox(
-                    color: _greenSoft,
-                    child: Icon(Icons.description_outlined, color: _green),
-                  ),
-                )
-              : Image.memory(bytes!, width: 46, height: 46, fit: BoxFit.cover),
-        ),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Ordonnance prête',
-                style: TextStyle(fontWeight: FontWeight.w800, color: _navy),
-              ),
-              Text(
-                fileName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: _muted),
-              ),
-            ],
-          ),
-        ),
-        TextButton(onPressed: onReplace, child: const Text('Remplacer')),
-        IconButton(
-          tooltip: 'Supprimer l’ordonnance',
-          onPressed: onRemove,
-          icon: const Icon(Icons.close_rounded),
-        ),
-      ],
-    ),
   );
 }
 
@@ -1490,6 +2202,60 @@ class _PharmacyFilters {
     required this.prescriptionOnly,
     required this.availableOnly,
   });
+}
+
+class _PrescriptionRecord {
+  final String id;
+  final String fileName;
+  final String storagePath;
+  final String source;
+  final String status;
+  final String doctorName;
+  final DateTime? createdAt;
+
+  const _PrescriptionRecord({
+    required this.id,
+    required this.fileName,
+    required this.storagePath,
+    required this.source,
+    required this.status,
+    required this.doctorName,
+    required this.createdAt,
+  });
+
+  factory _PrescriptionRecord.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data() ?? const <String, dynamic>{};
+    final createdValue = data['createdAt'];
+    return _PrescriptionRecord(
+      id: document.id,
+      fileName: data['fileName']?.toString().trim() ?? '',
+      storagePath: data['storagePath']?.toString().trim() ?? '',
+      source: data['source']?.toString().trim() ?? 'scan',
+      status: data['status']?.toString().trim() ?? 'available',
+      doctorName: data['doctorName']?.toString().trim() ?? '',
+      createdAt: createdValue is Timestamp ? createdValue.toDate() : null,
+    );
+  }
+
+  bool get isFromDoctor => source == 'doctor';
+
+  String get displayName {
+    if (isFromDoctor && doctorName.isNotEmpty) {
+      return 'Ordonnance de $doctorName';
+    }
+    if (fileName.isNotEmpty) return fileName;
+    return isFromDoctor ? 'Ordonnance médicale' : 'Ordonnance scannée';
+  }
+
+  String get sourceLabel => isFromDoctor
+      ? doctorName.isEmpty
+            ? 'Envoyée par un médecin'
+            : 'Envoyée par $doctorName'
+      : 'Ajoutée par scan';
+
+  String get dateLabel => _formatPrescriptionDate(createdAt);
 }
 
 class _Medication {
@@ -1675,6 +2441,50 @@ bool _readBool(Map<dynamic, dynamic> data, List<String> keys) {
     }
   }
   return true;
+}
+
+String _safeImageExtension(String fileName) {
+  final normalized = fileName.toLowerCase();
+  if (normalized.endsWith('.png')) return 'png';
+  if (normalized.endsWith('.webp')) return 'webp';
+  if (normalized.endsWith('.heic') || normalized.endsWith('.heif')) {
+    return 'heic';
+  }
+  return 'jpg';
+}
+
+String _imageContentType(String extension) => switch (extension) {
+  'png' => 'image/png',
+  'webp' => 'image/webp',
+  'heic' => 'image/heic',
+  _ => 'image/jpeg',
+};
+
+String _formatPrescriptionDate(DateTime? value) {
+  if (value == null) return 'À l’instant';
+  final local = value.toLocal();
+  final now = DateTime.now();
+  final sameDay =
+      local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day;
+  final minutes = local.minute.toString().padLeft(2, '0');
+  if (sameDay) return 'Aujourd’hui, ${local.hour}:$minutes';
+  const months = [
+    'janv.',
+    'févr.',
+    'mars',
+    'avr.',
+    'mai',
+    'juin',
+    'juil.',
+    'août',
+    'sept.',
+    'oct.',
+    'nov.',
+    'déc.',
+  ];
+  return '${local.day} ${months[local.month - 1]} ${local.year}';
 }
 
 const _categories = ['Tous', 'Douleur', 'Rhume', 'Digestif', 'Vitamines'];

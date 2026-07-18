@@ -1733,9 +1733,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openService(HealthService service) {
     if (service.id == 'pharmacie') {
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const PharmacyPage()));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PharmacyPage(patientId: widget.user.uid),
+        ),
+      );
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(

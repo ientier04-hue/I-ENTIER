@@ -827,20 +827,10 @@ class _MeasurementFormState extends State<_MeasurementForm> {
               ),
               const SizedBox(height: 18),
               const _FormLabel('Type de mesure'),
-              DropdownButtonFormField<HealthMetric>(
-                initialValue: _metric,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.add_chart),
-                ),
-                items: [
-                  for (final metric in HealthMetric.values)
-                    DropdownMenuItem(value: metric, child: Text(metric.label)),
-                ],
-                onChanged: _saving
-                    ? null
-                    : (metric) {
-                        if (metric != null) _changeMetric(metric);
-                      },
+              _MetricTypePicker(
+                selected: _metric,
+                enabled: !_saving,
+                onSelected: _changeMetric,
               ),
               const SizedBox(height: 18),
               if (_metric == HealthMetric.bloodPressure)
@@ -979,6 +969,86 @@ class _FormLabel extends StatelessWidget {
       text,
       style: const TextStyle(color: _navy, fontWeight: FontWeight.w800),
     ),
+  );
+}
+
+class _MetricTypePicker extends StatelessWidget {
+  final HealthMetric selected;
+  final bool enabled;
+  final ValueChanged<HealthMetric> onSelected;
+
+  const _MetricTypePicker({
+    required this.selected,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const spacing = 9.0;
+      final columns = constraints.maxWidth >= 560 ? 5 : 3;
+      final itemWidth =
+          (constraints.maxWidth - spacing * (columns - 1)) / columns;
+      return Wrap(
+        spacing: spacing,
+        runSpacing: spacing,
+        children: [
+          for (final metric in HealthMetric.values)
+            SizedBox(
+              width: itemWidth,
+              child: Semantics(
+                button: true,
+                selected: selected == metric,
+                label: metric.label,
+                child: InkWell(
+                  onTap: enabled ? () => onSelected(metric) : null,
+                  borderRadius: BorderRadius.circular(16),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    constraints: const BoxConstraints(minHeight: 88),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected == metric
+                          ? metric.color.withValues(alpha: .10)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: selected == metric ? metric.color : _border,
+                        width: selected == metric ? 1.7 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(metric.icon, color: metric.color, size: 24),
+                        const SizedBox(height: 7),
+                        Text(
+                          metric.shortLabel,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: selected == metric ? _navy : _muted,
+                            fontSize: 12,
+                            height: 1.15,
+                            fontWeight: selected == metric
+                                ? FontWeight.w800
+                                : FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    },
   );
 }
 
