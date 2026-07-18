@@ -65,4 +65,36 @@ void main() {
     expect(find.byTooltip('Fermer'), findsNothing);
     expect(prompt, findsOneWidget);
   });
+
+  testWidgets('la poignée ferme toute la feuille AI en glissant vers le bas', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          user: _FakeUser(),
+          account: const {'name': 'Patient Test'},
+          patientProfile: const {},
+        ),
+      ),
+    );
+
+    final prompt = find.text('Écrivez votre message...');
+    await tester.ensureVisible(prompt);
+    await tester.tap(prompt);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 750));
+
+    final handle = find.byKey(const ValueKey('ai-sheet-drag-handle'));
+    expect(handle, findsOneWidget);
+    await tester.drag(handle, const Offset(0, 120));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byTooltip('Fermer'), findsNothing);
+    expect(prompt, findsOneWidget);
+  });
 }

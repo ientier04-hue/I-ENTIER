@@ -15,6 +15,7 @@ import 'firebase_options.dart';
 import 'cycle_tracking_page.dart';
 import 'health_tracking_page.dart';
 import 'laboratory_page.dart';
+import 'mental_health_page.dart';
 import 'pharmacy_page.dart';
 
 Future<void> main() async {
@@ -1653,6 +1654,7 @@ class HealthService {
   final String accentColor;
   final String actionLabel;
   final String? externalUrl;
+  final IconData? icon;
 
   const HealthService({
     required this.id,
@@ -1663,6 +1665,7 @@ class HealthService {
     required this.accentColor,
     this.actionLabel = 'Accéder',
     this.externalUrl,
+    this.icon,
   });
 
   /// Format attendu, par exemple depuis Firebase :
@@ -1710,7 +1713,7 @@ const _homeServices = <HealthService>[
     imagePath: 'sang.png',
     backgroundColor: '#FFA2A8',
     accentColor: '#F01924',
-    externalUrl: 'https://www.croixrouge.ht/donnez-votre-sang',
+    externalUrl: 'https://www.croixrouge.ht/2-check-up/',
   ),
   HealthService(
     id: 'laboratoire',
@@ -1727,6 +1730,16 @@ const _homeServices = <HealthService>[
     imagePath: 'regles.png',
     backgroundColor: '#F0E8FF',
     accentColor: '#7C5CE5',
+  ),
+  HealthService(
+    id: 'soutien-psychologique',
+    title: 'Bien-être mental',
+    summary: 'Écoutez-vous et trouvez du soutien',
+    imagePath: '',
+    backgroundColor: '#F3ECFF',
+    accentColor: '#7656D8',
+    actionLabel: 'Prendre soin de moi',
+    icon: Icons.psychology_alt_rounded,
   ),
 ];
 
@@ -1766,7 +1779,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         barrierColor: const Color(0xB30A1930),
         elevation: 0,
-        enableDrag: true,
+        enableDrag: false,
         showDragHandle: false,
         transitionAnimationController: transitionController,
         constraints: BoxConstraints(
@@ -1826,6 +1839,17 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => CycleTrackingPage(patientId: widget.user.uid),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'soutien-psychologique') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MentalHealthPage(
+            patientId: widget.user.uid,
+            patientProfile: widget.patientProfile,
+          ),
         ),
       );
       return;
@@ -3782,6 +3806,28 @@ class _ServiceImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (service.imagePath.isEmpty) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .72),
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x187656D8),
+              blurRadius: 20,
+              offset: Offset(0, 9),
+            ),
+          ],
+        ),
+        child: Icon(
+          service.icon ?? Icons.health_and_safety_outlined,
+          size: size * .56,
+          color: service.accent,
+        ),
+      );
+    }
     if (service.hasRemoteImage) {
       return Image.network(
         service.imagePath,
@@ -3981,6 +4027,8 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
   Timer? _focusTimer;
   String? _submittedMessage;
   bool _isClosing = false;
+  bool _isDragging = false;
+  double _dragOffset = 0;
 
   @override
   void initState() {
@@ -4005,6 +4053,41 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
     _focusTimer?.cancel();
     _focusNode.unfocus();
     widget.onClose();
+  }
+
+  void _startDrag(DragStartDetails details) {
+    if (_isClosing) return;
+    setState(() => _isDragging = true);
+  }
+
+  void _updateDrag(DragUpdateDetails details) {
+    if (!_isDragging || _isClosing) return;
+    setState(() {
+      _dragOffset = math.max(0, _dragOffset + details.delta.dy);
+    });
+  }
+
+  void _endDrag(DragEndDetails details) {
+    if (!_isDragging || _isClosing) return;
+    final shouldClose =
+        _dragOffset >= 72 || (details.primaryVelocity ?? 0) >= 650;
+    if (shouldClose) {
+      setState(() => _isDragging = false);
+      _close();
+      return;
+    }
+    setState(() {
+      _isDragging = false;
+      _dragOffset = 0;
+    });
+  }
+
+  void _cancelDrag() {
+    if (!_isDragging || _isClosing) return;
+    setState(() {
+      _isDragging = false;
+      _dragOffset = 0;
+    });
   }
 
   @override
@@ -4043,99 +4126,124 @@ class _AiAssistantSheetState extends State<_AiAssistantSheet>
       curve: const Interval(.18, 1, curve: Curves.easeOutCubic),
     );
 
-    return Material(
-      color: Colors.transparent,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF07172E), Color(0xFF0D2A55), Color(0xFF114D82)],
-              stops: [0, .52, 1],
-            ),
-          ),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _MagicBackdropPainter(_magicController),
-                  ),
-                ),
+    return AnimatedContainer(
+      duration: _isDragging ? Duration.zero : const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      transform: Matrix4.translationValues(0, _dragOffset, 0),
+      child: Material(
+        color: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF07172E),
+                  Color(0xFF0D2A55),
+                  Color(0xFF114D82),
+                ],
+                stops: [0, .52, 1],
               ),
-              AnimatedPadding(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.viewInsetsOf(context).bottom,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 16 : 32,
-                    10,
-                    compact ? 16 : 32,
-                    10,
+            ),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _MagicBackdropPainter(_magicController),
+                    ),
                   ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 860),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: .32),
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _AiSheetHeader(onClose: _close),
-                          Expanded(
-                            child: FadeTransition(
-                              opacity: contentAnimation,
-                              child: SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0, .08),
-                                  end: Offset.zero,
-                                ).animate(contentAnimation),
-                                child: _submittedMessage == null
-                                    ? _AiWelcome(
-                                        compact: compact,
-                                        magicAnimation: _magicController,
-                                        suggestions: _suggestions,
-                                        onSuggestionTap: _useSuggestion,
-                                      )
-                                    : _AiConversationPreview(
-                                        message: _submittedMessage!,
+                ),
+                AnimatedPadding(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewInsetsOf(context).bottom,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 16 : 32,
+                      10,
+                      compact ? 16 : 32,
+                      10,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 860),
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              key: const ValueKey('ai-sheet-drag-handle'),
+                              behavior: HitTestBehavior.opaque,
+                              onVerticalDragStart: _startDrag,
+                              onVerticalDragUpdate: _updateDrag,
+                              onVerticalDragEnd: _endDrag,
+                              onVerticalDragCancel: _cancelDrag,
+                              child: SizedBox(
+                                width: 88,
+                                height: 22,
+                                child: Center(
+                                  child: Container(
+                                    width: 46,
+                                    height: 5,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: .42,
                                       ),
+                                      borderRadius: BorderRadius.circular(99),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          _AiComposer(
-                            controller: _messageController,
-                            focusNode: _focusNode,
-                            onSubmitted: _submitMessage,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            "L'IA peut faire des erreurs. En cas d'urgence, contactez un professionnel.",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFFAFC9E7),
-                              fontSize: 10.5,
-                              height: 1.2,
+                            const SizedBox(height: 2),
+                            _AiSheetHeader(onClose: _close),
+                            Expanded(
+                              child: FadeTransition(
+                                opacity: contentAnimation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, .08),
+                                    end: Offset.zero,
+                                  ).animate(contentAnimation),
+                                  child: _submittedMessage == null
+                                      ? _AiWelcome(
+                                          compact: compact,
+                                          magicAnimation: _magicController,
+                                          suggestions: _suggestions,
+                                          onSuggestionTap: _useSuggestion,
+                                        )
+                                      : _AiConversationPreview(
+                                          message: _submittedMessage!,
+                                        ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                            _AiComposer(
+                              controller: _messageController,
+                              focusNode: _focusNode,
+                              onSubmitted: _submitMessage,
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "L'IA peut faire des erreurs. En cas d'urgence, contactez un professionnel.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFFAFC9E7),
+                                fontSize: 10.5,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

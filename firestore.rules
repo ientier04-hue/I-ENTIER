@@ -174,6 +174,40 @@ service cloud.firestore {
         allow delete: if signedIn() && request.auth.uid == patientId;
       }
 
+      // Private emotional wellbeing journal. Entries are deliberately
+      // immutable so their history cannot be silently rewritten.
+      match /mentalHealthEntries/{entryId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+
+        allow create: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.keys().hasOnly([
+            'mood', 'moodScore', 'feelings', 'note', 'createdAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'mood', 'moodScore', 'feelings', 'note', 'createdAt'
+          ])
+          && request.resource.data.mood is string
+          && request.resource.data.mood in [
+            'veryLow', 'low', 'neutral', 'good', 'veryGood'
+          ]
+          && request.resource.data.moodScore is int
+          && request.resource.data.moodScore >= 1
+          && request.resource.data.moodScore <= 5
+          && request.resource.data.feelings is list
+          && request.resource.data.feelings.size() <= 8
+          && request.resource.data.feelings.hasOnly([
+            'anxious', 'sad', 'stressed', 'tired', 'lonely', 'angry',
+            'calm', 'hopeful'
+          ])
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 500
+          && request.resource.data.createdAt == request.time;
+
+        allow update: if false;
+        allow delete: if signedIn() && request.auth.uid == patientId;
+      }
+
       // Scanned prescriptions belong to the patient. A trusted backend can
       // later create records with source == 'doctor' through the Admin SDK.
       match /prescriptions/{prescriptionId} {
