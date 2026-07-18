@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "273373283430",
+    "project_id": "i-entier",
+    "storage_bucket": "i-entier.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273373283430:android:7eef2a7e171341697c19a7",
+        "android_client_info": {
+          "package_name": "com.ientier.i_entier"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "273373283430-t8nuvdm6ej8eupla7ntl4aee8iov35qm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaKC1GhR_94odUsI4OBp4gisV3tI6sY4o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "273373283430-t8nuvdm6ej8eupla7ntl4aee8iov35qm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "273373283430-g5qhsuldh0rtbuorf6m0ehv1e2e4pm60.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.ientier"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273373283430:android:5c10f30393821be07c19a7",
+        "android_client_info": {
+          "package_name": "com.mycompany.ientier"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "273373283430-1fsgmd1qi2r0sof2lrbtbgrcqmtpgbk6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mycompany.ientier",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "273373283430-t8nuvdm6ej8eupla7ntl4aee8iov35qm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaKC1GhR_94odUsI4OBp4gisV3tI6sY4o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "273373283430-t8nuvdm6ej8eupla7ntl4aee8iov35qm.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "273373283430-g5qhsuldh0rtbuorf6m0ehv1e2e4pm60.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.ientier"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

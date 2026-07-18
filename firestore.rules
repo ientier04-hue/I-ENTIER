@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Medical profile: only its authenticated owner can access it.
+    match /patients/{patientId} {
+      allow read: if signedIn() && request.auth.uid == patientId;
+
+      allow create: if signedIn()
+        && request.auth.uid == patientId
+        && request.resource.data.keys().hasOnly([
+          'fullName', 'sex', 'birthDate', 'medicalConditions', 'allergies',
+          'photoUrl', 'profileComplete', 'createdAt', 'updatedAt'
+        ]);
+
+      allow update: if signedIn()
+        && request.auth.uid == patientId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fullName', 'sex', 'birthDate', 'medicalConditions', 'allergies',
+          'photoUrl', 'profileComplete', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
+    // Directories are readable after authentication, but data management must
+    // be handled by an admin backend or the Firebase console.
+    match /personnelMedical/{documentId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /institution/{documentId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Deny every collection not explicitly listed above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
