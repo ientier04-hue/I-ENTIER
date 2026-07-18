@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1741,6 +1743,33 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
 
+  Future<void> _openAiAssistant() async {
+    final transitionController = AnimationController(
+      vsync: Navigator.of(context),
+      duration: const Duration(milliseconds: 620),
+      reverseDuration: const Duration(milliseconds: 420),
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0xB30A1930),
+      elevation: 0,
+      enableDrag: true,
+      showDragHandle: false,
+      transitionAnimationController: transitionController,
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width,
+        maxHeight: MediaQuery.sizeOf(context).height,
+      ),
+      builder: (_) => const _AiAssistantSheet(),
+    );
+
+    transitionController.dispose();
+  }
+
   void _openService(HealthService service) {
     if (service.id == 'pharmacie') {
       Navigator.of(context).push(
@@ -1776,6 +1805,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     return Scaffold(
       backgroundColor: AppColors.canvas,
+      extendBody: true,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -1820,9 +1850,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           onServiceTap: _openService,
                         ),
                         const SizedBox(height: 26),
-                        const AspectRatio(
+                        AspectRatio(
                           aspectRatio: 18 / 9,
-                          child: _AssistantCard(),
+                          child: _AssistantCard(onComposeTap: _openAiAssistant),
                         ),
                       ] else if (_selectedTab == 1)
                         const _PersonnelPage()
@@ -1836,7 +1866,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (_selectedTab == 0)
                   Positioned(
                     right: wide ? 42 : 20,
-                    bottom: 12,
+                    bottom: 94,
                     child: _EmergencyButton(),
                   ),
               ],
@@ -1851,46 +1881,69 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
             child: Container(
-              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.border),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x17132D52),
-                    blurRadius: 24,
-                    offset: Offset(0, 10),
+                    color: Color(0x24102A56),
+                    blurRadius: 30,
+                    spreadRadius: -4,
+                    offset: Offset(0, 14),
                   ),
                 ],
               ),
-              child: NavigationBar(
-                height: 70,
-                selectedIndex: _selectedTab,
-                onDestinationSelected: (index) =>
-                    setState(() => _selectedTab = index),
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    selectedIcon: Icon(Icons.home_rounded),
-                    label: 'Accueil',
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xF2FFFFFF),
+                          Color(0xDDEAF3FF),
+                          Color(0xE8F9FCFF),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0xBFFFFFFF)),
+                    ),
+                    child: NavigationBar(
+                      height: 70,
+                      elevation: 0,
+                      backgroundColor: Colors.transparent,
+                      surfaceTintColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      selectedIndex: _selectedTab,
+                      onDestinationSelected: (index) =>
+                          setState(() => _selectedTab = index),
+                      destinations: const [
+                        NavigationDestination(
+                          icon: Icon(Icons.home_outlined),
+                          selectedIcon: Icon(Icons.home_rounded),
+                          label: 'Accueil',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.medical_information_outlined),
+                          selectedIcon: Icon(Icons.medical_information_rounded),
+                          label: 'Personnel',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.local_hospital_outlined),
+                          selectedIcon: Icon(Icons.local_hospital_rounded),
+                          label: 'Institutions',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.monitor_heart_outlined),
+                          selectedIcon: Icon(Icons.monitor_heart_rounded),
+                          label: 'Suivi',
+                        ),
+                      ],
+                    ),
                   ),
-                  NavigationDestination(
-                    icon: Icon(Icons.medical_information_outlined),
-                    selectedIcon: Icon(Icons.medical_information_rounded),
-                    label: 'Personnel',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.local_hospital_outlined),
-                    selectedIcon: Icon(Icons.local_hospital_rounded),
-                    label: 'Institutions',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.monitor_heart_outlined),
-                    selectedIcon: Icon(Icons.monitor_heart_rounded),
-                    label: 'Suivi',
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -3715,7 +3768,9 @@ class _ServiceImage extends StatelessWidget {
 }
 
 class _AssistantCard extends StatelessWidget {
-  const _AssistantCard();
+  final VoidCallback onComposeTap;
+
+  const _AssistantCard({required this.onComposeTap});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -3744,12 +3799,15 @@ class _AssistantCard extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                const CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Color(0xFFCDEAFF),
-                  child: Icon(
-                    Icons.auto_awesome_rounded,
-                    color: Color(0xFF1559A5),
+                Hero(
+                  tag: 'i-entier-ai-avatar',
+                  child: const CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Color(0xFFCDEAFF),
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Color(0xFF1559A5),
+                    ),
                   ),
                 ),
                 Positioned(
@@ -3810,33 +3868,710 @@ class _AssistantCard extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        TextField(
-          decoration: InputDecoration(
-            hintText: 'Écrivez votre message...',
-            hintStyle: const TextStyle(color: Color(0xFF75849C)),
-            suffixIcon: Container(
-              margin: const EdgeInsets.all(5),
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
+        Semantics(
+          button: true,
+          label: 'Ouvrir I-ENTIER AI',
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onComposeTap,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Écrivez votre message...',
+                        style: TextStyle(
+                          color: Color(0xFF75849C),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_upward_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: const Icon(
-                Icons.arrow_upward_rounded,
-                color: Colors.white,
-              ),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(15),
-              borderSide: BorderSide.none,
             ),
           ),
         ),
       ],
     ),
   );
+}
+
+class _AiAssistantSheet extends StatefulWidget {
+  const _AiAssistantSheet();
+
+  @override
+  State<_AiAssistantSheet> createState() => _AiAssistantSheetState();
+}
+
+class _AiAssistantSheetState extends State<_AiAssistantSheet>
+    with TickerProviderStateMixin {
+  static const _suggestions = <({IconData icon, String label})>[
+    (icon: Icons.health_and_safety_outlined, label: 'Comprendre mes symptômes'),
+    (icon: Icons.medication_outlined, label: 'Question sur un médicament'),
+    (icon: Icons.calendar_month_outlined, label: 'Préparer mon rendez-vous'),
+  ];
+
+  final _messageController = TextEditingController();
+  final _focusNode = FocusNode();
+  late final AnimationController _entranceController;
+  late final AnimationController _magicController;
+  String? _submittedMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 760),
+    )..forward();
+    _magicController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 7),
+    )..repeat();
+
+    Future<void>.delayed(const Duration(milliseconds: 430), () {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _focusNode.dispose();
+    _entranceController.dispose();
+    _magicController.dispose();
+    super.dispose();
+  }
+
+  void _useSuggestion(String suggestion) {
+    _messageController
+      ..text = suggestion
+      ..selection = TextSelection.collapsed(offset: suggestion.length);
+    _focusNode.requestFocus();
+  }
+
+  void _submitMessage() {
+    final message = _messageController.text.trim();
+    if (message.isEmpty) return;
+    setState(() {
+      _submittedMessage = message;
+      _messageController.clear();
+    });
+    _focusNode.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final compact = size.width < 600;
+    final contentAnimation = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(.18, 1, curve: Curves.easeOutCubic),
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF07172E), Color(0xFF0D2A55), Color(0xFF114D82)],
+              stops: [0, .52, 1],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _MagicBackdropPainter(_magicController),
+                  ),
+                ),
+              ),
+              Scaffold(
+                resizeToAvoidBottomInset: true,
+                backgroundColor: Colors.transparent,
+                body: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 16 : 32,
+                    10,
+                    compact ? 16 : 32,
+                    10,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 860),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .32),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _AiSheetHeader(
+                            onClose: () => Navigator.of(context).pop(),
+                          ),
+                          Expanded(
+                            child: FadeTransition(
+                              opacity: contentAnimation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, .08),
+                                  end: Offset.zero,
+                                ).animate(contentAnimation),
+                                child: _submittedMessage == null
+                                    ? _AiWelcome(
+                                        compact: compact,
+                                        magicAnimation: _magicController,
+                                        suggestions: _suggestions,
+                                        onSuggestionTap: _useSuggestion,
+                                      )
+                                    : _AiConversationPreview(
+                                        message: _submittedMessage!,
+                                      ),
+                              ),
+                            ),
+                          ),
+                          _AiComposer(
+                            controller: _messageController,
+                            focusNode: _focusNode,
+                            onSubmitted: _submitMessage,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "L'IA peut faire des erreurs. En cas d'urgence, contactez un professionnel.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFFAFC9E7),
+                              fontSize: 10.5,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiSheetHeader extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _AiSheetHeader({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Hero(
+        tag: 'i-entier-ai-avatar',
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFE1F3FF), Color(0xFF8ED7FF)],
+            ),
+            shape: BoxShape.circle,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x6646B8FF),
+                blurRadius: 24,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.auto_awesome_rounded,
+            color: Color(0xFF125AA3),
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+      const Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'I-ENTIER AI',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .2,
+              ),
+            ),
+            Row(
+              children: [
+                _OnlineDot(),
+                SizedBox(width: 6),
+                Text(
+                  'Assistant santé • En ligne',
+                  style: TextStyle(color: Color(0xFFC6DDF5), fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      IconButton(
+        tooltip: 'Fermer',
+        onPressed: onClose,
+        style: IconButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: Colors.white.withValues(alpha: .1),
+          minimumSize: const Size(44, 44),
+        ),
+        icon: const Icon(Icons.close_rounded),
+      ),
+    ],
+  );
+}
+
+class _OnlineDot extends StatelessWidget {
+  const _OnlineDot();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 7,
+    height: 7,
+    decoration: const BoxDecoration(
+      color: Color(0xFF55E6A5),
+      shape: BoxShape.circle,
+      boxShadow: [BoxShadow(color: Color(0x9955E6A5), blurRadius: 7)],
+    ),
+  );
+}
+
+class _AiWelcome extends StatelessWidget {
+  final bool compact;
+  final Animation<double> magicAnimation;
+  final List<({IconData icon, String label})> suggestions;
+  final ValueChanged<String> onSuggestionTap;
+
+  const _AiWelcome({
+    required this.compact,
+    required this.magicAnimation,
+    required this.suggestions,
+    required this.onSuggestionTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      padding: EdgeInsets.symmetric(vertical: compact ? 18 : 34),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight - 36),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _AiMagicOrb(animation: magicAnimation, compact: compact),
+            SizedBox(height: compact ? 18 : 26),
+            Text(
+              'Bonjour, je suis là pour vous',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: compact ? 24 : 32,
+                height: 1.08,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -.6,
+              ),
+            ),
+            const SizedBox(height: 9),
+            const Text(
+              'Posez une question sur votre santé ou choisissez une suggestion.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFFC4D9EF),
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            SizedBox(height: compact ? 20 : 28),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 9,
+              runSpacing: 9,
+              children: suggestions
+                  .map(
+                    (suggestion) => _AiSuggestionChip(
+                      icon: suggestion.icon,
+                      label: suggestion.label,
+                      onTap: () => onSuggestionTap(suggestion.label),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _AiMagicOrb extends StatelessWidget {
+  final Animation<double> animation;
+  final bool compact;
+
+  const _AiMagicOrb({required this.animation, required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 96.0 : 126.0;
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        final phase = animation.value * math.pi * 2;
+        final scale = 1 + math.sin(phase) * .035;
+        return Transform.scale(
+          scale: scale,
+          child: Transform.rotate(
+            angle: math.sin(phase * .5) * .035,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const RadialGradient(
+            center: Alignment(-.28, -.35),
+            colors: [
+              Color(0xFFFFFFFF),
+              Color(0xFFB8E8FF),
+              Color(0xFF62B9FF),
+              Color(0xFF2569C5),
+            ],
+            stops: [0, .28, .65, 1],
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: .72)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x8859C8FF),
+              blurRadius: 50,
+              spreadRadius: 10,
+            ),
+            BoxShadow(
+              color: Color(0x664D7DFF),
+              blurRadius: 90,
+              spreadRadius: 24,
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.auto_awesome_rounded,
+          size: compact ? 42 : 54,
+          color: const Color(0xFF0D4D91),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiSuggestionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _AiSuggestionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white.withValues(alpha: .09),
+    borderRadius: BorderRadius.circular(99),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(99),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(color: Colors.white.withValues(alpha: .14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFF91D8FF), size: 18),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _AiConversationPreview extends StatelessWidget {
+  final String message;
+
+  const _AiConversationPreview({required this.message});
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: const EdgeInsets.symmetric(vertical: 28),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 600),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF2B78D0),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(6),
+              ),
+            ),
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white, height: 1.35),
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 620),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(6),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
+              border: Border.all(color: Colors.white.withValues(alpha: .12)),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Color(0xFF8FD7FF),
+                  size: 20,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "L'interface est prête. Le moteur de réponse IA sera connecté prochainement.",
+                    style: TextStyle(color: Colors.white, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AiComposer extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onSubmitted;
+
+  const _AiComposer({
+    required this.controller,
+    required this.focusNode,
+    required this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(1.2),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF8BE0FF), Color(0xFF497CFF), Color(0xFFB290FF)],
+      ),
+      borderRadius: BorderRadius.circular(23),
+      boxShadow: const [
+        BoxShadow(color: Color(0x553E9CFF), blurRadius: 28, spreadRadius: 2),
+      ],
+    ),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 5, 6, 5),
+      decoration: BoxDecoration(
+        color: const Color(0xF2142B47),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              minLines: 1,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.newline,
+              keyboardAppearance: Brightness.dark,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              cursorColor: const Color(0xFF8EDCFF),
+              decoration: const InputDecoration(
+                hintText: 'Demandez quelque chose...',
+                hintStyle: TextStyle(color: Color(0xFF91A9C3)),
+                filled: false,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 13),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, child) {
+              final enabled = value.text.trim().isNotEmpty;
+              return Semantics(
+                button: true,
+                enabled: enabled,
+                label: 'Envoyer le message',
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: enabled
+                        ? const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF68CAFF), Color(0xFF246CDE)],
+                          )
+                        : null,
+                    color: enabled ? null : Colors.white.withValues(alpha: .08),
+                    shape: BoxShape.circle,
+                    boxShadow: enabled
+                        ? const [
+                            BoxShadow(color: Color(0x665BC5FF), blurRadius: 18),
+                          ]
+                        : null,
+                  ),
+                  child: IconButton(
+                    tooltip: 'Envoyer',
+                    onPressed: enabled ? onSubmitted : null,
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.arrow_upward_rounded,
+                      color: enabled ? Colors.white : const Color(0xFF6F89A5),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _MagicBackdropPainter extends CustomPainter {
+  final Animation<double> animation;
+
+  _MagicBackdropPainter(this.animation) : super(repaint: animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final phase = animation.value * math.pi * 2;
+    final glowPaint = Paint()
+      ..color = const Color(0x284CBFFF)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 70);
+    canvas.drawCircle(
+      Offset(
+        size.width * .16 + math.sin(phase) * 24,
+        size.height * .32 + math.cos(phase) * 18,
+      ),
+      math.min(size.width, size.height) * .24,
+      glowPaint,
+    );
+
+    glowPaint.color = const Color(0x223B72FF);
+    canvas.drawCircle(
+      Offset(
+        size.width * .84 + math.cos(phase * .8) * 30,
+        size.height * .67 + math.sin(phase * .8) * 22,
+      ),
+      math.min(size.width, size.height) * .29,
+      glowPaint,
+    );
+
+    for (var index = 0; index < 22; index++) {
+      final x = ((index * 47) % 101) / 100 * size.width;
+      final baseY = ((index * 71) % 97) / 100 * size.height;
+      final y = baseY + math.sin(phase + index * .9) * 7;
+      final pulse = .35 + (math.sin(phase * 1.7 + index) + 1) * .27;
+      final radius = index % 5 == 0 ? 2.1 : 1.25;
+      final starPaint = Paint()
+        ..color = Colors.white.withValues(alpha: pulse.clamp(0, 1));
+      canvas.drawCircle(Offset(x, y), radius, starPaint);
+      if (index % 5 == 0) {
+        canvas.drawLine(
+          Offset(x - 4, y),
+          Offset(x + 4, y),
+          starPaint..strokeWidth = .7,
+        );
+        canvas.drawLine(Offset(x, y - 4), Offset(x, y + 4), starPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MagicBackdropPainter oldDelegate) =>
+      oldDelegate.animation != animation;
 }
 
 class _EmergencyButton extends StatelessWidget {
