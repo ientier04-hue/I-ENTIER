@@ -753,6 +753,82 @@ class AppColors {
   static const border = Color(0xFFE9EDF5);
 }
 
+/// Données indépendantes du rendu. La même structure peut venir plus tard
+/// d'une collection Firestore ou d'une API plutôt que de [_homeServices].
+class HealthService {
+  final String id;
+  final String title;
+  final String summary;
+  final String imagePath;
+  final String backgroundColor;
+  final String accentColor;
+  final String actionLabel;
+
+  const HealthService({
+    required this.id,
+    required this.title,
+    required this.summary,
+    required this.imagePath,
+    required this.backgroundColor,
+    required this.accentColor,
+    this.actionLabel = 'Accéder',
+  });
+
+  /// Format attendu, par exemple depuis Firebase :
+  /// {title, summary, imagePath, backgroundColor, accentColor, actionLabel}
+  factory HealthService.fromMap(String id, Map<String, dynamic> data) =>
+      HealthService(
+        id: id,
+        title: data['title']?.toString() ?? '',
+        summary: data['summary']?.toString() ?? '',
+        imagePath:
+            data['imagePath']?.toString() ?? data['imageUrl']?.toString() ?? '',
+        backgroundColor: data['backgroundColor']?.toString() ?? '#FFFFFF',
+        accentColor: data['accentColor']?.toString() ?? '#1769F5',
+        actionLabel: data['actionLabel']?.toString() ?? 'Accéder',
+      );
+
+  bool get hasRemoteImage =>
+      imagePath.startsWith('https://') || imagePath.startsWith('http://');
+
+  Color get background => _colorFromHex(backgroundColor, Colors.white);
+  Color get accent => _colorFromHex(accentColor, AppColors.primary);
+
+  static Color _colorFromHex(String value, Color fallback) {
+    final normalized = value.trim().replaceFirst('#', '');
+    final hex = normalized.length == 6 ? 'FF$normalized' : normalized;
+    final colorValue = int.tryParse(hex, radix: 16);
+    return colorValue == null ? fallback : Color(colorValue);
+  }
+}
+
+const _homeServices = <HealthService>[
+  HealthService(
+    id: 'pharmacie',
+    title: 'Pharmacie',
+    summary: 'Commandez vos médicaments en ligne',
+    imagePath: 'pharma.png',
+    backgroundColor: '#D7F5F1',
+    accentColor: '#009B88',
+  ),
+  HealthService(
+    id: 'don-de-sang',
+    title: 'Don de sang',
+    summary: 'Trouvez un centre et sauvez des vies',
+    imagePath: 'sang.png',
+    backgroundColor: '#FFA2A8',
+    accentColor: '#F01924',
+  ),
+  HealthService(
+    id: 'laboratoire',
+    title: 'Laboratoire',
+    summary: 'Trouvez un labo pour votre examen',
+    imagePath: 'laboratoire.png',
+    backgroundColor: '#DDF6F4',
+    accentColor: '#009B88',
+  ),
+];
+
 class HomeScreen extends StatefulWidget {
   final User user;
   final Map<String, dynamic> account;
@@ -822,7 +898,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           action: 'Voir tout',
                         ),
                         const SizedBox(height: 14),
-                        _ServiceGrid(wide: wide),
+                        _ServiceCarousel(wide: wide, services: _homeServices),
                         const SizedBox(height: 28),
                         _AssistantCard(
                           open: _assistantOpen,
@@ -1792,117 +1868,118 @@ class _CareIllustration extends StatelessWidget {
   );
 }
 
-class _ServiceGrid extends StatelessWidget {
+class _ServiceCarousel extends StatelessWidget {
   final bool wide;
-  const _ServiceGrid({required this.wide});
+  final List<HealthService> services;
+  const _ServiceCarousel({required this.wide, required this.services});
+
   @override
   Widget build(BuildContext context) {
-    final services = [
-      (
-        'Pharmacie',
-        'Commandez vos médicaments en ligne',
-        Icons.medication_rounded,
-        const Color(0xFFE7F8F4),
-        const Color(0xFF11A98B),
+    return SizedBox(
+      height: wide ? 430 : 390,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        clipBehavior: Clip.none,
+        padding: const EdgeInsets.only(right: 4),
+        itemCount: services.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 18),
+        itemBuilder: (context, index) {
+          final service = services[index];
+          return SizedBox(
+            width: wide ? 312 : 286,
+            child: _ServiceCard(service: service),
+          );
+        },
       ),
-      (
-        'Don de sang',
-        'Trouvez un centre et sauvez des vies',
-        Icons.bloodtype_rounded,
-        const Color(0xFFFFEFF1),
-        const Color(0xFFF04B62),
-      ),
-      (
-        'Suivi de cycle',
-        'Suivez votre cycle et recevez des conseils',
-        Icons.calendar_month_rounded,
-        const Color(0xFFF1EEFF),
-        const Color(0xFF8552C8),
-      ),
-    ];
-    return LayoutBuilder(
-      builder: (context, c) {
-        final count = c.maxWidth > 620 ? 3 : 1;
-        return GridView.count(
-          crossAxisCount: count,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: count == 1 ? 2.65 : 0.70,
-          children: services
-              .map(
-                (s) => _ServiceCard(
-                  title: s.$1,
-                  description: s.$2,
-                  icon: s.$3,
-                  background: s.$4,
-                  accent: s.$5,
-                ),
-              )
-              .toList(),
-        );
-      },
     );
   }
 }
 
 class _ServiceCard extends StatelessWidget {
-  final String title, description;
-  final IconData icon;
-  final Color background, accent;
-  const _ServiceCard({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.background,
-    required this.accent,
-  });
+  final HealthService service;
+  const _ServiceCard({required this.service});
+
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(22),
+    padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
     decoration: BoxDecoration(
-      color: background,
-      borderRadius: BorderRadius.circular(26),
+      color: service.background,
+      borderRadius: BorderRadius.circular(27),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 62,
-          height: 62,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .72),
-            borderRadius: BorderRadius.circular(19),
-          ),
-          child: Icon(icon, color: accent, size: 34),
+        Expanded(
+          child: Center(child: _ServiceImage(service: service)),
         ),
-        const Spacer(),
         Text(
-          title,
+          service.title,
           style: const TextStyle(
-            fontSize: 19,
+            fontSize: 22,
             fontWeight: FontWeight.w800,
             color: Color(0xFF172033),
           ),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: 4),
         Text(
-          description,
-          style: const TextStyle(height: 1.35, color: Color(0xFF59667C)),
+          service.summary,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 17,
+            height: 1.2,
+            color: Color(0xFF283648),
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 17),
         Text(
-          'Accéder  →',
+          '${service.actionLabel}  →',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: accent,
+            color: service.accent,
           ),
         ),
       ],
     ),
   );
+}
+
+class _ServiceImage extends StatelessWidget {
+  final HealthService service;
+  const _ServiceImage({required this.service});
+
+  @override
+  Widget build(BuildContext context) {
+    const imageSize = 190.0;
+    if (service.hasRemoteImage) {
+      return Image.network(
+        service.imagePath,
+        width: imageSize,
+        height: imageSize,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (context, error, stackTrace) => const Icon(
+          Icons.image_not_supported_outlined,
+          size: 64,
+          color: AppColors.muted,
+        ),
+      );
+    }
+    return Image.asset(
+      service.imagePath,
+      width: imageSize,
+      height: imageSize,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (context, error, stackTrace) => const Icon(
+        Icons.image_not_supported_outlined,
+        size: 64,
+        color: AppColors.muted,
+      ),
+    );
+  }
 }
 
 class _AssistantCard extends StatelessWidget {
