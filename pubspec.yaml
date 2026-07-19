@@ -70,6 +70,8 @@ flutter:
     - sang.png
     - laboratoire.png
     - regles.png
+    - mental_health.png
+    - preventive_medicine.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

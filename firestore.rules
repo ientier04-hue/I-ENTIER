@@ -208,6 +208,108 @@ service cloud.firestore {
         allow delete: if signedIn() && request.auth.uid == patientId;
       }
 
+      // Private preventive-care notebook. Patients can record completed
+      // check-ups and the next date agreed with a healthcare professional.
+      match /preventiveCareRecords/{recordId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+
+        allow create: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.keys().hasOnly([
+            'category', 'title', 'planItemId', 'completedAt', 'nextDueAt',
+            'provider', 'note', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'category', 'title', 'planItemId', 'completedAt', 'provider',
+            'note', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.category is string
+          && request.resource.data.category in [
+            'checkup', 'vaccine', 'screening', 'dental', 'vision', 'habit'
+          ]
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.planItemId is string
+          && request.resource.data.planItemId.size() <= 80
+          && request.resource.data.completedAt is timestamp
+          && request.resource.data.completedAt <= request.time
+          && (!request.resource.data.keys().hasAny(['nextDueAt'])
+            || (request.resource.data.nextDueAt is timestamp
+              && request.resource.data.nextDueAt
+                > request.resource.data.completedAt))
+          && request.resource.data.provider is string
+          && request.resource.data.provider.size() <= 120
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 500
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'category', 'title', 'planItemId', 'completedAt', 'nextDueAt',
+            'provider', 'note', 'updatedAt'
+          ])
+          && request.resource.data.category is string
+          && request.resource.data.category in [
+            'checkup', 'vaccine', 'screening', 'dental', 'vision', 'habit'
+          ]
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.planItemId is string
+          && request.resource.data.planItemId.size() <= 80
+          && request.resource.data.completedAt is timestamp
+          && request.resource.data.completedAt <= request.time
+          && (!request.resource.data.keys().hasAny(['nextDueAt'])
+            || (request.resource.data.nextDueAt is timestamp
+              && request.resource.data.nextDueAt
+                > request.resource.data.completedAt))
+          && request.resource.data.provider is string
+          && request.resource.data.provider.size() <= 120
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 500
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if signedIn() && request.auth.uid == patientId;
+      }
+
+      // In-app preventive reminders. They are immutable: changing a date
+      // means replacing the reminder, which keeps validation predictable.
+      match /preventiveCareReminders/{reminderId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+
+        allow create: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.keys().hasOnly([
+            'category', 'title', 'planItemId', 'dueAt', 'note',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'category', 'title', 'planItemId', 'dueAt', 'note',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.category is string
+          && request.resource.data.category in [
+            'checkup', 'vaccine', 'screening', 'dental', 'vision', 'habit'
+          ]
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.planItemId is string
+          && request.resource.data.planItemId.size() <= 80
+          && request.resource.data.dueAt is timestamp
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 300
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if false;
+        allow delete: if signedIn() && request.auth.uid == patientId;
+      }
+
       // Scanned prescriptions belong to the patient. A trusted backend can
       // later create records with source == 'doctor' through the Admin SDK.
       match /prescriptions/{prescriptionId} {

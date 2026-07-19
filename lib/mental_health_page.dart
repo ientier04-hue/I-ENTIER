@@ -297,11 +297,17 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
           content: Text('Votre point bien-être a été enregistré.'),
         ),
       );
-    } on FirebaseException {
+    } on FirebaseException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Impossible d’enregistrer pour le moment.'),
+          SnackBar(
+            content: Text(switch (error.code) {
+              'permission-denied' =>
+                'Accès refusé par la sécurité Firebase. Réessayez après la mise à jour.',
+              'unavailable' =>
+                'Connexion indisponible. Vérifiez votre accès à Internet.',
+              _ => 'Impossible d’enregistrer pour le moment.',
+            }),
           ),
         );
       }

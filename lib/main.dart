@@ -16,7 +16,9 @@ import 'cycle_tracking_page.dart';
 import 'health_tracking_page.dart';
 import 'laboratory_page.dart';
 import 'mental_health_page.dart';
+import 'notifications_page.dart';
 import 'pharmacy_page.dart';
+import 'preventive_medicine_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1735,11 +1737,19 @@ const _homeServices = <HealthService>[
     id: 'soutien-psychologique',
     title: 'Bien-être mental',
     summary: 'Écoutez-vous et trouvez du soutien',
-    imagePath: '',
+    imagePath: 'mental_health.png',
     backgroundColor: '#F3ECFF',
     accentColor: '#7656D8',
     actionLabel: 'Prendre soin de moi',
-    icon: Icons.psychology_alt_rounded,
+  ),
+  HealthService(
+    id: 'medecine-preventive',
+    title: 'Prévention',
+    summary: 'Planifiez vos bilans et protégez votre santé',
+    imagePath: 'preventive_medicine.png',
+    backgroundColor: '#E7F3FF',
+    accentColor: '#176BFF',
+    actionLabel: 'Voir mon plan',
   ),
 ];
 
@@ -1760,6 +1770,30 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
+  late List<AppNotification> _notifications;
+
+  @override
+  void initState() {
+    super.initState();
+    _notifications = defaultAppNotifications();
+  }
+
+  int get _unreadNotificationCount =>
+      _notifications.where((notification) => !notification.isRead).length;
+
+  void _openNotifications() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NotificationsPage(
+          notifications: _notifications,
+          onNotificationsChanged: (notifications) {
+            if (!mounted) return;
+            setState(() => _notifications = List.of(notifications));
+          },
+        ),
+      ),
+    );
+  }
 
   Future<void> _openAiAssistant() async {
     final navigator = Navigator.of(context, rootNavigator: true);
@@ -1854,6 +1888,17 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
+    if (service.id == 'medecine-preventive') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PreventiveMedicinePage(
+            patientId: widget.user.uid,
+            patientProfile: widget.patientProfile,
+          ),
+        ),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Le service « ${service.title} » arrive bientôt.'),
@@ -1886,6 +1931,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       _Header(
                         user: widget.user,
                         account: widget.account,
+                        unreadNotificationCount: _unreadNotificationCount,
+                        onNotificationsTap: _openNotifications,
                         onProfileTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => PatientProfileScreen(
@@ -3402,10 +3449,14 @@ class _DetailEntry extends StatelessWidget {
 class _Header extends StatelessWidget {
   final User user;
   final Map<String, dynamic> account;
+  final int unreadNotificationCount;
+  final VoidCallback onNotificationsTap;
   final VoidCallback onProfileTap;
   const _Header({
     required this.user,
     required this.account,
+    required this.unreadNotificationCount,
+    required this.onNotificationsTap,
     required this.onProfileTap,
   });
 
@@ -3481,7 +3532,14 @@ class _Header extends StatelessWidget {
     final actions = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const _RoundIcon(icon: Icons.notifications_none_rounded, badge: '3'),
+        _RoundIcon(
+          icon: Icons.notifications_none_rounded,
+          badge: unreadNotificationCount == 0
+              ? null
+              : unreadNotificationCount.toString(),
+          tooltip: 'Notifications',
+          onTap: onNotificationsTap,
+        ),
         const SizedBox(width: 9),
         Semantics(
           button: true,
@@ -3588,20 +3646,28 @@ class _GoogleAvatar extends StatelessWidget {
 class _RoundIcon extends StatelessWidget {
   final IconData icon;
   final String? badge;
-  const _RoundIcon({required this.icon, this.badge});
+  final String? tooltip;
+  final VoidCallback? onTap;
+  const _RoundIcon({required this.icon, this.badge, this.tooltip, this.onTap});
   @override
   Widget build(BuildContext context) => Stack(
     clipBehavior: Clip.none,
     children: [
-      Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
+      Tooltip(
+        message: tooltip ?? '',
+        child: Material(
           color: const Color(0xFFF6F8FC),
-          shape: BoxShape.circle,
-          border: Border.all(color: AppColors.border),
+          shape: CircleBorder(side: BorderSide(color: AppColors.border)),
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Icon(icon, color: AppColors.navy, size: 22),
+            ),
+          ),
         ),
-        child: Icon(icon, color: AppColors.navy, size: 22),
       ),
       if (badge != null)
         Positioned(
