@@ -92,6 +92,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('garde le plan visible si le carnet ne se synchronise pas', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PreventiveMedicinePage(
+          patientId: 'patient-test',
+          patientProfile: const {'sex': 'Femme'},
+          now: DateTime(2026, 7, 18),
+          recordStream: Stream<List<PreventiveCareRecord>>.error(
+            Exception('permission-denied'),
+          ),
+          reminderStream: Stream.value(const <PreventiveCareReminder>[]),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Mon plan de prévention'), findsOneWidget);
+    expect(
+      find.byKey(const Key('preventive-record-storage-error')),
+      findsOneWidget,
+    );
+    expect(find.text('Votre carnet est indisponible'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('enregistre une action de prévention complète', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));

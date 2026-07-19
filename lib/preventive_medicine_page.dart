@@ -644,21 +644,9 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
       ),
       body: StreamBuilder<List<PreventiveCareRecord>>(
         stream: _recordStream,
+        initialData: const <PreventiveCareRecord>[],
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const _PreventiveFeedback(
-              icon: Icons.lock_outline_rounded,
-              title: 'Votre carnet est indisponible',
-              message:
-                  'La lecture de vos données privées est momentanément impossible.',
-            );
-          }
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(color: _primary),
-            );
-          }
-          final records = [...snapshot.data!]
+          final records = [...?snapshot.data]
             ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
           return StreamBuilder<List<PreventiveCareReminder>>(
             stream: _reminderStream,
@@ -670,6 +658,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
                 plan: plan,
                 records: records,
                 reminders: reminders,
+                recordStorageError: snapshot.hasError,
                 reminderStorageError: reminderSnapshot.hasError,
                 today: _today,
                 profile: widget.patientProfile,
@@ -693,6 +682,7 @@ class _PreventiveDashboard extends StatelessWidget {
   final List<PreventivePlanItem> plan;
   final List<PreventiveCareRecord> records;
   final List<PreventiveCareReminder> reminders;
+  final bool recordStorageError;
   final bool reminderStorageError;
   final DateTime today;
   final Map<String, dynamic> profile;
@@ -708,6 +698,7 @@ class _PreventiveDashboard extends StatelessWidget {
     required this.plan,
     required this.records,
     required this.reminders,
+    required this.recordStorageError,
     required this.reminderStorageError,
     required this.today,
     required this.profile,
@@ -762,6 +753,10 @@ class _PreventiveDashboard extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   const _ClinicalNotice(),
+                  if (recordStorageError) ...[
+                    const SizedBox(height: 12),
+                    const _RecordStorageNotice(),
+                  ],
                   const SizedBox(height: 28),
                   _SectionTitle(
                     title: 'Mes rappels',
@@ -1030,6 +1025,39 @@ class _ClinicalNotice extends StatelessWidget {
             'Ce plan vous aide à préparer une consultation. Il ne pose aucun diagnostic et ne remplace pas les recommandations d’un professionnel.',
             style: TextStyle(
               color: Color(0xFF684A0D),
+              fontSize: 13,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _RecordStorageNotice extends StatelessWidget {
+  const _RecordStorageNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('preventive-record-storage-error'),
+    padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF2F0),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFF2B8B0)),
+    ),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.cloud_off_rounded, color: Color(0xFFA33B2F), size: 22),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'Le plan reste disponible, mais votre carnet ne peut pas se synchroniser pour le moment. Réessayez un peu plus tard.',
+            style: TextStyle(
+              color: Color(0xFF762C24),
               fontSize: 13,
               height: 1.4,
               fontWeight: FontWeight.w600,
