@@ -332,6 +332,509 @@ class _LaboratorySectionSwitch extends StatelessWidget {
   );
 }
 
+class LaboratoryExam {
+  final String id;
+  final String name;
+  final String category;
+  final String description;
+  final String sampleType;
+  final String preparation;
+  final String turnaround;
+  final bool fasting;
+
+  const LaboratoryExam({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.description,
+    required this.sampleType,
+    required this.preparation,
+    required this.turnaround,
+    this.fasting = false,
+  });
+}
+
+const laboratoryExaminations = <LaboratoryExam>[
+  LaboratoryExam(
+    id: 'cbc',
+    name: 'Hémogramme complet',
+    category: 'Hématologie',
+    description:
+        'Évalue les globules rouges, les globules blancs et les plaquettes.',
+    sampleType: 'Prélèvement sanguin',
+    preparation: 'Aucune préparation particulière',
+    turnaround: 'Généralement sous 24 h',
+  ),
+  LaboratoryExam(
+    id: 'fasting-glucose',
+    name: 'Glycémie à jeun',
+    category: 'Biochimie',
+    description: 'Mesure le taux de glucose dans le sang à jeun.',
+    sampleType: 'Prélèvement sanguin',
+    preparation: 'Ne pas manger pendant 8 à 12 heures',
+    turnaround: 'Le jour même',
+    fasting: true,
+  ),
+  LaboratoryExam(
+    id: 'lipid-panel',
+    name: 'Bilan lipidique',
+    category: 'Biochimie',
+    description: 'Mesure notamment le cholestérol et les triglycérides.',
+    sampleType: 'Prélèvement sanguin',
+    preparation: 'Suivre les instructions du laboratoire concernant le jeûne',
+    turnaround: 'Sous 24 à 48 h',
+  ),
+  LaboratoryExam(
+    id: 'urinalysis',
+    name: 'Analyse d’urines',
+    category: 'Analyses courantes',
+    description: 'Recherche plusieurs marqueurs urinaires utiles au médecin.',
+    sampleType: 'Échantillon d’urine',
+    preparation: 'Utiliser le contenant stérile fourni',
+    turnaround: 'Le jour même',
+  ),
+  LaboratoryExam(
+    id: 'pregnancy-test',
+    name: 'Test de grossesse β-hCG',
+    category: 'Hormones',
+    description: 'Détecte ou mesure l’hormone β-hCG selon la prescription.',
+    sampleType: 'Sang ou urine',
+    preparation: 'Selon le type de prélèvement demandé',
+    turnaround: 'Le jour même',
+  ),
+  LaboratoryExam(
+    id: 'hiv-screening',
+    name: 'Dépistage du VIH',
+    category: 'Dépistage',
+    description:
+        'Test de dépistage confidentiel avec accompagnement selon le centre.',
+    sampleType: 'Prélèvement sanguin',
+    preparation: 'Aucune préparation particulière',
+    turnaround: 'Selon la méthode utilisée',
+  ),
+];
+
+class _ExaminationsPage extends StatefulWidget {
+  final List<LaboratoryExam> examinations;
+
+  const _ExaminationsPage({required this.examinations});
+
+  @override
+  State<_ExaminationsPage> createState() => _ExaminationsPageState();
+}
+
+class _ExaminationsPageState extends State<_ExaminationsPage> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _controller.text.trim().toLowerCase();
+    final visible = widget.examinations.where((exam) {
+      final searchable = [
+        exam.name,
+        exam.category,
+        exam.description,
+        exam.sampleType,
+      ].join(' ').toLowerCase();
+      return query.isEmpty || searchable.contains(query);
+    }).toList();
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: CustomScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+              sliver: SliverList.list(
+                children: [
+                  const _LaboratoryPageHeading(
+                    icon: Icons.biotech_outlined,
+                    eyebrow: 'CATALOGUE',
+                    title: 'Examens courants',
+                    subtitle:
+                        'Préparez votre visite et vérifiez toujours les consignes auprès du laboratoire.',
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    key: const Key('laboratory-exam-search'),
+                    controller: _controller,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      hintText: 'Rechercher un examen…',
+                      prefixIcon: Icon(Icons.search_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    '${visible.length} examen${visible.length > 1 ? 's' : ''}',
+                    style: const TextStyle(
+                      color: _navy,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (visible.isEmpty)
+                    const _PageFeedback(
+                      icon: Icons.search_off_rounded,
+                      title: 'Aucun examen trouvé',
+                      message: 'Essayez un autre nom ou une autre catégorie.',
+                    )
+                  else
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        const gap = 12.0;
+                        final columns = constraints.maxWidth >= 760 ? 2 : 1;
+                        final width =
+                            (constraints.maxWidth - gap * (columns - 1)) /
+                            columns;
+                        return Wrap(
+                          spacing: gap,
+                          runSpacing: gap,
+                          children: [
+                            for (final exam in visible)
+                              SizedBox(
+                                width: width,
+                                child: _LaboratoryExamCard(exam: exam),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LaboratoryExamCard extends StatelessWidget {
+  final LaboratoryExam exam;
+
+  const _LaboratoryExamCard({required this.exam});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: Key('laboratory-exam-${exam.id}'),
+    padding: const EdgeInsets.all(17),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(21),
+      border: Border.all(color: _border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: _tealSoft,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.science_outlined, color: _teal),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    exam.name,
+                    style: const TextStyle(
+                      color: _navy,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    exam.category,
+                    style: const TextStyle(
+                      color: _teal,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (exam.fasting)
+              const _FeaturePill(
+                icon: Icons.no_food_outlined,
+                label: 'À jeun',
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          exam.description,
+          style: const TextStyle(color: _ink, fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        _InfoLine(icon: Icons.water_drop_outlined, text: exam.sampleType),
+        const SizedBox(height: 8),
+        _InfoLine(icon: Icons.checklist_rounded, text: exam.preparation),
+        const SizedBox(height: 8),
+        _InfoLine(icon: Icons.schedule_outlined, text: exam.turnaround),
+      ],
+    ),
+  );
+}
+
+class LaboratoryResult {
+  final String id;
+  final String examName;
+  final String laboratoryName;
+  final String status;
+  final String summary;
+  final String resultUrl;
+  final DateTime publishedAt;
+
+  const LaboratoryResult({
+    required this.id,
+    required this.examName,
+    required this.laboratoryName,
+    required this.status,
+    required this.publishedAt,
+    this.summary = '',
+    this.resultUrl = '',
+  });
+
+  factory LaboratoryResult.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data() ?? const <String, dynamic>{};
+    final published = data['publishedAt'];
+    return LaboratoryResult(
+      id: document.id,
+      examName: _readText(data, const ['examName', 'examen', 'title', 'name']),
+      laboratoryName: _readText(data, const [
+        'laboratoryName',
+        'laboratoire',
+        'institutionName',
+      ]),
+      status: _readText(data, const ['status', 'statut']),
+      summary: _readText(data, const ['summary', 'resume', 'résumé']),
+      resultUrl: _readText(data, const ['resultUrl', 'downloadUrl', 'url']),
+      publishedAt: published is Timestamp
+          ? published.toDate()
+          : DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+}
+
+class _PatientResultsPage extends StatelessWidget {
+  final List<LaboratoryResult> results;
+
+  const _PatientResultsPage({required this.results});
+
+  Future<void> _openResult(BuildContext context, String url) async {
+    final launched = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d’ouvrir ce résultat.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 900),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+        children: [
+          const _LaboratoryPageHeading(
+            icon: Icons.assignment_turned_in_outlined,
+            eyebrow: 'DOSSIER PRIVÉ',
+            title: 'Mes résultats',
+            subtitle:
+                'Consultez les documents publiés par vos laboratoires partenaires.',
+          ),
+          const SizedBox(height: 18),
+          if (results.isEmpty)
+            const _PageFeedback(
+              icon: Icons.inbox_outlined,
+              title: 'Aucun résultat disponible',
+              message:
+                  'Vos prochains résultats apparaîtront ici lorsqu’un laboratoire les publiera.',
+            )
+          else
+            for (var index = 0; index < results.length; index++) ...[
+              _LaboratoryResultCard(
+                result: results[index],
+                onOpen: results[index].resultUrl.isEmpty
+                    ? null
+                    : () => _openResult(context, results[index].resultUrl),
+              ),
+              if (index < results.length - 1) const SizedBox(height: 11),
+            ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _LaboratoryResultCard extends StatelessWidget {
+  final LaboratoryResult result;
+  final VoidCallback? onOpen;
+
+  const _LaboratoryResultCard({required this.result, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final available = result.status.toLowerCase() != 'pending';
+    return Container(
+      key: Key('laboratory-result-${result.id}'),
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(21),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: available ? _tealSoft : const Color(0xFFF1F3F6),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(
+              available ? Icons.description_outlined : Icons.hourglass_top,
+              color: available ? _teal : _muted,
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  result.examName.isEmpty ? 'Résultat de laboratoire' : result.examName,
+                  style: const TextStyle(
+                    color: _navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (result.laboratoryName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    result.laboratoryName,
+                    style: const TextStyle(color: _teal, fontSize: 12.5),
+                  ),
+                ],
+                const SizedBox(height: 5),
+                Text(
+                  _formatLaboratoryDate(result.publishedAt),
+                  style: const TextStyle(color: _muted, fontSize: 12),
+                ),
+                if (result.summary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    result.summary,
+                    style: const TextStyle(
+                      color: _ink,
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (onOpen != null)
+            IconButton(
+              tooltip: 'Ouvrir le résultat',
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new_rounded, color: _primary),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LaboratoryPageHeading extends StatelessWidget {
+  final IconData icon;
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+
+  const _LaboratoryPageHeading({
+    required this.icon,
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        width: 54,
+        height: 54,
+        decoration: BoxDecoration(
+          color: _tealSoft,
+          borderRadius: BorderRadius.circular(17),
+        ),
+        child: Icon(icon, color: _teal),
+      ),
+      const SizedBox(width: 13),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              eyebrow,
+              style: const TextStyle(
+                color: _teal,
+                fontSize: 10.5,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: const TextStyle(
+                color: _navy,
+                fontSize: 23,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              subtitle,
+              style: const TextStyle(color: _muted, fontSize: 13, height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
 enum _LaboratoryFilter { all, open, home, online }
 
 extension on _LaboratoryFilter {
@@ -945,6 +1448,1040 @@ class _PageFeedback extends StatelessWidget {
           ),
         ],
       ),
+    ),
+  );
+}
+
+class _ExaminationsPage extends StatefulWidget {
+  final List<LaboratoryExam> examinations;
+
+  const _ExaminationsPage({required this.examinations});
+
+  @override
+  State<_ExaminationsPage> createState() => _ExaminationsPageState();
+}
+
+class _ExaminationsPageState extends State<_ExaminationsPage> {
+  final _controller = TextEditingController();
+  String _category = 'Tous';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _controller.text.trim().toLowerCase();
+    final examinations = widget.examinations.where((examination) {
+      final matchesCategory =
+          _category == 'Tous' || examination.category == _category;
+      final matchesQuery =
+          query.isEmpty || examination.searchableText.contains(query);
+      return matchesCategory && matchesQuery;
+    }).toList();
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: CustomScrollView(
+          key: const PageStorageKey<String>('laboratory-examinations'),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+              sliver: SliverList.list(
+                children: [
+                  const _ExaminationHero(),
+                  const SizedBox(height: 22),
+                  TextField(
+                    key: const Key('examination-search-field'),
+                    controller: _controller,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher un examen ou un prélèvement...',
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: _muted,
+                      ),
+                      suffixIcon: _controller.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _controller.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _ExaminationCategoryBar(
+                    selected: _category,
+                    onSelected: (category) =>
+                        setState(() => _category = category),
+                  ),
+                  const SizedBox(height: 26),
+                  _DirectoryTitle(
+                    title: 'Catalogue des examens',
+                    count: examinations.length,
+                  ),
+                  const SizedBox(height: 14),
+                  if (examinations.isEmpty)
+                    _SimpleEmptyState(
+                      icon: Icons.biotech_outlined,
+                      title: 'Aucun examen trouvé',
+                      message:
+                          'Modifiez votre recherche ou choisissez une autre catégorie.',
+                      actionLabel: 'Tout afficher',
+                      onAction: () {
+                        _controller.clear();
+                        setState(() => _category = 'Tous');
+                      },
+                    )
+                  else
+                    _ExaminationGrid(examinations: examinations),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExaminationHero extends StatelessWidget {
+  const _ExaminationHero();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFFEAF1FF), Color(0xFFE2FAF6)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(28),
+      border: Border.all(color: Colors.white),
+    ),
+    child: const Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Comprendre vos examens',
+                style: TextStyle(
+                  color: _navy,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Découvrez le prélèvement, la préparation et le délai indicatif avant de choisir un laboratoire.',
+                style: TextStyle(color: _ink, height: 1.4, fontSize: 13.5),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 16),
+        Icon(Icons.biotech_rounded, color: _primary, size: 62),
+      ],
+    ),
+  );
+}
+
+const _examinationCategories = [
+  'Tous',
+  'Sang',
+  'Dépistage',
+  'Hormones',
+  'Urines',
+  'Prévention',
+];
+
+class _ExaminationCategoryBar extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  const _ExaminationCategoryBar({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 42,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: _examinationCategories.length,
+      separatorBuilder: (context, index) => const SizedBox(width: 8),
+      itemBuilder: (context, index) {
+        final category = _examinationCategories[index];
+        return ChoiceChip(
+          key: Key('examination-category-${category.toLowerCase()}'),
+          selected: category == selected,
+          onSelected: (_) => onSelected(category),
+          label: Text(category),
+          showCheckmark: false,
+          selectedColor: _tealSoft,
+          backgroundColor: Colors.white,
+          side: BorderSide(
+            color: category == selected ? _teal : _border,
+          ),
+          labelStyle: TextStyle(
+            color: category == selected ? const Color(0xFF08776A) : _ink,
+            fontWeight: FontWeight.w700,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class _DirectoryTitle extends StatelessWidget {
+  final String title;
+  final int count;
+
+  const _DirectoryTitle({required this.title, required this.count});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          title,
+          style: const TextStyle(
+            color: _navy,
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _tealSoft,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          '$count',
+          style: const TextStyle(
+            color: Color(0xFF08776A),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _ExaminationGrid extends StatelessWidget {
+  final List<LaboratoryExam> examinations;
+
+  const _ExaminationGrid({required this.examinations});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const gap = 14.0;
+      final columns = constraints.maxWidth >= 760 ? 2 : 1;
+      final width = (constraints.maxWidth - ((columns - 1) * gap)) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final examination in examinations)
+            SizedBox(
+              width: width,
+              child: _ExaminationCard(examination: examination),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _ExaminationCard extends StatelessWidget {
+  final LaboratoryExam examination;
+
+  const _ExaminationCard({required this.examination});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(22),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      key: Key('examination-card-${examination.id}'),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => LaboratoryExamDetailPage(examination: examination),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          border: Border.all(color: _border),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: examination.color,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(examination.icon, color: _teal, size: 25),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        examination.name,
+                        style: const TextStyle(
+                          color: _navy,
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        examination.category,
+                        style: const TextStyle(
+                          color: _teal,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: _primary,
+                  size: 15,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              examination.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _muted, height: 1.35),
+            ),
+            const SizedBox(height: 13),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _FeaturePill(
+                  icon: Icons.water_drop_outlined,
+                  label: examination.sample,
+                ),
+                _FeaturePill(
+                  icon: Icons.schedule_outlined,
+                  label: examination.turnaround,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class LaboratoryExamDetailPage extends StatelessWidget {
+  final LaboratoryExam examination;
+
+  const LaboratoryExamDetailPage({
+    super.key,
+    required this.examination,
+  });
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _canvas,
+    appBar: AppBar(
+      backgroundColor: _canvas,
+      surfaceTintColor: Colors.transparent,
+      title: const Text('Détails de l’examen'),
+    ),
+    body: SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.white, Color(0xFFE8F8F4)],
+                    ),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: _border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          color: examination.color,
+                          borderRadius: BorderRadius.circular(21),
+                        ),
+                        child: Icon(
+                          examination.icon,
+                          color: _teal,
+                          size: 36,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              examination.name,
+                              style: const TextStyle(
+                                color: _navy,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              examination.category,
+                              style: const TextStyle(
+                                color: _teal,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _DetailSection(
+                  title: 'Informations',
+                  children: [
+                    _DetailEntry(
+                      icon: Icons.info_outline_rounded,
+                      label: 'À quoi sert cet examen ?',
+                      value: examination.description,
+                    ),
+                    _DetailEntry(
+                      icon: Icons.water_drop_outlined,
+                      label: 'Type de prélèvement',
+                      value: examination.sample,
+                    ),
+                    _DetailEntry(
+                      icon: Icons.schedule_outlined,
+                      label: 'Délai indicatif',
+                      value: examination.turnaround,
+                    ),
+                    _DetailEntry(
+                      icon: Icons.fact_check_outlined,
+                      label: 'Préparation',
+                      value: examination.preparation,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const _MedicalNotice(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _MedicalNotice extends StatelessWidget {
+  const _MedicalNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF7E8),
+      borderRadius: BorderRadius.circular(17),
+      border: Border.all(color: const Color(0xFFF4D9A6)),
+    ),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.info_outline_rounded, color: Color(0xFFB54708)),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Ces informations sont générales. Suivez toujours les consignes de votre professionnel de santé et du laboratoire.',
+            style: TextStyle(color: Color(0xFF7A4A08), height: 1.4),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+enum _ResultFilter { all, available, pending }
+
+class _PatientResultsPage extends StatefulWidget {
+  final List<LaboratoryResult> results;
+
+  const _PatientResultsPage({required this.results});
+
+  @override
+  State<_PatientResultsPage> createState() => _PatientResultsPageState();
+}
+
+class _PatientResultsPageState extends State<_PatientResultsPage> {
+  final _controller = TextEditingController();
+  _ResultFilter _filter = _ResultFilter.all;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _controller.text.trim().toLowerCase();
+    final results = widget.results.where((result) {
+      final matchesQuery = query.isEmpty || result.searchableText.contains(query);
+      final matchesStatus = switch (_filter) {
+        _ResultFilter.all => true,
+        _ResultFilter.available => result.isAvailable,
+        _ResultFilter.pending => !result.isAvailable,
+      };
+      return matchesQuery && matchesStatus;
+    }).toList()..sort((a, b) => b.sortDate.compareTo(a.sortDate));
+
+    final availableCount = widget.results
+        .where((result) => result.isAvailable)
+        .length;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: CustomScrollView(
+          key: const PageStorageKey<String>('laboratory-results'),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+              sliver: SliverList.list(
+                children: [
+                  _ResultsHero(availableCount: availableCount),
+                  const SizedBox(height: 22),
+                  TextField(
+                    key: const Key('laboratory-result-search-field'),
+                    controller: _controller,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher un résultat ou un laboratoire...',
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: _muted,
+                      ),
+                      suffixIcon: _controller.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _controller.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _ResultFilterBar(
+                    selected: _filter,
+                    onSelected: (filter) => setState(() => _filter = filter),
+                  ),
+                  const SizedBox(height: 26),
+                  _DirectoryTitle(title: 'Historique', count: results.length),
+                  const SizedBox(height: 14),
+                  if (results.isEmpty)
+                    _SimpleEmptyState(
+                      icon: Icons.assignment_outlined,
+                      title: widget.results.isEmpty
+                          ? 'Aucun résultat disponible'
+                          : 'Aucun résultat trouvé',
+                      message: widget.results.isEmpty
+                          ? 'Les résultats publiés par vos laboratoires apparaîtront ici.'
+                          : 'Modifiez votre recherche ou affichez tout l’historique.',
+                      actionLabel: widget.results.isEmpty
+                          ? null
+                          : 'Tout afficher',
+                      onAction: widget.results.isEmpty
+                          ? null
+                          : () {
+                              _controller.clear();
+                              setState(() => _filter = _ResultFilter.all);
+                            },
+                    )
+                  else
+                    _ResultList(results: results),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultsHero extends StatelessWidget {
+  final int availableCount;
+
+  const _ResultsHero({required this.availableCount});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFFE8F8F4), Color(0xFFEAF1FF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(28),
+      border: Border.all(color: Colors.white),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Mes résultats',
+                style: TextStyle(
+                  color: _navy,
+                  fontSize: 25,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                availableCount == 0
+                    ? 'Vos comptes rendus sont regroupés dans un espace privé.'
+                    : '$availableCount compte${availableCount > 1 ? 's' : ''} rendu${availableCount > 1 ? 's' : ''} disponible${availableCount > 1 ? 's' : ''}.',
+                style: const TextStyle(color: _ink, height: 1.4),
+              ),
+              const SizedBox(height: 11),
+              const Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded, color: _teal, size: 17),
+                  SizedBox(width: 6),
+                  Text(
+                    'Visible uniquement par vous',
+                    style: TextStyle(
+                      color: _teal,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        const Icon(
+          Icons.assignment_turned_in_rounded,
+          color: _primary,
+          size: 60,
+        ),
+      ],
+    ),
+  );
+}
+
+class _ResultFilterBar extends StatelessWidget {
+  final _ResultFilter selected;
+  final ValueChanged<_ResultFilter> onSelected;
+
+  const _ResultFilterBar({required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    const filters = [
+      (_ResultFilter.all, 'Tous'),
+      (_ResultFilter.available, 'Disponibles'),
+      (_ResultFilter.pending, 'En attente'),
+    ];
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: filters.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final (filter, label) = filters[index];
+          return ChoiceChip(
+            key: Key('laboratory-result-filter-${filter.name}'),
+            selected: selected == filter,
+            onSelected: (_) => onSelected(filter),
+            label: Text(label),
+            showCheckmark: false,
+            selectedColor: _tealSoft,
+            backgroundColor: Colors.white,
+            side: BorderSide(color: selected == filter ? _teal : _border),
+            labelStyle: TextStyle(
+              color: selected == filter ? const Color(0xFF08776A) : _ink,
+              fontWeight: FontWeight.w700,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ResultList extends StatelessWidget {
+  final List<LaboratoryResult> results;
+
+  const _ResultList({required this.results});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (var index = 0; index < results.length; index++) ...[
+        if (index > 0) const SizedBox(height: 12),
+        _ResultCard(result: results[index]),
+      ],
+    ],
+  );
+}
+
+class _ResultCard extends StatelessWidget {
+  final LaboratoryResult result;
+
+  const _ResultCard({required this.result});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(22),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      key: Key('laboratory-result-${result.id}'),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => LaboratoryResultDetailPage(result: result),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          border: Border.all(color: _border),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: result.isAvailable
+                    ? _tealSoft
+                    : const Color(0xFFFFF3E8),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                result.isAvailable
+                    ? Icons.description_outlined
+                    : Icons.hourglass_top_rounded,
+                color: result.isAvailable
+                    ? _teal
+                    : const Color(0xFFB54708),
+              ),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    result.examName,
+                    style: const TextStyle(
+                      color: _navy,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  if (result.laboratoryName.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      result.laboratoryName,
+                      style: const TextStyle(color: _muted),
+                    ),
+                  ],
+                  const SizedBox(height: 9),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _ResultStatusBadge(result: result),
+                      if (result.dateLabel.isNotEmpty)
+                        _FeaturePill(
+                          icon: Icons.calendar_today_outlined,
+                          label: result.dateLabel,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: _primary,
+              size: 15,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ResultStatusBadge extends StatelessWidget {
+  final LaboratoryResult result;
+
+  const _ResultStatusBadge({required this.result});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+    decoration: BoxDecoration(
+      color: result.isAvailable ? _tealSoft : const Color(0xFFFFF3E8),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Text(
+      result.statusLabel,
+      style: TextStyle(
+        color: result.isAvailable
+            ? const Color(0xFF08776A)
+            : const Color(0xFFB54708),
+        fontSize: 11.5,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
+class LaboratoryResultDetailPage extends StatelessWidget {
+  final LaboratoryResult result;
+
+  const LaboratoryResultDetailPage({super.key, required this.result});
+
+  Future<void> _openDocument(BuildContext context) async {
+    final uri = Uri.tryParse(result.fileUrl);
+    if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d’ouvrir ce document.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _canvas,
+    appBar: AppBar(
+      backgroundColor: _canvas,
+      surfaceTintColor: Colors.transparent,
+      title: const Text('Compte rendu'),
+    ),
+    body: SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.white, Color(0xFFE8F8F4)],
+                    ),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: _border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ResultStatusBadge(result: result),
+                      const SizedBox(height: 13),
+                      Text(
+                        result.examName,
+                        style: const TextStyle(
+                          color: _navy,
+                          fontSize: 23,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (result.laboratoryName.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          result.laboratoryName,
+                          style: const TextStyle(
+                            color: _teal,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _DetailSection(
+                  title: 'Informations',
+                  children: [
+                    if (result.collectedAt != null)
+                      _DetailEntry(
+                        icon: Icons.event_outlined,
+                        label: 'Prélèvement',
+                        value: _formatLaboratoryDate(result.collectedAt!),
+                      ),
+                    if (result.publishedAt != null)
+                      _DetailEntry(
+                        icon: Icons.check_circle_outline_rounded,
+                        label: 'Publication',
+                        value: _formatLaboratoryDate(result.publishedAt!),
+                      ),
+                    if (result.summary.isNotEmpty)
+                      _DetailEntry(
+                        icon: Icons.summarize_outlined,
+                        label: 'Résumé',
+                        value: result.summary,
+                      ),
+                    if (result.referenceRange.isNotEmpty)
+                      _DetailEntry(
+                        icon: Icons.straighten_outlined,
+                        label: 'Valeurs de référence',
+                        value: result.referenceRange,
+                      ),
+                    if (result.note.isNotEmpty)
+                      _DetailEntry(
+                        icon: Icons.notes_rounded,
+                        label: 'Note du laboratoire',
+                        value: result.note,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const _MedicalNotice(),
+                if (result.isAvailable && result.fileUrl.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    key: const Key('open-laboratory-result-document'),
+                    onPressed: () => _openDocument(context),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _teal,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: const Text('Ouvrir le compte rendu'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _SimpleEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _SimpleEmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(28),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: _border),
+    ),
+    child: Column(
+      children: [
+        Icon(icon, color: _teal, size: 42),
+        const SizedBox(height: 12),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: _navy,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _muted, height: 1.4),
+        ),
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: onAction,
+            child: Text(actionLabel!),
+          ),
+        ],
+      ],
     ),
   );
 }
