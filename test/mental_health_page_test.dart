@@ -17,7 +17,7 @@ void main() {
     ),
   );
 
-  testWidgets('affiche le parcours complet de soutien psychologique', (
+  testWidgets('regroupe le parcours dans les quatre menus supérieurs', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(900, 1800));
@@ -26,11 +26,27 @@ void main() {
     await tester.pump();
 
     expect(find.text('Soutien psychologique'), findsOneWidget);
+    expect(find.text('Accueil'), findsOneWidget);
+    expect(find.text('Journal'), findsOneWidget);
+    expect(find.text('Outils'), findsOneWidget);
+    expect(find.text('Soutien'), findsOneWidget);
+    expect(find.text('Que souhaitez-vous faire ?'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('mental-health-section-journal')),
+    );
+    await tester.pump();
     expect(find.text('Comment vous sentez-vous ?'), findsOneWidget);
+    expect(find.text('Votre journal commence ici'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('mental-health-section-tools')));
+    await tester.pump();
     expect(find.text('Respiration guidée'), findsOneWidget);
     expect(find.text('Ancrage 5-4-3-2-1'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('mental-health-section-support')));
+    await tester.pump();
     expect(find.text('PSYCREPH'), findsOneWidget);
-    expect(find.text('Votre journal commence ici'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -43,6 +59,10 @@ void main() {
     );
     await tester.pump();
 
+    await tester.tap(
+      find.byKey(const Key('mental-health-section-journal')),
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('mental-health-mood-low')));
     await tester.tap(find.byKey(const Key('mental-health-feeling-anxious')));
     await tester.enterText(
@@ -85,6 +105,8 @@ void main() {
     await tester.pumpWidget(buildPage());
     await tester.pump();
 
+    await tester.tap(find.byKey(const Key('mental-health-section-tools')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('mental-health-breathing-tool')));
     await tester.pumpAndSettle();
     expect(
@@ -103,5 +125,20 @@ void main() {
     expect(find.text('choses que vous pouvez voir'), findsOneWidget);
     expect(find.text('chose que vous pouvez goûter'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('le menu supérieur reste utilisable sur mobile', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(buildPage());
+    await tester.pump();
+
+    for (final section in const ['journal', 'tools', 'support', 'overview']) {
+      await tester.tap(
+        find.byKey(Key('mental-health-section-$section')),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    }
   });
 }

@@ -678,7 +678,9 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
   }
 }
 
-class _PreventiveDashboard extends StatelessWidget {
+enum _PreventiveView { overview, plan, screenings, habits, records }
+
+class _PreventiveDashboard extends StatefulWidget {
   final List<PreventivePlanItem> plan;
   final List<PreventiveCareRecord> records;
   final List<PreventiveCareReminder> reminders;
@@ -710,6 +712,32 @@ class _PreventiveDashboard extends StatelessWidget {
     required this.onDeleteReminder,
     required this.onCompleteReminder,
   });
+
+  @override
+  State<_PreventiveDashboard> createState() => _PreventiveDashboardState();
+}
+
+class _PreventiveDashboardState extends State<_PreventiveDashboard> {
+  _PreventiveView _selectedView = _PreventiveView.overview;
+
+  List<PreventivePlanItem> get plan => widget.plan;
+  List<PreventiveCareRecord> get records => widget.records;
+  List<PreventiveCareReminder> get reminders => widget.reminders;
+  bool get recordStorageError => widget.recordStorageError;
+  bool get reminderStorageError => widget.reminderStorageError;
+  DateTime get today => widget.today;
+  Map<String, dynamic> get profile => widget.profile;
+  ValueChanged<PreventivePlanItem> get onPlanItemTap => widget.onPlanItemTap;
+  ValueChanged<PreventivePlanItem> get onPlanReminderTap =>
+      widget.onPlanReminderTap;
+  VoidCallback get onAddRecord => widget.onAddRecord;
+  VoidCallback get onAddReminder => widget.onAddReminder;
+  ValueChanged<PreventiveCareRecord> get onDeleteRecord =>
+      widget.onDeleteRecord;
+  ValueChanged<PreventiveCareReminder> get onDeleteReminder =>
+      widget.onDeleteReminder;
+  ValueChanged<PreventiveCareReminder> get onCompleteReminder =>
+      widget.onCompleteReminder;
 
   @override
   Widget build(BuildContext context) {
@@ -745,117 +773,167 @@ class _PreventiveDashboard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PreventionHero(
-                    completed: completed,
-                    total: plan.length,
-                    profileLabel: profileLabel,
-                    onAdd: onAddRecord,
+                  _PreventionSectionMenu(
+                    selected: _selectedView,
+                    onSelected: (view) => setState(() => _selectedView = view),
                   ),
-                  const SizedBox(height: 16),
-                  const _ClinicalNotice(),
-                  if (recordStorageError) ...[
-                    const SizedBox(height: 12),
-                    const _RecordStorageNotice(),
-                  ],
-                  const SizedBox(height: 28),
-                  _SectionTitle(
-                    title: 'Mes rappels',
-                    subtitle: reminders.isEmpty
-                        ? 'Planifiez un check-up ou un dépistage sans attendre d’y penser.'
-                        : '${reminders.length} rappel${reminders.length > 1 ? 's' : ''} dans votre plan.',
-                    actionLabel: 'Nouveau rappel',
-                    onAction: onAddReminder,
-                  ),
-                  const SizedBox(height: 14),
-                  _ReminderPanel(
-                    reminders: reminders,
-                    today: today,
-                    storageError: reminderStorageError,
-                    onAdd: onAddReminder,
-                    onComplete: onCompleteReminder,
-                    onDelete: onDeleteReminder,
-                  ),
-                  const SizedBox(height: 30),
-                  const _SectionTitle(
-                    title: 'Mon plan de prévention',
-                    subtitle:
-                        'Des sujets personnalisés à préparer avec votre équipe soignante.',
-                  ),
-                  const SizedBox(height: 14),
-                  _PlanItemsLayout(
-                    wide: wide,
-                    items: essentialPlan,
-                    records: records,
-                    today: today,
-                    onComplete: onPlanItemTap,
-                    onReminder: onPlanReminderTap,
-                  ),
-                  if (cancerPlan.isNotEmpty) ...[
-                    const SizedBox(height: 30),
-                    const _CancerSectionIntro(),
-                    const SizedBox(height: 14),
-                    _PlanItemsLayout(
-                      wide: wide,
-                      items: cancerPlan,
-                      records: records,
-                      today: today,
-                      onComplete: onPlanItemTap,
-                      onReminder: onPlanReminderTap,
+                  const SizedBox(height: 20),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    child: KeyedSubtree(
+                      key: ValueKey(_selectedView),
+                      child: switch (_selectedView) {
+                        _PreventiveView.overview => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _PreventionHero(
+                              completed: completed,
+                              total: plan.length,
+                              profileLabel: profileLabel,
+                              onAdd: onAddRecord,
+                            ),
+                            const SizedBox(height: 16),
+                            const _ClinicalNotice(),
+                            if (recordStorageError) ...[
+                              const SizedBox(height: 12),
+                              const _RecordStorageNotice(),
+                            ],
+                            const SizedBox(height: 28),
+                            _SectionTitle(
+                              title: 'Mes rappels',
+                              subtitle: reminders.isEmpty
+                                  ? 'Planifiez un check-up ou un dépistage sans attendre d’y penser.'
+                                  : '${reminders.length} rappel${reminders.length > 1 ? 's' : ''} dans votre plan.',
+                              actionLabel: 'Nouveau rappel',
+                              onAction: onAddReminder,
+                            ),
+                            const SizedBox(height: 14),
+                            _ReminderPanel(
+                              reminders: reminders,
+                              today: today,
+                              storageError: reminderStorageError,
+                              onAdd: onAddReminder,
+                              onComplete: onCompleteReminder,
+                              onDelete: onDeleteReminder,
+                            ),
+                            if (dueRecords.isNotEmpty) ...[
+                              const SizedBox(height: 30),
+                              const _SectionTitle(
+                                title: 'Mes prochaines échéances',
+                                subtitle:
+                                    'Les dates que vous avez choisies dans votre carnet.',
+                              ),
+                              const SizedBox(height: 14),
+                              _DueDateStrip(records: dueRecords, today: today),
+                            ],
+                            const SizedBox(height: 28),
+                            const _EvidenceCard(),
+                          ],
+                        ),
+                        _PreventiveView.plan => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle(
+                              title: 'Mon plan de prévention',
+                              subtitle:
+                                  'Des sujets personnalisés à préparer avec votre équipe soignante.',
+                            ),
+                            const SizedBox(height: 14),
+                            _PlanItemsLayout(
+                              wide: wide,
+                              items: essentialPlan,
+                              records: records,
+                              today: today,
+                              onComplete: onPlanItemTap,
+                              onReminder: onPlanReminderTap,
+                            ),
+                          ],
+                        ),
+                        _PreventiveView.screenings => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _CancerSectionIntro(),
+                            const SizedBox(height: 14),
+                            if (cancerPlan.isEmpty)
+                              const _PreventiveFeedback(
+                                icon: Icons.health_and_safety_outlined,
+                                title: 'Aucun dépistage à afficher',
+                                message:
+                                    'Complétez votre profil pour obtenir des repères adaptés à votre âge et à votre situation.',
+                              )
+                            else ...[
+                              _PlanItemsLayout(
+                                wide: wide,
+                                items: cancerPlan,
+                                records: records,
+                                today: today,
+                                onComplete: onPlanItemTap,
+                                onReminder: onPlanReminderTap,
+                              ),
+                              const SizedBox(height: 14),
+                              _CancerWarningSigns(
+                                showBreastGuide: cancerPlan.any(
+                                  (item) => item.id == 'breast-awareness',
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        _PreventiveView.habits => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle(
+                              title: 'Repères protecteurs',
+                              subtitle:
+                                  'De petits gestes réguliers comptent aussi dans la prévention.',
+                            ),
+                            const SizedBox(height: 14),
+                            const _ProtectiveHabits(),
+                            const SizedBox(height: 30),
+                            _NutritionHydrationSection(
+                              profile: profile,
+                              onHydrationReminder: () =>
+                                  onPlanReminderTap(hydrationPlanItem),
+                            ),
+                          ],
+                        ),
+                        _PreventiveView.records => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (recordStorageError) ...[
+                              const _RecordStorageNotice(),
+                              const SizedBox(height: 18),
+                            ],
+                            _SectionTitle(
+                              title: 'Mon carnet',
+                              subtitle: records.isEmpty
+                                  ? 'Conservez ici les bilans, vaccins et dépistages réalisés.'
+                                  : '${records.length} action${records.length > 1 ? 's' : ''} enregistrée${records.length > 1 ? 's' : ''}.',
+                              actionLabel: 'Ajouter',
+                              onAction: onAddRecord,
+                            ),
+                            const SizedBox(height: 14),
+                            if (records.isEmpty)
+                              _PreventiveFeedback(
+                                icon: Icons.inventory_2_outlined,
+                                title: 'Votre carnet commence ici',
+                                message:
+                                    'Ajoutez un bilan, un vaccin ou un dépistage pour garder vos prochaines étapes en vue.',
+                                actionLabel: 'Ajouter une action',
+                                onAction: onAddRecord,
+                              )
+                            else
+                              _RecordList(
+                                records: records,
+                                onDelete: onDeleteRecord,
+                              ),
+                          ],
+                        ),
+                      },
                     ),
-                    const SizedBox(height: 14),
-                    _CancerWarningSigns(
-                      showBreastGuide: cancerPlan.any(
-                        (item) => item.id == 'breast-awareness',
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 22),
-                  if (dueRecords.isNotEmpty) ...[
-                    const _SectionTitle(
-                      title: 'Mes prochaines échéances',
-                      subtitle:
-                          'Les dates que vous avez choisies dans votre carnet.',
-                    ),
-                    const SizedBox(height: 14),
-                    _DueDateStrip(records: dueRecords, today: today),
-                    const SizedBox(height: 30),
-                  ],
-                  const _SectionTitle(
-                    title: 'Repères protecteurs',
-                    subtitle:
-                        'De petits gestes réguliers comptent aussi dans la prévention.',
                   ),
-                  const SizedBox(height: 14),
-                  const _ProtectiveHabits(),
-                  const SizedBox(height: 30),
-                  _NutritionHydrationSection(
-                    profile: profile,
-                    onHydrationReminder: () =>
-                        onPlanReminderTap(hydrationPlanItem),
-                  ),
-                  const SizedBox(height: 30),
-                  _SectionTitle(
-                    title: 'Mon carnet',
-                    subtitle: records.isEmpty
-                        ? 'Conservez ici les bilans, vaccins et dépistages réalisés.'
-                        : '${records.length} action${records.length > 1 ? 's' : ''} enregistrée${records.length > 1 ? 's' : ''}.',
-                    actionLabel: 'Ajouter',
-                    onAction: onAddRecord,
-                  ),
-                  const SizedBox(height: 14),
-                  if (records.isEmpty)
-                    _PreventiveFeedback(
-                      icon: Icons.inventory_2_outlined,
-                      title: 'Votre carnet commence ici',
-                      message:
-                          'Ajoutez un bilan, un vaccin ou un dépistage pour garder vos prochaines étapes en vue.',
-                      actionLabel: 'Ajouter une action',
-                      onAction: onAddRecord,
-                    )
-                  else
-                    _RecordList(records: records, onDelete: onDeleteRecord),
-                  const SizedBox(height: 28),
-                  const _EvidenceCard(),
                 ],
               ),
             ),
@@ -877,6 +955,106 @@ bool _isCurrent(
   if (matches.isEmpty) return false;
   final nextDue = matches.first.nextDueAt;
   return nextDue == null || !_dateOnly(nextDue).isBefore(_dateOnly(today));
+}
+
+extension on _PreventiveView {
+  String get label => switch (this) {
+    _PreventiveView.overview => 'Aperçu',
+    _PreventiveView.plan => 'Mon plan',
+    _PreventiveView.screenings => 'Dépistages',
+    _PreventiveView.habits => 'Habitudes',
+    _PreventiveView.records => 'Carnet',
+  };
+
+  IconData get icon => switch (this) {
+    _PreventiveView.overview => Icons.dashboard_rounded,
+    _PreventiveView.plan => Icons.fact_check_rounded,
+    _PreventiveView.screenings => Icons.health_and_safety_rounded,
+    _PreventiveView.habits => Icons.eco_rounded,
+    _PreventiveView.records => Icons.folder_shared_rounded,
+  };
+}
+
+class _PreventionSectionMenu extends StatelessWidget {
+  final _PreventiveView selected;
+  final ValueChanged<_PreventiveView> onSelected;
+
+  const _PreventionSectionMenu({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(6),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: const Color(0xFFE1E9F5)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0D173B6C),
+          blurRadius: 16,
+          offset: Offset(0, 6),
+        ),
+      ],
+    ),
+    child: SingleChildScrollView(
+      key: const Key('preventive-section-menu-scroll'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _PreventiveView.values.map((view) {
+          final isSelected = view == selected;
+          return Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Semantics(
+              selected: isSelected,
+              button: true,
+              child: Material(
+                color: isSelected ? _primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(15),
+                child: InkWell(
+                  key: Key('preventive-menu-${view.name}'),
+                  onTap: () => onSelected(view),
+                  borderRadius: BorderRadius.circular(15),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          view.icon,
+                          size: 19,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF536A87),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          view.label,
+                          style: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF334A68),
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    ),
+  );
 }
 
 class _PreventionHero extends StatelessWidget {

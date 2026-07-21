@@ -28,6 +28,52 @@ void main() {
     expect(find.text('Continuer avec Google'), findsOneWidget);
   });
 
+  testWidgets('affiche le header Material 3 compact sur mobile', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          user: _FakeUser(),
+          account: const {'name': 'Patient Test'},
+          patientProfile: const {},
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('home-header')), findsOneWidget);
+    expect(find.text('I-ENTIER'), findsOneWidget);
+    expect(find.text('Votre espace santé'), findsOneWidget);
+    expect(find.text('LL'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(
+      find.text('Rechercher un service, un professionnel...'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Filtrer'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('home-header')),
+        matching: find.textContaining('Bonjour'),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Personnel'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-header')), findsNothing);
+
+    await tester.tap(find.text('Accueil'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-header')), findsOneWidget);
+  });
+
   testWidgets('la croix ferme toute la feuille AI avec le clavier ouvert', (
     tester,
   ) async {

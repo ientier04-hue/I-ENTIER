@@ -71,7 +71,20 @@ void main() {
     await tester.pump();
 
     expect(find.text('Médecine préventive'), findsOneWidget);
+    expect(find.text('Aperçu'), findsOneWidget);
+    expect(find.text('Mes rappels'), findsOneWidget);
+    expect(find.text('Faire mon prochain check-up'), findsOneWidget);
+    expect(find.text('Mes prochaines échéances'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('preventive-menu-plan')));
+    await tester.pumpAndSettle();
     expect(find.text('Mon plan de prévention'), findsOneWidget);
+
+    final screeningsMenu = find.byKey(const Key('preventive-menu-screenings'));
+    await tester.ensureVisible(screeningsMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(screeningsMenu);
+    await tester.pumpAndSettle();
     expect(
       find.text('Prévention et détection précoce des cancers'),
       findsOneWidget,
@@ -81,12 +94,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Parler du dépistage du col de l’utérus'), findsOneWidget);
-    expect(find.text('Mes rappels'), findsOneWidget);
-    expect(find.text('Faire mon prochain check-up'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('preventive-menu-habits')));
+    await tester.pumpAndSettle();
     expect(find.text('Alimentation & hydratation'), findsOneWidget);
     expect(find.text('Composer des repas nourrissants'), findsOneWidget);
     expect(find.text('Boire de l’eau régulièrement'), findsWidgets);
-    expect(find.text('Mes prochaines échéances'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('preventive-menu-records')));
+    await tester.pumpAndSettle();
     expect(find.text('Vérification du carnet vaccinal'), findsWidgets);
     expect(find.text('1 action enregistrée.'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -114,7 +130,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Mon plan de prévention'), findsOneWidget);
+    expect(find.text('Mes rappels'), findsOneWidget);
     expect(
       find.byKey(const Key('preventive-record-storage-error')),
       findsOneWidget,
@@ -197,6 +213,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    await tester.tap(find.byKey(const Key('preventive-menu-plan')));
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const Key('preventive-plan-preventive-review')),
     );
@@ -234,6 +252,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    await tester.tap(find.byKey(const Key('preventive-menu-screenings')));
+    await tester.pumpAndSettle();
     final breastReminder = find.byKey(
       const Key('preventive-reminder-breast-screening'),
     );
@@ -282,6 +302,11 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    final screeningsMenu = find.byKey(const Key('preventive-menu-screenings'));
+    await tester.ensureVisible(screeningsMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(screeningsMenu);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(const Key('preventive-breast-awareness-guide')),
       500,
@@ -324,6 +349,11 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    final habitsMenu = find.byKey(const Key('preventive-menu-habits'));
+    await tester.ensureVisible(habitsMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(habitsMenu);
+    await tester.pumpAndSettle();
     expect(find.text('Alimentation & hydratation'), findsOneWidget);
     expect(find.textContaining('limité vos boissons'), findsOneWidget);
     expect(find.text('Urines foncées ou rares'), findsOneWidget);

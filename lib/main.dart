@@ -1912,13 +1912,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.canvas,
       extendBody: true,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
-            child: Stack(
-              children: [
-                SingleChildScrollView(
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
                     wide ? 42 : 20,
                     wide ? 28 : 18,
@@ -1928,22 +1929,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _Header(
-                        user: widget.user,
-                        account: widget.account,
-                        unreadNotificationCount: _unreadNotificationCount,
-                        onNotificationsTap: _openNotifications,
-                        onProfileTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => PatientProfileScreen(
-                              user: widget.user,
-                              accountProfile: widget.account,
-                              initialProfile: widget.patientProfile,
+                      if (_selectedTab == 0) ...[
+                        _Header(
+                          unreadNotificationCount: _unreadNotificationCount,
+                          onNotificationsTap: _openNotifications,
+                          onProfileTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => PatientProfileScreen(
+                                user: widget.user,
+                                accountProfile: widget.account,
+                                initialProfile: widget.patientProfile,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 12),
+                      ],
                       if (_selectedTab == 0) ...[
                         const _SearchField(),
                         const SizedBox(height: 26),
@@ -1971,36 +1972,41 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-        child: Center(
-          heightFactor: 1,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 820),
-            child: SizedBox(
-              height: 76,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _GlassNavigationBar(
-                      selectedIndex: _selectedTab,
-                      onDestinationSelected: (index) =>
-                          setState(() => _selectedTab = index),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const _EmergencyButton(),
-                ],
               ),
             ),
           ),
-        ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Center(
+                heightFactor: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 820),
+                  child: SizedBox(
+                    height: 76,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: _GlassNavigationBar(
+                            selectedIndex: _selectedTab,
+                            onDestinationSelected: (index) =>
+                                setState(() => _selectedTab = index),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const _EmergencyButton(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2019,7 +2025,7 @@ class _GlassNavigationBar extends StatelessWidget {
     (Icons.home_outlined, Icons.home_rounded, 'Accueil'),
     (Icons.person_outline_rounded, Icons.person_rounded, 'Personnel'),
     (
-      Icons.account_balance_outlined,
+      Icons.account_balance_rounded,
       Icons.account_balance_rounded,
       'Institution',
     ),
@@ -2089,7 +2095,7 @@ class _GlassNavigationDestination extends StatelessWidget {
                 ),
                 child: Icon(
                   selected ? selectedIcon : icon,
-                  size: 25,
+                  size: 27,
                   color: selected ? AppColors.primary : AppColors.navy,
                 ),
               ),
@@ -3546,14 +3552,10 @@ class _DetailEntry extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  final User user;
-  final Map<String, dynamic> account;
   final int unreadNotificationCount;
   final VoidCallback onNotificationsTap;
   final VoidCallback onProfileTap;
   const _Header({
-    required this.user,
-    required this.account,
     required this.unreadNotificationCount,
     required this.onNotificationsTap,
     required this.onProfileTap,
@@ -3561,151 +3563,84 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accountName = _profileText(account, [
-      'displayName',
-      'fullName',
-      'name',
-    ]);
-    final greetingName = accountName.isEmpty
-        ? (user.displayName ?? 'à vous')
-        : accountName;
-    final brand = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const _BrandMark(),
-        const SizedBox(width: 12),
-        const SizedBox(
-          width: 145,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'I-ENTIER',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 21,
-                  color: AppColors.navy,
-                  letterSpacing: .5,
+    return Container(
+      key: const ValueKey('home-header'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: const Color(0xFFEDF8F5),
+      child: Row(
+        children: [
+          const SizedBox(width: 44, height: 44, child: _BrandMark()),
+          const SizedBox(width: 11),
+          const Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'I-ENTIER',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 19,
+                    height: 1.1,
+                    color: AppColors.navy,
+                    letterSpacing: .4,
+                  ),
                 ),
-              ),
-              SizedBox(height: 1),
-              Text(
-                'Votre espace santé',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.muted,
-                  fontWeight: FontWeight.w600,
+                SizedBox(height: 3),
+                Text(
+                  'Votre espace santé',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-    final greeting = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Bonjour, $greetingName 👋',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 17,
-            color: AppColors.navy,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 3),
-        const Text(
-          'Comment pouvons-nous vous aider aujourd’hui ?',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 12.5, color: AppColors.muted),
-        ),
-      ],
-    );
-    final actions = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _RoundIcon(
-          icon: Icons.notifications_none_rounded,
-          badge: unreadNotificationCount == 0
-              ? null
-              : unreadNotificationCount.toString(),
-          tooltip: 'Notifications',
-          onTap: onNotificationsTap,
-        ),
-        const SizedBox(width: 9),
-        Semantics(
-          button: true,
-          label: 'Ouvrir le profil',
-          child: InkWell(
-            onTap: onProfileTap,
-            customBorder: const CircleBorder(),
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primarySoft, width: 2),
-              ),
-              child: _GoogleAvatar(user: user, radius: 20),
+              ],
             ),
           ),
-        ),
-      ],
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 650;
-        return Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(compact ? 14 : 17),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.border),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0B173B66),
-                blurRadius: 20,
-                offset: Offset(0, 7),
-              ),
-            ],
+          const SizedBox(width: 8),
+          _RoundIcon(
+            icon: Icons.notifications_none_rounded,
+            badge: unreadNotificationCount == 0
+                ? null
+                : unreadNotificationCount.toString(),
+            tooltip: 'Notifications',
+            onTap: onNotificationsTap,
           ),
-          child: compact
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: brand),
-                        actions,
-                      ],
+          const SizedBox(width: 8),
+          Semantics(
+            button: true,
+            label: 'Ouvrir le profil LL',
+            child: Material(
+              color: const Color(0xFFE8E2F8),
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: onProfileTap,
+                customBorder: const CircleBorder(),
+                child: const SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: Center(
+                    child: Text(
+                      'LL',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      child: Divider(height: 1, color: AppColors.border),
-                    ),
-                    greeting,
-                  ],
-                )
-              : Row(
-                  children: [
-                    brand,
-                    const SizedBox(width: 24),
-                    Container(width: 1, height: 44, color: AppColors.border),
-                    const SizedBox(width: 24),
-                    Expanded(child: greeting),
-                    const SizedBox(width: 20),
-                    actions,
-                  ],
+                  ),
                 ),
-        );
-      },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -3755,15 +3690,15 @@ class _RoundIcon extends StatelessWidget {
       Tooltip(
         message: tooltip ?? '',
         child: Material(
-          color: const Color(0xFFF6F8FC),
-          shape: CircleBorder(side: BorderSide(color: AppColors.border)),
+          color: const Color(0xFFDDEFF3),
+          shape: const CircleBorder(),
           child: InkWell(
             onTap: onTap,
             customBorder: const CircleBorder(),
             child: SizedBox(
-              width: 46,
-              height: 46,
-              child: Icon(icon, color: AppColors.navy, size: 22),
+              width: 42,
+              height: 42,
+              child: Icon(icon, color: AppColors.navy, size: 21),
             ),
           ),
         ),
@@ -3773,9 +3708,11 @@ class _RoundIcon extends StatelessWidget {
           right: -2,
           top: -3,
           child: Container(
-            padding: const EdgeInsets.all(5),
+            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: const BoxDecoration(
-              color: Color(0xFFFF352C),
+              color: Color(0xFF6750A4),
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -3799,36 +3736,17 @@ class _SearchField extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => Container(
-    height: 62,
-    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+    key: const ValueKey('home-search-bar'),
+    height: 56,
+    padding: const EdgeInsets.fromLTRB(16, 6, 7, 6),
     decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: AppColors.border),
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0D18345F),
-          blurRadius: 20,
-          offset: Offset(0, 8),
-        ),
-      ],
+      color: const Color(0xFFF0EDFA),
+      borderRadius: BorderRadius.circular(28),
     ),
     child: Row(
       children: [
-        Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(
-            Icons.search_rounded,
-            color: AppColors.primary,
-            size: 25,
-          ),
-        ),
-        const SizedBox(width: 13),
+        const Icon(Icons.search_rounded, color: AppColors.navy, size: 23),
+        const SizedBox(width: 12),
         Expanded(
           child: Text(
             hint,
@@ -3840,13 +3758,26 @@ class _SearchField extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        Container(width: 1, height: 24, color: AppColors.border),
-        const SizedBox(width: 5),
-        const SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(Icons.tune_rounded, color: AppColors.navy, size: 21),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: 'Filtrer',
+          child: Material(
+            color: const Color(0xFFDDECF7),
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: () {},
+              customBorder: const CircleBorder(),
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: AppColors.navy,
+                  size: 21,
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     ),
@@ -5012,26 +4943,10 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
               key: const ValueKey('emergency-bottom-button'),
               onTap: _openEmergencySheet,
               customBorder: const CircleBorder(),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [Color(0x55FF3029), Color(0x00FF3029)],
-                      ),
-                    ),
-                  ),
-                  const Icon(
-                    Icons.emergency_rounded,
-                    size: 35,
-                    color: Color(0xFFFF3029),
-                    shadows: [Shadow(color: Color(0x66FF3029), blurRadius: 14)],
-                  ),
-                ],
+              child: const Icon(
+                Icons.emergency_rounded,
+                size: 37,
+                color: Color(0xFFFF3029),
               ),
             ),
           ),

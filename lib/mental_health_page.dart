@@ -23,6 +23,24 @@ const _psycrephPhone = '+50931112640';
 const _psycrephWebsite = 'https://psycreph.org/nos-actions-et-services/';
 const _canEmergencyNumber = '116';
 
+enum _MentalHealthSection { overview, journal, tools, support }
+
+extension _MentalHealthSectionDetails on _MentalHealthSection {
+  String get label => switch (this) {
+    _MentalHealthSection.overview => 'Accueil',
+    _MentalHealthSection.journal => 'Journal',
+    _MentalHealthSection.tools => 'Outils',
+    _MentalHealthSection.support => 'Soutien',
+  };
+
+  IconData get icon => switch (this) {
+    _MentalHealthSection.overview => Icons.home_outlined,
+    _MentalHealthSection.journal => Icons.auto_stories_outlined,
+    _MentalHealthSection.tools => Icons.self_improvement_outlined,
+    _MentalHealthSection.support => Icons.support_agent_outlined,
+  };
+}
+
 enum MentalHealthMood { veryLow, low, neutral, good, veryGood }
 
 extension MentalHealthMoodDetails on MentalHealthMood {
@@ -201,7 +219,7 @@ class MentalHealthPage extends StatefulWidget {
 
 class _MentalHealthPageState extends State<MentalHealthPage> {
   final _noteController = TextEditingController();
-  final _professionalSectionKey = GlobalKey();
+  _MentalHealthSection _section = _MentalHealthSection.overview;
   MentalHealthMood? _selectedMood;
   final Set<String> _selectedFeelings = <String>{};
   bool _saving = false;
@@ -373,17 +391,6 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
     ),
   );
 
-  Future<void> _scrollToProfessionals() async {
-    final target = _professionalSectionKey.currentContext;
-    if (target == null) return;
-    await Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
-      alignment: .08,
-    );
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: _canvas,
@@ -405,73 +412,355 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1080),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 48),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _WelcomeCard(onFindProfessional: _scrollToProfessionals),
-                const SizedBox(height: 14),
-                _CrisisBanner(onTap: _openCrisisSupport),
-                const SizedBox(height: 26),
-                const _SectionTitle(
-                  eyebrow: 'POINT BIEN-ÊTRE',
-                  title: 'Comment vous sentez-vous ?',
-                  subtitle:
-                      'Prenez un instant pour reconnaître ce que vous vivez.',
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                child: _SectionSwitcher(
+                  selected: _section,
+                  onSelected: (section) => setState(() => _section = section),
                 ),
-                const SizedBox(height: 14),
-                _CheckInCard(
-                  selectedMood: _selectedMood,
-                  selectedFeelings: _selectedFeelings,
-                  noteController: _noteController,
-                  saving: _saving,
-                  onMoodSelected: (mood) =>
-                      setState(() => _selectedMood = mood),
-                  onFeelingSelected: (feeling, selected) => setState(() {
-                    if (selected) {
-                      _selectedFeelings.add(feeling);
-                    } else {
-                      _selectedFeelings.remove(feeling);
-                    }
-                  }),
-                  onSave: _saveCheckIn,
+              ),
+              Expanded(
+                child: IndexedStack(
+                  index: _section.index,
+                  children: [
+                    _SectionScroll(
+                      key: const PageStorageKey('mental-health-overview'),
+                      children: [
+                        _WelcomeCard(
+                          onFindProfessional: () => setState(
+                            () => _section = _MentalHealthSection.support,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _CrisisBanner(onTap: _openCrisisSupport),
+                        const SizedBox(height: 28),
+                        const _SectionTitle(
+                          eyebrow: 'VOS ESPACES',
+                          title: 'Que souhaitez-vous faire ?',
+                          subtitle:
+                              'Chaque fonctionnalité est maintenant regroupée dans un espace dédié.',
+                        ),
+                        const SizedBox(height: 14),
+                        _DashboardActions(
+                          onSelected: (section) =>
+                              setState(() => _section = section),
+                        ),
+                        const SizedBox(height: 24),
+                        const _ClinicalNotice(),
+                      ],
+                    ),
+                    _SectionScroll(
+                      key: const PageStorageKey('mental-health-journal'),
+                      children: [
+                        const _SectionTitle(
+                          eyebrow: 'POINT BIEN-ÊTRE',
+                          title: 'Comment vous sentez-vous ?',
+                          subtitle:
+                              'Prenez un instant pour reconnaître ce que vous vivez.',
+                        ),
+                        const SizedBox(height: 14),
+                        _CheckInCard(
+                          selectedMood: _selectedMood,
+                          selectedFeelings: _selectedFeelings,
+                          noteController: _noteController,
+                          saving: _saving,
+                          onMoodSelected: (mood) =>
+                              setState(() => _selectedMood = mood),
+                          onFeelingSelected: (feeling, selected) => setState(() {
+                            if (selected) {
+                              _selectedFeelings.add(feeling);
+                            } else {
+                              _selectedFeelings.remove(feeling);
+                            }
+                          }),
+                          onSave: _saveCheckIn,
+                        ),
+                        const SizedBox(height: 30),
+                        const _SectionTitle(
+                          eyebrow: 'VOTRE ESPACE PRIVÉ',
+                          title: 'Journal récent',
+                          subtitle:
+                              'Vos entrées restent associées à votre compte personnel.',
+                        ),
+                        const SizedBox(height: 14),
+                        _EntryHistory(
+                          stream: _entriesStream,
+                          onDelete: _deleteEntry,
+                        ),
+                      ],
+                    ),
+                    _SectionScroll(
+                      key: const PageStorageKey('mental-health-tools'),
+                      children: [
+                        const _SectionTitle(
+                          eyebrow: 'OUTILS IMMÉDIATS',
+                          title: 'Retrouvez un peu de calme',
+                          subtitle:
+                              'Des exercices courts pour traverser un moment difficile.',
+                        ),
+                        const SizedBox(height: 14),
+                        _WellbeingTools(onCrisisTap: _openCrisisSupport),
+                        const SizedBox(height: 20),
+                        _CrisisBanner(onTap: _openCrisisSupport),
+                      ],
+                    ),
+                    _SectionScroll(
+                      key: const PageStorageKey('mental-health-support'),
+                      children: [
+                        _CrisisBanner(onTap: _openCrisisSupport),
+                        const SizedBox(height: 26),
+                        const _SectionTitle(
+                          eyebrow: 'ACCOMPAGNEMENT HUMAIN',
+                          title: 'Parler à un professionnel',
+                          subtitle:
+                              'Contactez directement une ressource spécialisée en santé mentale.',
+                        ),
+                        const SizedBox(height: 14),
+                        _ProfessionalDirectory(stream: _professionalsStream),
+                        const SizedBox(height: 24),
+                        const _ClinicalNotice(),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 30),
-                const _SectionTitle(
-                  eyebrow: 'OUTILS IMMÉDIATS',
-                  title: 'Retrouvez un peu de calme',
-                  subtitle:
-                      'Des exercices courts pour traverser un moment difficile.',
-                ),
-                const SizedBox(height: 14),
-                _WellbeingTools(onCrisisTap: _openCrisisSupport),
-                const SizedBox(height: 30),
-                const _SectionTitle(
-                  eyebrow: 'VOTRE ESPACE PRIVÉ',
-                  title: 'Journal récent',
-                  subtitle:
-                      'Vos entrées restent associées à votre compte personnel.',
-                ),
-                const SizedBox(height: 14),
-                _EntryHistory(stream: _entriesStream, onDelete: _deleteEntry),
-                const SizedBox(height: 30),
-                Container(
-                  key: _professionalSectionKey,
-                  child: const _SectionTitle(
-                    eyebrow: 'ACCOMPAGNEMENT HUMAIN',
-                    title: 'Parler à un professionnel',
-                    subtitle:
-                        'Contactez directement une ressource spécialisée en santé mentale.',
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _ProfessionalDirectory(stream: _professionalsStream),
-                const SizedBox(height: 24),
-                const _ClinicalNotice(),
-              ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _SectionScroll extends StatelessWidget {
+  final List<Widget> children;
+
+  const _SectionScroll({super.key, required this.children});
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    key: key,
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    ),
+  );
+}
+
+class _SectionSwitcher extends StatelessWidget {
+  final _MentalHealthSection selected;
+  final ValueChanged<_MentalHealthSection> onSelected;
+
+  const _SectionSwitcher({required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(5),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: _border),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x10102A56),
+          blurRadius: 16,
+          offset: Offset(0, 6),
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        for (final section in _MentalHealthSection.values)
+          Expanded(
+            child: _SectionSwitchItem(
+              section: section,
+              selected: section == selected,
+              onTap: () => onSelected(section),
             ),
           ),
+      ],
+    ),
+  );
+}
+
+class _SectionSwitchItem extends StatelessWidget {
+  final _MentalHealthSection section;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SectionSwitchItem({
+    required this.section,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      key: Key('mental-health-section-${section.name}'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? _primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              section.icon,
+              size: 19,
+              color: selected ? Colors.white : _muted,
+            ),
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                section.label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: selected ? Colors.white : _ink,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _DashboardActions extends StatelessWidget {
+  final ValueChanged<_MentalHealthSection> onSelected;
+
+  const _DashboardActions({required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 720 ? 3 : 1;
+      const gap = 12.0;
+      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+      final actions = [
+        _DashboardActionCard(
+          key: const Key('mental-health-dashboard-journal'),
+          icon: Icons.edit_note_rounded,
+          color: _primary,
+          background: _primarySoft,
+          title: 'Mon journal',
+          description: 'Notez votre humeur et retrouvez votre historique.',
+          onTap: () => onSelected(_MentalHealthSection.journal),
+        ),
+        _DashboardActionCard(
+          key: const Key('mental-health-dashboard-tools'),
+          icon: Icons.self_improvement_rounded,
+          color: _teal,
+          background: _tealSoft,
+          title: 'Mes outils',
+          description: 'Respirez, recentrez-vous et traversez le moment.',
+          onTap: () => onSelected(_MentalHealthSection.tools),
+        ),
+        _DashboardActionCard(
+          key: const Key('mental-health-dashboard-support'),
+          icon: Icons.people_alt_outlined,
+          color: _rose,
+          background: _roseSoft,
+          title: 'Trouver du soutien',
+          description: 'Accédez aux contacts et aux professionnels.',
+          onTap: () => onSelected(_MentalHealthSection.support),
+        ),
+      ];
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final action in actions)
+            SizedBox(width: width, child: action),
+        ],
+      );
+    },
+  );
+}
+
+class _DashboardActionCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  const _DashboardActionCard({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.background,
+    required this.title,
+    required this.description,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(20),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: _border),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: _navy,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_rounded, color: color, size: 19),
+          ],
         ),
       ),
     ),

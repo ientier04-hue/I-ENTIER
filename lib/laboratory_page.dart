@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const _primary = Color(0xFF176BFF);
 const _teal = Color(0xFF009B88);
@@ -12,13 +13,21 @@ const _border = Color(0xFFE4EAF2);
 const _canvas = Color(0xFFF5F8FC);
 
 class LaboratoryPage extends StatefulWidget {
+  final String patientId;
   final Stream<QuerySnapshot<Map<String, dynamic>>>? institutionStream;
+  final Stream<QuerySnapshot<Map<String, dynamic>>>? resultStream;
   final List<Laboratory>? laboratories;
+  final List<LaboratoryExam>? examinations;
+  final List<LaboratoryResult>? results;
 
   const LaboratoryPage({
     super.key,
+    this.patientId = '',
     this.institutionStream,
+    this.resultStream,
     this.laboratories,
+    this.examinations,
+    this.results,
   });
 
   @override
@@ -27,12 +36,23 @@ class LaboratoryPage extends StatefulWidget {
 
 class _LaboratoryPageState extends State<LaboratoryPage> {
   final _searchController = TextEditingController();
+  _LaboratorySection _section = _LaboratorySection.laboratories;
   _LaboratoryFilter _filter = _LaboratoryFilter.all;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _institutions =>
       widget.institutionStream ??
       FirebaseFirestore.instance
           .collection('institution')
+          .limit(100)
+          .snapshots();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _results =>
+      widget.resultStream ??
+      FirebaseFirestore.instance
+          .collection('patients')
+          .doc(widget.patientId)
+          .collection('laboratoryResults')
+          .orderBy('publishedAt', descending: true)
           .limit(100)
           .snapshots();
 
@@ -55,33 +75,91 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
     ),
     body: SafeArea(
       top: false,
-      child: widget.laboratories != null
-          ? _buildDirectory(widget.laboratories!)
-          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _institutions,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const _PageFeedback(
-                    icon: Icons.lock_outline_rounded,
-                    title: 'Laboratoires indisponibles',
-                    message:
-                        'Vérifiez l’accès à la collection Firestore « institution ».',
-                  );
-                }
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: _teal),
-                  );
-                }
-                final laboratories = snapshot.data!.docs
-                    .map(Laboratory.fromFirestore)
-                    .whereType<Laboratory>()
-                    .toList();
-                return _buildDirectory(laboratories);
-              },
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: _LaboratorySectionSwitch(
+              selected: _section,
+              onSelected: (section) => setState(() => _section = section),
             ),
+          ),
+          Expanded(
+            child: IndexedStack(
+              index: _section.index,
+              children: [
+                _buildLaboratorySource(),
+                _ExaminationsPage(
+                  examinations: widget.examinations ?? laboratoryExaminations,
+                ),
+                _buildResultSource(),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
+
+  Widget _buildLaboratorySource() {
+    if (widget.laboratories != null) {
+      return _buildDirectory(widget.laboratories!);
+    }
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _institutions,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const _PageFeedback(
+            icon: Icons.lock_outline_rounded,
+            title: 'Laboratoires indisponibles',
+            message:
+                'Vérifiez l’accès à la collection Firestore « institution ».',
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: _teal),
+          );
+        }
+        final laboratories = snapshot.data!.docs
+            .map(Laboratory.fromFirestore)
+            .whereType<Laboratory>()
+            .toList();
+        return _buildDirectory(laboratories);
+      },
+    );
+  }
+
+  Widget _buildResultSource() {
+    if (widget.results != null) {
+      return _PatientResultsPage(results: widget.results!);
+    }
+    if (widget.patientId.isEmpty) {
+      return const _PatientResultsPage(results: []);
+    }
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _results,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const _PageFeedback(
+            icon: Icons.shield_outlined,
+            title: 'Résultats indisponibles',
+            message:
+                'Vos résultats n’ont pas pu être chargés pour le moment.',
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: _teal),
+          );
+        }
+        final results = snapshot.data!.docs
+            .map(LaboratoryResult.fromFirestore)
+            .toList();
+        return _PatientResultsPage(results: results);
+      },
+    );
+  }
 
   Widget _buildDirectory(List<Laboratory> laboratories) {
     final query = _searchController.text.trim().toLowerCase();
@@ -146,6 +224,112 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
       ),
     );
   }
+}
+
+enum _LaboratorySection { laboratories, examinations, results }
+
+extension on _LaboratorySection {
+  String get label => switch (this) {
+    _LaboratorySection.laboratories => 'Laboratoires',
+    _LaboratorySection.examinations => 'Examens',
+    _LaboratorySection.results => 'Résultats',
+  };
+
+  IconData get icon => switch (this) {
+    _LaboratorySection.laboratories => Icons.apartment_outlined,
+    _LaboratorySection.examinations => Icons.biotech_outlined,
+    _LaboratorySection.results => Icons.assignment_turned_in_outlined,
+  };
+
+  String get keyName => switch (this) {
+    _LaboratorySection.laboratories => 'laboratories',
+    _LaboratorySection.examinations => 'examinations',
+    _LaboratorySection.results => 'results',
+  };
+}
+
+class _LaboratorySectionSwitch extends StatelessWidget {
+  final _LaboratorySection selected;
+  final ValueChanged<_LaboratorySection> onSelected;
+
+  const _LaboratorySectionSwitch({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(5),
+    decoration: BoxDecoration(
+      color: const Color(0xFFE9EEF6),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Row(
+      children: [
+        for (final section in _LaboratorySection.values)
+          Expanded(
+            child: Semantics(
+              selected: selected == section,
+              button: true,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: Key('laboratory-section-${section.keyName}'),
+                  onTap: () => onSelected(section),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 190),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected == section
+                          ? Colors.white
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: selected == section
+                          ? const [
+                              BoxShadow(
+                                color: Color(0x12102A56),
+                                blurRadius: 10,
+                                offset: Offset(0, 3),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          section.icon,
+                          size: 18,
+                          color: selected == section ? _teal : _muted,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            section.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: selected == section ? _navy : _muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 enum _LaboratoryFilter { all, open, home, online }
