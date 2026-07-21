@@ -198,6 +198,7 @@ class FirebaseNotificationService {
         onDidReceiveNotificationResponse: _onNotificationSelected,
       );
     } catch (error, stackTrace) {
+      _initialized = false;
       debugPrint('Initialisation des notifications impossible: $error');
       debugPrintStack(stackTrace: stackTrace);
     }

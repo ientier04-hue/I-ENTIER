@@ -54,6 +54,7 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   late List<AppNotification> _notifications;
   StreamSubscription<List<AppNotification>>? _subscription;
+  Timer? _deliveryClock;
   _NotificationFilter _filter = _NotificationFilter.all;
   bool _isLoading = false;
   bool _hasStorageError = false;
@@ -77,11 +78,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         (notifications) {
           if (!mounted) return;
           setState(() {
-            _notifications = notifications
-                .where(
-                  (notification) => notification.isDeliveredAt(DateTime.now()),
-                )
-                .toList();
+            _notifications = notifications;
             _isLoading = false;
             _hasStorageError = false;
           });
@@ -96,21 +93,32 @@ class _NotificationsPageState extends State<NotificationsPage> {
         },
       );
     }
+    _deliveryClock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _deliveryClock?.cancel();
     unawaited(_subscription?.cancel());
     super.dispose();
   }
 
-  int get _unreadCount =>
-      _notifications.where((notification) => !notification.isRead).length;
+  int get _unreadCount => _deliveredNotifications
+      .where((notification) => !notification.isRead)
+      .length;
+
+  List<AppNotification> get _deliveredNotifications => _notifications
+      .where((notification) => notification.isDeliveredAt(DateTime.now()))
+      .toList();
 
   List<AppNotification> get _visibleNotifications => switch (_filter) {
-    _NotificationFilter.all => _notifications,
+    _NotificationFilter.all => _deliveredNotifications,
     _NotificationFilter.unread =>
-      _notifications.where((notification) => !notification.isRead).toList(),
+      _deliveredNotifications
+          .where((notification) => !notification.isRead)
+          .toList(),
   };
 
   void _notifyParent() {
@@ -155,7 +163,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final before = List<AppNotification>.of(_notifications);
     setState(() {
       _notifications = _notifications
-          .map((notification) => notification.copyWith(isRead: true))
+          .map(
+            (notification) => notification.isDeliveredAt(DateTime.now())
+                ? notification.copyWith(isRead: true)
+                : notification,
+          )
           .toList();
     });
     _notifyParent();
@@ -164,7 +176,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
       try {
         await FirebaseNotificationService.instance.markAllAsRead(
           patientId,
-          before,
+          before.where(
+            (notification) => notification.isDeliveredAt(DateTime.now()),
+          ),
         );
       } catch (_) {
         if (!mounted) return;
@@ -297,7 +311,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       children: [
                         Expanded(
                           child: _FilterChip(
-                            label: 'Toutes (${_notifications.length})',
+                            label: 'Toutes (${_deliveredNotifications.length})',
                             selected: _filter == _NotificationFilter.all,
                             onSelected: () => setState(
                               () => _filter = _NotificationFilter.all,

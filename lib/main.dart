@@ -1842,13 +1842,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .toList(),
           onNotificationsChanged: (notifications) {
             if (!mounted) return;
-            final now = DateTime.now();
-            final futureNotifications = _notifications
-                .where((notification) => !notification.isDeliveredAt(now))
-                .toList();
-            setState(
-              () => _notifications = [...notifications, ...futureNotifications],
-            );
+            setState(() => _notifications = List.of(notifications));
           },
         ),
       ),
