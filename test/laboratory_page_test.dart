@@ -26,8 +26,45 @@ void main() {
     ),
   ];
 
-  Widget buildPage() =>
-      const MaterialApp(home: LaboratoryPage(laboratories: laboratories));
+  final results = [
+    LaboratoryResult(
+      id: 'result-nfs',
+      examName: 'Numération formule sanguine',
+      laboratoryName: 'Laboratoire Bio Plus',
+      status: 'available',
+      summary: 'Compte rendu complet disponible',
+      referenceRange: 'Voir le document du laboratoire',
+      collectedAt: DateTime(2026, 7, 17),
+      publishedAt: DateTime(2026, 7, 18),
+    ),
+    LaboratoryResult(
+      id: 'result-tsh',
+      examName: 'TSH',
+      laboratoryName: 'Laboratoire Central',
+      status: 'pending',
+      collectedAt: DateTime(2026, 7, 20),
+    ),
+  ];
+
+  Widget buildPage() => MaterialApp(
+    home: LaboratoryPage(laboratories: laboratories, results: results),
+  );
+
+  testWidgets('regroupe les fonctionnalités dans trois menus en haut', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(buildPage());
+
+    expect(find.text('Laboratoires'), findsOneWidget);
+    expect(find.text('Examens'), findsOneWidget);
+    expect(find.text('Résultats'), findsOneWidget);
+    expect(
+      find.byKey(const Key('laboratory-section-laboratories')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('affiche les laboratoires et recherche dans leurs services', (
     tester,
@@ -81,12 +118,71 @@ void main() {
     expect(find.text('Copier le numéro du laboratoire'), findsOneWidget);
   });
 
+  testWidgets('navigue et recherche dans le catalogue des examens', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(buildPage());
+
+    await tester.tap(find.byKey(const Key('laboratory-section-examinations')));
+    await tester.pump();
+
+    expect(find.text('Comprendre vos examens'), findsOneWidget);
+    expect(find.text('Numération formule sanguine'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('examination-search-field')),
+      'glycémie',
+    );
+    await tester.pump();
+
+    expect(find.text('Glycémie'), findsOneWidget);
+    expect(find.text('Numération formule sanguine'), findsNothing);
+  });
+
+  testWidgets('affiche les résultats privés du patient et leur détail', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(buildPage());
+
+    await tester.tap(find.byKey(const Key('laboratory-section-results')));
+    await tester.pump();
+
+    expect(find.text('Mes résultats'), findsOneWidget);
+    expect(find.text('Visible uniquement par vous'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('laboratory-result-result-tsh')),
+        matching: find.text('En attente'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('laboratory-result-result-nfs')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Compte rendu'), findsOneWidget);
+    expect(find.text('Compte rendu complet disponible'), findsOneWidget);
+    expect(find.text('18 juil. 2026'), findsOneWidget);
+  });
+
   testWidgets('la page reste utilisable sur mobile', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(buildPage());
 
-    expect(tester.takeException(), isNull);
+    for (final key in const [
+      'laboratory-section-examinations',
+      'laboratory-section-results',
+      'laboratory-section-laboratories',
+    ]) {
+      await tester.tap(find.byKey(Key(key)));
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: key);
+    }
     await tester.scrollUntilVisible(
       find.byKey(const Key('laboratory-card-central')),
       250,

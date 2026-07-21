@@ -16,6 +16,7 @@ import 'cycle_tracking_page.dart';
 import 'health_tracking_page.dart';
 import 'laboratory_page.dart';
 import 'mental_health_page.dart';
+import 'notification_service.dart';
 import 'notifications_page.dart';
 import 'pharmacy_page.dart';
 import 'preventive_medicine_page.dart';
@@ -23,6 +24,7 @@ import 'preventive_medicine_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await FirebaseNotificationService.instance.initialize();
   runApp(const IEntierApp());
 }
 
@@ -1757,11 +1759,13 @@ class HomeScreen extends StatefulWidget {
   final User user;
   final Map<String, dynamic> account;
   final Map<String, dynamic> patientProfile;
+  final Stream<List<AppNotification>>? notificationStream;
   const HomeScreen({
     super.key,
     required this.user,
     required this.account,
     required this.patientProfile,
+    this.notificationStream,
   });
 
   @override
@@ -1770,25 +1774,81 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
-  late List<AppNotification> _notifications;
+  List<AppNotification> _notifications = const [];
+  StreamSubscription<List<AppNotification>>? _notificationSubscription;
+  Timer? _notificationClock;
+
+  bool get _usesFirebaseNotifications =>
+      widget.notificationStream == null && Firebase.apps.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _notifications = defaultAppNotifications();
+    if (widget.notificationStream == null && Firebase.apps.isEmpty) {
+      _notifications = defaultAppNotifications();
+    }
+    final notificationStream =
+        widget.notificationStream ??
+        (_usesFirebaseNotifications
+            ? FirebaseNotificationService.instance.watchNotifications(
+                widget.user.uid,
+              )
+            : Stream.value(defaultAppNotifications()));
+    _notificationSubscription = notificationStream.listen(
+      (notifications) {
+        if (mounted) setState(() => _notifications = notifications);
+      },
+      onError: (Object _) {
+        // Le reste de l’accueil reste disponible hors connexion.
+      },
+    );
+    _notificationClock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    if (_usesFirebaseNotifications) {
+      unawaited(
+        FirebaseNotificationService.instance.startSync(widget.user.uid),
+      );
+    }
   }
 
-  int get _unreadNotificationCount =>
-      _notifications.where((notification) => !notification.isRead).length;
+  int get _unreadNotificationCount => _notifications
+      .where(
+        (notification) =>
+            !notification.isRead && notification.isDeliveredAt(DateTime.now()),
+      )
+      .length;
+
+  @override
+  void dispose() {
+    _notificationClock?.cancel();
+    unawaited(_notificationSubscription?.cancel());
+    if (_usesFirebaseNotifications) {
+      unawaited(FirebaseNotificationService.instance.stopSync());
+    }
+    super.dispose();
+  }
 
   void _openNotifications() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => NotificationsPage(
-          notifications: _notifications,
+          patientId: _usesFirebaseNotifications ? widget.user.uid : null,
+          notificationStream: widget.notificationStream,
+          notifications: _notifications
+              .where(
+                (notification) => notification.isDeliveredAt(DateTime.now()),
+              )
+              .toList(),
           onNotificationsChanged: (notifications) {
             if (!mounted) return;
-            setState(() => _notifications = List.of(notifications));
+            final now = DateTime.now();
+            final futureNotifications = _notifications
+                .where((notification) => !notification.isDeliveredAt(now))
+                .toList();
+            setState(
+              () => _notifications = [...notifications, ...futureNotifications],
+            );
           },
         ),
       ),
@@ -1864,9 +1924,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     if (service.id == 'laboratoire') {
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const LaboratoryPage()));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => LaboratoryPage(patientId: widget.user.uid),
+        ),
+      );
       return;
     }
     if (service.id == 'suivi-cycle') {
@@ -2236,40 +2298,48 @@ class _PersonnelPage extends StatelessWidget {
       const SizedBox(height: 22),
       const _SectionHeading(title: 'Professionnels recommandés'),
       const SizedBox(height: 6),
-      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('personnelMedical')
-            .limit(50)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const _DirectoryFeedback(
-              icon: Icons.lock_outline,
-              title: 'Personnel indisponible',
-              message:
-                  'Vérifiez les règles Firestore de la collection personnelMedical.',
+      if (Firebase.apps.isEmpty)
+        const _DirectoryFeedback(
+          icon: Icons.cloud_off_outlined,
+          title: 'Annuaire en mode aperçu',
+          message:
+              'Firebase sera utilisé lorsque l’application sera initialisée.',
+        )
+      else
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('personnelMedical')
+              .limit(50)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const _DirectoryFeedback(
+                icon: Icons.lock_outline,
+                title: 'Personnel indisponible',
+                message:
+                    'Vérifiez les règles Firestore de la collection personnelMedical.',
+              );
+            }
+            if (!snapshot.hasData) return const _DirectoryLoading();
+            final records = snapshot.data!.docs
+                .map((doc) => _Professional.fromFirestore(doc))
+                .toList();
+            if (records.isEmpty) {
+              return const _DirectoryFeedback(
+                icon: Icons.person_search_outlined,
+                title: 'Aucun professionnel pour le moment',
+                message:
+                    'Ajoutez des documents dans personnelMedical depuis Firebase.',
+              );
+            }
+            return _DirectoryGrid(
+              children: [
+                for (final record in records)
+                  _ProfessionalCard(professional: record),
+              ],
             );
-          }
-          if (!snapshot.hasData) return const _DirectoryLoading();
-          final records = snapshot.data!.docs
-              .map((doc) => _Professional.fromFirestore(doc))
-              .toList();
-          if (records.isEmpty) {
-            return const _DirectoryFeedback(
-              icon: Icons.person_search_outlined,
-              title: 'Aucun professionnel pour le moment',
-              message:
-                  'Ajoutez des documents dans personnelMedical depuis Firebase.',
-            );
-          }
-          return _DirectoryGrid(
-            children: [
-              for (final record in records)
-                _ProfessionalCard(professional: record),
-            ],
-          );
-        },
-      ),
+          },
+        ),
     ],
   );
 }
@@ -2299,40 +2369,48 @@ class _InstitutionsPage extends StatelessWidget {
       const SizedBox(height: 22),
       const _SectionHeading(title: 'À proximité'),
       const SizedBox(height: 6),
-      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('institution')
-            .limit(50)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const _DirectoryFeedback(
-              icon: Icons.lock_outline,
-              title: 'Institutions indisponibles',
-              message:
-                  'Vérifiez les règles Firestore de la collection institution.',
+      if (Firebase.apps.isEmpty)
+        const _DirectoryFeedback(
+          icon: Icons.cloud_off_outlined,
+          title: 'Annuaire en mode aperçu',
+          message:
+              'Firebase sera utilisé lorsque l’application sera initialisée.',
+        )
+      else
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('institution')
+              .limit(50)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const _DirectoryFeedback(
+                icon: Icons.lock_outline,
+                title: 'Institutions indisponibles',
+                message:
+                    'Vérifiez les règles Firestore de la collection institution.',
+              );
+            }
+            if (!snapshot.hasData) return const _DirectoryLoading();
+            final records = snapshot.data!.docs
+                .map((doc) => _Institution.fromFirestore(doc))
+                .toList();
+            if (records.isEmpty) {
+              return const _DirectoryFeedback(
+                icon: Icons.location_city_outlined,
+                title: 'Aucune institution pour le moment',
+                message:
+                    'Ajoutez des documents dans institution depuis Firebase.',
+              );
+            }
+            return _DirectoryGrid(
+              children: [
+                for (final record in records)
+                  _InstitutionCard(institution: record),
+              ],
             );
-          }
-          if (!snapshot.hasData) return const _DirectoryLoading();
-          final records = snapshot.data!.docs
-              .map((doc) => _Institution.fromFirestore(doc))
-              .toList();
-          if (records.isEmpty) {
-            return const _DirectoryFeedback(
-              icon: Icons.location_city_outlined,
-              title: 'Aucune institution pour le moment',
-              message:
-                  'Ajoutez des documents dans institution depuis Firebase.',
-            );
-          }
-          return _DirectoryGrid(
-            children: [
-              for (final record in records)
-                _InstitutionCard(institution: record),
-            ],
-          );
-        },
-      ),
+          },
+        ),
     ],
   );
 }

@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
+import 'notification_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const _primary = Color(0xFF176BFF);
@@ -385,6 +387,8 @@ class PreventiveMedicinePage extends StatefulWidget {
 }
 
 class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
+  bool? _notificationPermissionGranted;
+
   DateTime get _today => widget.now ?? DateTime.now();
 
   CollectionReference<Map<String, dynamic>> get _records => FirebaseFirestore
@@ -398,6 +402,12 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
       .collection('patients')
       .doc(widget.patientId)
       .collection('preventiveCareReminders');
+
+  CollectionReference<Map<String, dynamic>> get _notifications =>
+      FirebaseFirestore.instance
+          .collection('patients')
+          .doc(widget.patientId)
+          .collection('notifications');
 
   Stream<List<PreventiveCareRecord>> get _recordStream {
     final injected = widget.recordStream;
@@ -430,6 +440,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
   }
 
   Future<void> _saveRecord(Map<String, dynamic> data) async {
+    _notificationPermissionGranted = null;
     final injected = widget.onSaveRecord;
     if (injected != null) {
       await injected(data);
@@ -437,28 +448,73 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     }
     final completedAt = data['completedAt'] as DateTime;
     final nextDueAt = data['nextDueAt'] as DateTime?;
-    await _records.add({
+    final record = _records.doc();
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(record, {
       ...data,
       'completedAt': Timestamp.fromDate(completedAt),
       if (nextDueAt != null) 'nextDueAt': Timestamp.fromDate(nextDueAt),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    if (nextDueAt != null) {
+      final scheduledAt = _atReminderTime(nextDueAt);
+      batch.set(_notifications.doc('preventive_record_${record.id}'), {
+        'title': 'Prochain contrôle à prévoir',
+        'message': data['title'] as String,
+        'type': AppNotificationType.reminder.name,
+        'isRead': false,
+        'scheduledAt': Timestamp.fromDate(scheduledAt),
+        'actionLabel': 'Voir mon plan',
+        'source': 'preventiveRecord',
+        'sourceId': record.id,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    if (nextDueAt != null) {
+      _notificationPermissionGranted = await FirebaseNotificationService
+          .instance
+          .requestPermission();
+    }
   }
 
   Future<void> _saveReminder(Map<String, dynamic> data) async {
+    _notificationPermissionGranted = null;
     final injected = widget.onSaveReminder;
     if (injected != null) {
       await injected(data);
       return;
     }
-    await _reminders.add({
+    final reminder = _reminders.doc();
+    final scheduledAt = _atReminderTime(data['dueAt'] as DateTime);
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(reminder, {
       ...data,
       'dueAt': Timestamp.fromDate(data['dueAt'] as DateTime),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    batch.set(_notifications.doc('preventive_${reminder.id}'), {
+      'title': 'Rappel de prévention',
+      'message': data['title'] as String,
+      'type': AppNotificationType.reminder.name,
+      'isRead': false,
+      'scheduledAt': Timestamp.fromDate(scheduledAt),
+      'actionLabel': 'Voir mon plan',
+      'source': 'preventiveReminder',
+      'sourceId': reminder.id,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    _notificationPermissionGranted = await FirebaseNotificationService.instance
+        .requestPermission();
   }
+
+  DateTime _atReminderTime(DateTime date) =>
+      DateTime(date.year, date.month, date.day, 9);
 
   Future<bool> _openRecordForm({
     PreventivePlanItem? planItem,
@@ -480,7 +536,13 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     );
     if (saved == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Action de prévention enregistrée.')),
+        SnackBar(
+          content: Text(
+            _notificationPermissionGranted == false
+                ? 'Action enregistrée. Activez les notifications système pour recevoir le rappel.'
+                : 'Action de prévention enregistrée.',
+          ),
+        ),
       );
     }
     return saved == true;
@@ -500,7 +562,15 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     );
     if (saved == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Rappel ajouté à votre plan.')),
+        SnackBar(
+          content: Text(
+            _notificationPermissionGranted == false
+                ? 'Rappel synchronisé. Activez les notifications système pour être alerté.'
+                : _notificationPermissionGranted == true
+                ? 'Rappel synchronisé et notification programmée.'
+                : 'Rappel ajouté à votre plan.',
+          ),
+        ),
       );
     }
   }
@@ -513,7 +583,10 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     if (injected != null) {
       await injected(reminder.id);
     } else {
-      await _reminders.doc(reminder.id).delete();
+      final batch = FirebaseFirestore.instance.batch();
+      batch.delete(_reminders.doc(reminder.id));
+      batch.delete(_notifications.doc('preventive_${reminder.id}'));
+      await batch.commit();
     }
     if (showFeedback && mounted) {
       ScaffoldMessenger.of(
@@ -603,7 +676,10 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
       if (injected != null) {
         await injected(record.id);
       } else {
-        await _records.doc(record.id).delete();
+        final batch = FirebaseFirestore.instance.batch();
+        batch.delete(_records.doc(record.id));
+        batch.delete(_notifications.doc('preventive_record_${record.id}'));
+        await batch.commit();
       }
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1000,14 +1076,13 @@ class _PreventionSectionMenu extends StatelessWidget {
         ),
       ],
     ),
-    child: SingleChildScrollView(
+    child: Row(
       key: const Key('preventive-section-menu-scroll'),
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: _PreventiveView.values.map((view) {
-          final isSelected = view == selected;
-          return Padding(
-            padding: const EdgeInsets.only(right: 4),
+      children: _PreventiveView.values.map((view) {
+        final isSelected = view == selected;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Semantics(
               selected: isSelected,
               button: true,
@@ -1020,10 +1095,10 @@ class _PreventionSectionMenu extends StatelessWidget {
                   borderRadius: BorderRadius.circular(15),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 12,
+                      horizontal: 3,
+                      vertical: 9,
                     ),
-                    child: Row(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -1033,15 +1108,19 @@ class _PreventionSectionMenu extends StatelessWidget {
                               ? Colors.white
                               : const Color(0xFF536A87),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          view.label,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : const Color(0xFF334A68),
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            view.label,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF334A68),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ],
@@ -1050,9 +1129,9 @@ class _PreventionSectionMenu extends StatelessWidget {
                 ),
               ),
             ),
-          );
-        }).toList(),
-      ),
+          ),
+        );
+      }).toList(),
     ),
   );
 }

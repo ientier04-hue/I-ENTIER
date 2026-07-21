@@ -32,9 +32,7 @@ void main() {
     expect(find.text('Soutien'), findsOneWidget);
     expect(find.text('Que souhaitez-vous faire ?'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const Key('mental-health-section-journal')),
-    );
+    await tester.tap(find.byKey(const Key('mental-health-section-journal')));
     await tester.pump();
     expect(find.text('Comment vous sentez-vous ?'), findsOneWidget);
     expect(find.text('Votre journal commence ici'), findsOneWidget);
@@ -59,9 +57,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(
-      find.byKey(const Key('mental-health-section-journal')),
-    );
+    await tester.tap(find.byKey(const Key('mental-health-section-journal')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('mental-health-mood-low')));
     await tester.tap(find.byKey(const Key('mental-health-feeling-anxious')));
@@ -134,9 +130,7 @@ void main() {
     await tester.pump();
 
     for (final section in const ['journal', 'tools', 'support', 'overview']) {
-      await tester.tap(
-        find.byKey(Key('mental-health-section-$section')),
-      );
+      await tester.tap(find.byKey(Key('mental-health-section-$section')));
       await tester.pump();
       expect(tester.takeException(), isNull);
     }

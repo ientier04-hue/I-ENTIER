@@ -52,7 +52,6 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
           .collection('patients')
           .doc(widget.patientId)
           .collection('laboratoryResults')
-          .orderBy('publishedAt', descending: true)
           .limit(100)
           .snapshots();
 
@@ -117,9 +116,7 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
           );
         }
         if (!snapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(color: _teal),
-          );
+          return const Center(child: CircularProgressIndicator(color: _teal));
         }
         final laboratories = snapshot.data!.docs
             .map(Laboratory.fromFirestore)
@@ -144,14 +141,11 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
           return const _PageFeedback(
             icon: Icons.shield_outlined,
             title: 'Résultats indisponibles',
-            message:
-                'Vos résultats n’ont pas pu être chargés pour le moment.',
+            message: 'Vos résultats n’ont pas pu être chargés pour le moment.',
           );
         }
         if (!snapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(color: _teal),
-          );
+          return const Center(child: CircularProgressIndicator(color: _teal));
         }
         final results = snapshot.data!.docs
             .map(LaboratoryResult.fromFirestore)
@@ -163,20 +157,21 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
 
   Widget _buildDirectory(List<Laboratory> laboratories) {
     final query = _searchController.text.trim().toLowerCase();
-    final visibleLaboratories = laboratories.where((laboratory) {
-      final matchesQuery =
-          query.isEmpty || laboratory.searchableText.contains(query);
-      final matchesFilter = switch (_filter) {
-        _LaboratoryFilter.all => true,
-        _LaboratoryFilter.open => laboratory.available,
-        _LaboratoryFilter.home => laboratory.homeSampling,
-        _LaboratoryFilter.online => laboratory.onlineResults,
-      };
-      return matchesQuery && matchesFilter;
-    }).toList()..sort((a, b) {
-      if (a.available != b.available) return a.available ? -1 : 1;
-      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-    });
+    final visibleLaboratories =
+        laboratories.where((laboratory) {
+          final matchesQuery =
+              query.isEmpty || laboratory.searchableText.contains(query);
+          final matchesFilter = switch (_filter) {
+            _LaboratoryFilter.all => true,
+            _LaboratoryFilter.open => laboratory.available,
+            _LaboratoryFilter.home => laboratory.homeSampling,
+            _LaboratoryFilter.online => laboratory.onlineResults,
+          };
+          return matchesQuery && matchesFilter;
+        }).toList()..sort((a, b) {
+          if (a.available != b.available) return a.available ? -1 : 1;
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
 
     return Center(
       child: ConstrainedBox(
@@ -332,509 +327,6 @@ class _LaboratorySectionSwitch extends StatelessWidget {
   );
 }
 
-class LaboratoryExam {
-  final String id;
-  final String name;
-  final String category;
-  final String description;
-  final String sampleType;
-  final String preparation;
-  final String turnaround;
-  final bool fasting;
-
-  const LaboratoryExam({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.description,
-    required this.sampleType,
-    required this.preparation,
-    required this.turnaround,
-    this.fasting = false,
-  });
-}
-
-const laboratoryExaminations = <LaboratoryExam>[
-  LaboratoryExam(
-    id: 'cbc',
-    name: 'Hémogramme complet',
-    category: 'Hématologie',
-    description:
-        'Évalue les globules rouges, les globules blancs et les plaquettes.',
-    sampleType: 'Prélèvement sanguin',
-    preparation: 'Aucune préparation particulière',
-    turnaround: 'Généralement sous 24 h',
-  ),
-  LaboratoryExam(
-    id: 'fasting-glucose',
-    name: 'Glycémie à jeun',
-    category: 'Biochimie',
-    description: 'Mesure le taux de glucose dans le sang à jeun.',
-    sampleType: 'Prélèvement sanguin',
-    preparation: 'Ne pas manger pendant 8 à 12 heures',
-    turnaround: 'Le jour même',
-    fasting: true,
-  ),
-  LaboratoryExam(
-    id: 'lipid-panel',
-    name: 'Bilan lipidique',
-    category: 'Biochimie',
-    description: 'Mesure notamment le cholestérol et les triglycérides.',
-    sampleType: 'Prélèvement sanguin',
-    preparation: 'Suivre les instructions du laboratoire concernant le jeûne',
-    turnaround: 'Sous 24 à 48 h',
-  ),
-  LaboratoryExam(
-    id: 'urinalysis',
-    name: 'Analyse d’urines',
-    category: 'Analyses courantes',
-    description: 'Recherche plusieurs marqueurs urinaires utiles au médecin.',
-    sampleType: 'Échantillon d’urine',
-    preparation: 'Utiliser le contenant stérile fourni',
-    turnaround: 'Le jour même',
-  ),
-  LaboratoryExam(
-    id: 'pregnancy-test',
-    name: 'Test de grossesse β-hCG',
-    category: 'Hormones',
-    description: 'Détecte ou mesure l’hormone β-hCG selon la prescription.',
-    sampleType: 'Sang ou urine',
-    preparation: 'Selon le type de prélèvement demandé',
-    turnaround: 'Le jour même',
-  ),
-  LaboratoryExam(
-    id: 'hiv-screening',
-    name: 'Dépistage du VIH',
-    category: 'Dépistage',
-    description:
-        'Test de dépistage confidentiel avec accompagnement selon le centre.',
-    sampleType: 'Prélèvement sanguin',
-    preparation: 'Aucune préparation particulière',
-    turnaround: 'Selon la méthode utilisée',
-  ),
-];
-
-class _ExaminationsPage extends StatefulWidget {
-  final List<LaboratoryExam> examinations;
-
-  const _ExaminationsPage({required this.examinations});
-
-  @override
-  State<_ExaminationsPage> createState() => _ExaminationsPageState();
-}
-
-class _ExaminationsPageState extends State<_ExaminationsPage> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final query = _controller.text.trim().toLowerCase();
-    final visible = widget.examinations.where((exam) {
-      final searchable = [
-        exam.name,
-        exam.category,
-        exam.description,
-        exam.sampleType,
-      ].join(' ').toLowerCase();
-      return query.isEmpty || searchable.contains(query);
-    }).toList();
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1120),
-        child: CustomScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
-              sliver: SliverList.list(
-                children: [
-                  const _LaboratoryPageHeading(
-                    icon: Icons.biotech_outlined,
-                    eyebrow: 'CATALOGUE',
-                    title: 'Examens courants',
-                    subtitle:
-                        'Préparez votre visite et vérifiez toujours les consignes auprès du laboratoire.',
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    key: const Key('laboratory-exam-search'),
-                    controller: _controller,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      hintText: 'Rechercher un examen…',
-                      prefixIcon: Icon(Icons.search_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    '${visible.length} examen${visible.length > 1 ? 's' : ''}',
-                    style: const TextStyle(
-                      color: _navy,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (visible.isEmpty)
-                    const _PageFeedback(
-                      icon: Icons.search_off_rounded,
-                      title: 'Aucun examen trouvé',
-                      message: 'Essayez un autre nom ou une autre catégorie.',
-                    )
-                  else
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        const gap = 12.0;
-                        final columns = constraints.maxWidth >= 760 ? 2 : 1;
-                        final width =
-                            (constraints.maxWidth - gap * (columns - 1)) /
-                            columns;
-                        return Wrap(
-                          spacing: gap,
-                          runSpacing: gap,
-                          children: [
-                            for (final exam in visible)
-                              SizedBox(
-                                width: width,
-                                child: _LaboratoryExamCard(exam: exam),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LaboratoryExamCard extends StatelessWidget {
-  final LaboratoryExam exam;
-
-  const _LaboratoryExamCard({required this.exam});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: Key('laboratory-exam-${exam.id}'),
-    padding: const EdgeInsets.all(17),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(21),
-      border: Border.all(color: _border),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: _tealSoft,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.science_outlined, color: _teal),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    exam.name,
-                    style: const TextStyle(
-                      color: _navy,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    exam.category,
-                    style: const TextStyle(
-                      color: _teal,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (exam.fasting)
-              const _FeaturePill(
-                icon: Icons.no_food_outlined,
-                label: 'À jeun',
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          exam.description,
-          style: const TextStyle(color: _ink, fontSize: 13, height: 1.4),
-        ),
-        const SizedBox(height: 12),
-        _InfoLine(icon: Icons.water_drop_outlined, text: exam.sampleType),
-        const SizedBox(height: 8),
-        _InfoLine(icon: Icons.checklist_rounded, text: exam.preparation),
-        const SizedBox(height: 8),
-        _InfoLine(icon: Icons.schedule_outlined, text: exam.turnaround),
-      ],
-    ),
-  );
-}
-
-class LaboratoryResult {
-  final String id;
-  final String examName;
-  final String laboratoryName;
-  final String status;
-  final String summary;
-  final String resultUrl;
-  final DateTime publishedAt;
-
-  const LaboratoryResult({
-    required this.id,
-    required this.examName,
-    required this.laboratoryName,
-    required this.status,
-    required this.publishedAt,
-    this.summary = '',
-    this.resultUrl = '',
-  });
-
-  factory LaboratoryResult.fromFirestore(
-    DocumentSnapshot<Map<String, dynamic>> document,
-  ) {
-    final data = document.data() ?? const <String, dynamic>{};
-    final published = data['publishedAt'];
-    return LaboratoryResult(
-      id: document.id,
-      examName: _readText(data, const ['examName', 'examen', 'title', 'name']),
-      laboratoryName: _readText(data, const [
-        'laboratoryName',
-        'laboratoire',
-        'institutionName',
-      ]),
-      status: _readText(data, const ['status', 'statut']),
-      summary: _readText(data, const ['summary', 'resume', 'résumé']),
-      resultUrl: _readText(data, const ['resultUrl', 'downloadUrl', 'url']),
-      publishedAt: published is Timestamp
-          ? published.toDate()
-          : DateTime.fromMillisecondsSinceEpoch(0),
-    );
-  }
-}
-
-class _PatientResultsPage extends StatelessWidget {
-  final List<LaboratoryResult> results;
-
-  const _PatientResultsPage({required this.results});
-
-  Future<void> _openResult(BuildContext context, String url) async {
-    final launched = await launchUrl(
-      Uri.parse(url),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d’ouvrir ce résultat.')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 900),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
-        children: [
-          const _LaboratoryPageHeading(
-            icon: Icons.assignment_turned_in_outlined,
-            eyebrow: 'DOSSIER PRIVÉ',
-            title: 'Mes résultats',
-            subtitle:
-                'Consultez les documents publiés par vos laboratoires partenaires.',
-          ),
-          const SizedBox(height: 18),
-          if (results.isEmpty)
-            const _PageFeedback(
-              icon: Icons.inbox_outlined,
-              title: 'Aucun résultat disponible',
-              message:
-                  'Vos prochains résultats apparaîtront ici lorsqu’un laboratoire les publiera.',
-            )
-          else
-            for (var index = 0; index < results.length; index++) ...[
-              _LaboratoryResultCard(
-                result: results[index],
-                onOpen: results[index].resultUrl.isEmpty
-                    ? null
-                    : () => _openResult(context, results[index].resultUrl),
-              ),
-              if (index < results.length - 1) const SizedBox(height: 11),
-            ],
-        ],
-      ),
-    ),
-  );
-}
-
-class _LaboratoryResultCard extends StatelessWidget {
-  final LaboratoryResult result;
-  final VoidCallback? onOpen;
-
-  const _LaboratoryResultCard({required this.result, required this.onOpen});
-
-  @override
-  Widget build(BuildContext context) {
-    final available = result.status.toLowerCase() != 'pending';
-    return Container(
-      key: Key('laboratory-result-${result.id}'),
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(21),
-        border: Border.all(color: _border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: available ? _tealSoft : const Color(0xFFF1F3F6),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Icon(
-              available ? Icons.description_outlined : Icons.hourglass_top,
-              color: available ? _teal : _muted,
-            ),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  result.examName.isEmpty ? 'Résultat de laboratoire' : result.examName,
-                  style: const TextStyle(
-                    color: _navy,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (result.laboratoryName.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    result.laboratoryName,
-                    style: const TextStyle(color: _teal, fontSize: 12.5),
-                  ),
-                ],
-                const SizedBox(height: 5),
-                Text(
-                  _formatLaboratoryDate(result.publishedAt),
-                  style: const TextStyle(color: _muted, fontSize: 12),
-                ),
-                if (result.summary.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    result.summary,
-                    style: const TextStyle(
-                      color: _ink,
-                      fontSize: 12.5,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (onOpen != null)
-            IconButton(
-              tooltip: 'Ouvrir le résultat',
-              onPressed: onOpen,
-              icon: const Icon(Icons.open_in_new_rounded, color: _primary),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LaboratoryPageHeading extends StatelessWidget {
-  final IconData icon;
-  final String eyebrow;
-  final String title;
-  final String subtitle;
-
-  const _LaboratoryPageHeading({
-    required this.icon,
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Container(
-        width: 54,
-        height: 54,
-        decoration: BoxDecoration(
-          color: _tealSoft,
-          borderRadius: BorderRadius.circular(17),
-        ),
-        child: Icon(icon, color: _teal),
-      ),
-      const SizedBox(width: 13),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              eyebrow,
-              style: const TextStyle(
-                color: _teal,
-                fontSize: 10.5,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: const TextStyle(
-                color: _navy,
-                fontSize: 23,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              subtitle,
-              style: const TextStyle(color: _muted, fontSize: 13, height: 1.4),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
 enum _LaboratoryFilter { all, open, home, online }
 
 extension on _LaboratoryFilter {
@@ -938,11 +430,7 @@ class _LaboratoryHero extends StatelessWidget {
             color: Colors.white.withValues(alpha: .72),
             borderRadius: BorderRadius.circular(25),
           ),
-          child: const Icon(
-            Icons.science_rounded,
-            color: _teal,
-            size: 58,
-          ),
+          child: const Icon(Icons.science_rounded, color: _teal, size: 58),
         ),
       ],
     ),
@@ -1631,9 +1119,7 @@ class _ExaminationCategoryBar extends StatelessWidget {
           showCheckmark: false,
           selectedColor: _tealSoft,
           backgroundColor: Colors.white,
-          side: BorderSide(
-            color: category == selected ? _teal : _border,
-          ),
+          side: BorderSide(color: category == selected ? _teal : _border),
           labelStyle: TextStyle(
             color: category == selected ? const Color(0xFF08776A) : _ink,
             fontWeight: FontWeight.w700,
@@ -1811,10 +1297,7 @@ class _ExaminationCard extends StatelessWidget {
 class LaboratoryExamDetailPage extends StatelessWidget {
   final LaboratoryExam examination;
 
-  const LaboratoryExamDetailPage({
-    super.key,
-    required this.examination,
-  });
+  const LaboratoryExamDetailPage({super.key, required this.examination});
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -1851,11 +1334,7 @@ class LaboratoryExamDetailPage extends StatelessWidget {
                           color: examination.color,
                           borderRadius: BorderRadius.circular(21),
                         ),
-                        child: Icon(
-                          examination.icon,
-                          color: _teal,
-                          size: 36,
-                        ),
+                        child: Icon(examination.icon, color: _teal, size: 36),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -1973,7 +1452,8 @@ class _PatientResultsPageState extends State<_PatientResultsPage> {
   Widget build(BuildContext context) {
     final query = _controller.text.trim().toLowerCase();
     final results = widget.results.where((result) {
-      final matchesQuery = query.isEmpty || result.searchableText.contains(query);
+      final matchesQuery =
+          query.isEmpty || result.searchableText.contains(query);
       final matchesStatus = switch (_filter) {
         _ResultFilter.all => true,
         _ResultFilter.available => result.isAvailable,
@@ -2102,12 +1582,15 @@ class _ResultsHero extends StatelessWidget {
                 children: [
                   Icon(Icons.lock_outline_rounded, color: _teal, size: 17),
                   SizedBox(width: 6),
-                  Text(
-                    'Visible uniquement par vous',
-                    style: TextStyle(
-                      color: _teal,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                  Flexible(
+                    child: Text(
+                      'Visible uniquement par vous',
+                      maxLines: 2,
+                      style: TextStyle(
+                        color: _teal,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ],
@@ -2216,18 +1699,14 @@ class _ResultCard extends StatelessWidget {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: result.isAvailable
-                    ? _tealSoft
-                    : const Color(0xFFFFF3E8),
+                color: result.isAvailable ? _tealSoft : const Color(0xFFFFF3E8),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
                 result.isAvailable
                     ? Icons.description_outlined
                     : Icons.hourglass_top_rounded,
-                color: result.isAvailable
-                    ? _teal
-                    : const Color(0xFFB54708),
+                color: result.isAvailable ? _teal : const Color(0xFFB54708),
               ),
             ),
             const SizedBox(width: 13),
@@ -2311,7 +1790,8 @@ class LaboratoryResultDetailPage extends StatelessWidget {
 
   Future<void> _openDocument(BuildContext context) async {
     final uri = Uri.tryParse(result.fileUrl);
-    if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (uri == null ||
+        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Impossible d’ouvrir ce document.')),
@@ -2476,10 +1956,7 @@ class _SimpleEmptyState extends StatelessWidget {
         ),
         if (actionLabel != null && onAction != null) ...[
           const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: onAction,
-            child: Text(actionLabel!),
-          ),
+          OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
         ],
       ],
     ),
@@ -2776,6 +2253,250 @@ class _DetailEntry extends StatelessWidget {
   );
 }
 
+class LaboratoryExam {
+  final String id;
+  final String name;
+  final String category;
+  final String description;
+  final String sample;
+  final String preparation;
+  final String turnaround;
+  final IconData icon;
+  final Color color;
+
+  const LaboratoryExam({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.description,
+    required this.sample,
+    required this.preparation,
+    required this.turnaround,
+    this.icon = Icons.biotech_outlined,
+    this.color = _tealSoft,
+  });
+
+  String get searchableText =>
+      [name, category, description, sample].join(' ').toLowerCase();
+}
+
+const laboratoryExaminations = <LaboratoryExam>[
+  LaboratoryExam(
+    id: 'nfs',
+    name: 'Numération formule sanguine',
+    category: 'Sang',
+    description:
+        'Évalue les globules rouges, les globules blancs et les plaquettes.',
+    sample: 'Prélèvement sanguin',
+    preparation: 'Aucun jeûne requis, sauf indication contraire.',
+    turnaround: 'Sous 24 h',
+    icon: Icons.bloodtype_outlined,
+  ),
+  LaboratoryExam(
+    id: 'glycemie',
+    name: 'Glycémie',
+    category: 'Sang',
+    description: 'Mesure le taux de glucose présent dans le sang.',
+    sample: 'Prélèvement sanguin',
+    preparation:
+        'Un jeûne de 8 à 12 heures peut être demandé selon la prescription.',
+    turnaround: 'Le jour même',
+    icon: Icons.water_drop_outlined,
+    color: Color(0xFFFFEDEC),
+  ),
+  LaboratoryExam(
+    id: 'bilan-lipidique',
+    name: 'Bilan lipidique',
+    category: 'Prévention',
+    description:
+        'Mesure notamment le cholestérol total, le HDL, le LDL et les triglycérides.',
+    sample: 'Prélèvement sanguin',
+    preparation:
+        'Le laboratoire précisera si un jeûne est nécessaire avant le prélèvement.',
+    turnaround: 'Sous 24 à 48 h',
+    icon: Icons.favorite_outline_rounded,
+    color: Color(0xFFFFF3E8),
+  ),
+  LaboratoryExam(
+    id: 'tsh',
+    name: 'TSH',
+    category: 'Hormones',
+    description: 'Aide à évaluer le fonctionnement de la thyroïde.',
+    sample: 'Prélèvement sanguin',
+    preparation:
+        'Signalez vos traitements au laboratoire et suivez les consignes reçues.',
+    turnaround: 'Sous 24 à 48 h',
+    icon: Icons.monitor_heart_outlined,
+    color: Color(0xFFF0E8FF),
+  ),
+  LaboratoryExam(
+    id: 'test-grossesse',
+    name: 'Test de grossesse β-hCG',
+    category: 'Hormones',
+    description: 'Recherche ou mesure l’hormone β-hCG.',
+    sample: 'Sang ou urine',
+    preparation: 'Aucune préparation particulière en général.',
+    turnaround: 'Le jour même',
+    icon: Icons.child_friendly_outlined,
+    color: Color(0xFFFFEAF3),
+  ),
+  LaboratoryExam(
+    id: 'analyse-urines',
+    name: 'Analyse d’urines',
+    category: 'Urines',
+    description:
+        'Recherche différents marqueurs et signes possibles d’infection.',
+    sample: 'Échantillon d’urine',
+    preparation:
+        'Utilisez le flacon fourni et respectez les consignes de recueil.',
+    turnaround: 'Sous 24 à 72 h',
+    icon: Icons.science_outlined,
+    color: Color(0xFFFFF8D9),
+  ),
+  LaboratoryExam(
+    id: 'vih',
+    name: 'Dépistage du VIH',
+    category: 'Dépistage',
+    description:
+        'Recherche des marqueurs associés au virus de l’immunodéficience humaine.',
+    sample: 'Prélèvement sanguin',
+    preparation: 'Aucun jeûne requis. Un accompagnement peut être proposé.',
+    turnaround: 'Selon la méthode',
+    icon: Icons.health_and_safety_outlined,
+    color: Color(0xFFE8F1FF),
+  ),
+  LaboratoryExam(
+    id: 'hepatite-b',
+    name: 'Dépistage de l’hépatite B',
+    category: 'Dépistage',
+    description: 'Recherche des marqueurs liés au virus de l’hépatite B.',
+    sample: 'Prélèvement sanguin',
+    preparation: 'Aucune préparation particulière en général.',
+    turnaround: 'Sous 1 à 3 jours',
+    icon: Icons.coronavirus_outlined,
+    color: Color(0xFFE7F7F0),
+  ),
+];
+
+class LaboratoryResult {
+  final String id;
+  final String examName;
+  final String laboratoryName;
+  final String status;
+  final String summary;
+  final String referenceRange;
+  final String note;
+  final String fileUrl;
+  final DateTime? collectedAt;
+  final DateTime? publishedAt;
+
+  const LaboratoryResult({
+    required this.id,
+    required this.examName,
+    this.laboratoryName = '',
+    this.status = 'pending',
+    this.summary = '',
+    this.referenceRange = '',
+    this.note = '',
+    this.fileUrl = '',
+    this.collectedAt,
+    this.publishedAt,
+  });
+
+  factory LaboratoryResult.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data() ?? const <String, dynamic>{};
+    final examName = _readText(data, const [
+      'examName',
+      'examinationName',
+      'testName',
+      'nomExamen',
+      'examen',
+      'title',
+    ]);
+    return LaboratoryResult(
+      id: document.id,
+      examName: examName.isEmpty ? 'Résultat de laboratoire' : examName,
+      laboratoryName: _readText(data, const [
+        'laboratoryName',
+        'labName',
+        'nomLaboratoire',
+        'laboratoire',
+      ]),
+      status: _readText(data, const ['status', 'statut']),
+      summary: _readText(data, const [
+        'summary',
+        'resultSummary',
+        'resume',
+        'résumé',
+        'value',
+      ]),
+      referenceRange: _readText(data, const [
+        'referenceRange',
+        'normalRange',
+        'valeursReference',
+        'valeursRéférence',
+      ]),
+      note: _readText(data, const [
+        'note',
+        'comment',
+        'commentaire',
+        'interpretation',
+        'interprétation',
+      ]),
+      fileUrl: _readText(data, const [
+        'fileUrl',
+        'downloadUrl',
+        'documentUrl',
+        'pdfUrl',
+      ]),
+      collectedAt: _readDate(data, const [
+        'collectedAt',
+        'sampledAt',
+        'datePrelevement',
+        'datePrélèvement',
+      ]),
+      publishedAt: _readDate(data, const [
+        'publishedAt',
+        'completedAt',
+        'resultDate',
+        'dateResultat',
+        'dateRésultat',
+        'createdAt',
+      ]),
+    );
+  }
+
+  bool get isAvailable {
+    final normalized = status.trim().toLowerCase();
+    return const [
+      'available',
+      'ready',
+      'published',
+      'completed',
+      'disponible',
+      'publié',
+      'publie',
+      'terminé',
+      'termine',
+    ].contains(normalized);
+  }
+
+  String get statusLabel => isAvailable ? 'Disponible' : 'En attente';
+
+  DateTime get sortDate =>
+      publishedAt ?? collectedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+  String get dateLabel {
+    final date = publishedAt ?? collectedAt;
+    return date == null ? '' : _formatLaboratoryDate(date);
+  }
+
+  String get searchableText =>
+      [examName, laboratoryName, summary].join(' ').toLowerCase();
+}
+
 class Laboratory {
   final String id;
   final String name;
@@ -2901,12 +2622,8 @@ class Laboratory {
     );
   }
 
-  String get searchableText => [
-    name,
-    description,
-    services,
-    address,
-  ].join(' ').toLowerCase();
+  String get searchableText =>
+      [name, description, services, address].join(' ').toLowerCase();
 }
 
 String _readText(Map<String, dynamic> data, List<String> keys) {
@@ -2941,6 +2658,37 @@ String _readText(Map<String, dynamic> data, List<String> keys) {
   return '';
 }
 
+DateTime? _readDate(Map<String, dynamic> data, List<String> keys) {
+  for (final key in keys) {
+    final value = data[key];
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+  }
+  return null;
+}
+
+String _formatLaboratoryDate(DateTime date) {
+  const months = [
+    'janv.',
+    'févr.',
+    'mars',
+    'avr.',
+    'mai',
+    'juin',
+    'juil.',
+    'août',
+    'sept.',
+    'oct.',
+    'nov.',
+    'déc.',
+  ];
+  return '${date.day} ${months[date.month - 1]} ${date.year}';
+}
+
 bool _readBool(
   Map<String, dynamic> data,
   List<String> keys, {
@@ -2955,7 +2703,14 @@ bool _readBool(
       if (const ['true', 'oui', 'yes', '1', 'ouvert'].contains(normalized)) {
         return true;
       }
-      if (const ['false', 'non', 'no', '0', 'fermé', 'ferme'].contains(normalized)) {
+      if (const [
+        'false',
+        'non',
+        'no',
+        '0',
+        'fermé',
+        'ferme',
+      ].contains(normalized)) {
         return false;
       }
     }

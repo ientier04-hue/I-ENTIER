@@ -1,4 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'notification_service.dart';
+
+export 'notification_service.dart'
+    show AppNotification, AppNotificationType, defaultAppNotifications;
 
 const _primary = Color(0xFF176BFF);
 const _primarySoft = Color(0xFFEAF1FF);
@@ -7,8 +14,6 @@ const _ink = Color(0xFF344054);
 const _muted = Color(0xFF667085);
 const _border = Color(0xFFE4EAF2);
 const _canvas = Color(0xFFF5F8FC);
-
-enum AppNotificationType { appointment, result, reminder, security }
 
 extension on AppNotificationType {
   IconData get icon => switch (this) {
@@ -26,91 +31,18 @@ extension on AppNotificationType {
   };
 }
 
-class AppNotification {
-  final String id;
-  final String title;
-  final String message;
-  final DateTime createdAt;
-  final AppNotificationType type;
-  final bool isRead;
-  final String? actionLabel;
-
-  const AppNotification({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.createdAt,
-    required this.type,
-    this.isRead = false,
-    this.actionLabel,
-  });
-
-  AppNotification copyWith({bool? isRead}) => AppNotification(
-    id: id,
-    title: title,
-    message: message,
-    createdAt: createdAt,
-    type: type,
-    isRead: isRead ?? this.isRead,
-    actionLabel: actionLabel,
-  );
-}
-
-List<AppNotification> defaultAppNotifications([DateTime? referenceTime]) {
-  final now = referenceTime ?? DateTime.now();
-  return [
-    AppNotification(
-      id: 'laboratory-result',
-      title: 'Vos résultats sont disponibles',
-      message:
-          'Le laboratoire a publié les résultats de votre dernière analyse.',
-      createdAt: now.subtract(const Duration(minutes: 12)),
-      type: AppNotificationType.result,
-      actionLabel: 'Voir les résultats',
-    ),
-    AppNotification(
-      id: 'appointment-reminder',
-      title: 'Rendez-vous demain à 9 h 30',
-      message: 'Votre consultation avec Dre Jean est prévue demain matin.',
-      createdAt: now.subtract(const Duration(hours: 2)),
-      type: AppNotificationType.appointment,
-      actionLabel: 'Voir le rendez-vous',
-    ),
-    AppNotification(
-      id: 'hydration-reminder',
-      title: 'Prenez soin de vous',
-      message: 'Pensez à boire de l’eau et à faire une courte pause.',
-      createdAt: now.subtract(const Duration(hours: 5)),
-      type: AppNotificationType.reminder,
-    ),
-    AppNotification(
-      id: 'prescription-renewal',
-      title: 'Renouvellement à prévoir',
-      message: 'Votre ordonnance arrive à échéance dans 5 jours.',
-      createdAt: now.subtract(const Duration(days: 1, hours: 1)),
-      type: AppNotificationType.reminder,
-      isRead: true,
-      actionLabel: 'Consulter l’ordonnance',
-    ),
-    AppNotification(
-      id: 'security',
-      title: 'Connexion sécurisée',
-      message: 'Une nouvelle connexion à votre compte a été confirmée.',
-      createdAt: now.subtract(const Duration(days: 3)),
-      type: AppNotificationType.security,
-      isRead: true,
-    ),
-  ];
-}
-
 enum _NotificationFilter { all, unread }
 
 class NotificationsPage extends StatefulWidget {
+  final String? patientId;
+  final Stream<List<AppNotification>>? notificationStream;
   final List<AppNotification>? notifications;
   final ValueChanged<List<AppNotification>>? onNotificationsChanged;
 
   const NotificationsPage({
     super.key,
+    this.patientId,
+    this.notificationStream,
     this.notifications,
     this.onNotificationsChanged,
   });
@@ -121,12 +53,55 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage> {
   late List<AppNotification> _notifications;
+  StreamSubscription<List<AppNotification>>? _subscription;
   _NotificationFilter _filter = _NotificationFilter.all;
+  bool _isLoading = false;
+  bool _hasStorageError = false;
 
   @override
   void initState() {
     super.initState();
-    _notifications = List.of(widget.notifications ?? defaultAppNotifications());
+    _notifications = List.of(widget.notifications ?? const []);
+    final stream =
+        widget.notificationStream ??
+        (widget.patientId == null
+            ? null
+            : FirebaseNotificationService.instance.watchNotifications(
+                widget.patientId!,
+              ));
+    if (stream == null && widget.notifications == null) {
+      _notifications = defaultAppNotifications();
+    } else if (stream != null) {
+      _isLoading = true;
+      _subscription = stream.listen(
+        (notifications) {
+          if (!mounted) return;
+          setState(() {
+            _notifications = notifications
+                .where(
+                  (notification) => notification.isDeliveredAt(DateTime.now()),
+                )
+                .toList();
+            _isLoading = false;
+            _hasStorageError = false;
+          });
+          _notifyParent();
+        },
+        onError: (Object _) {
+          if (!mounted) return;
+          setState(() {
+            _isLoading = false;
+            _hasStorageError = true;
+          });
+        },
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_subscription?.cancel());
+    super.dispose();
   }
 
   int get _unreadCount =>
@@ -142,7 +117,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     widget.onNotificationsChanged?.call(List.unmodifiable(_notifications));
   }
 
-  void _setRead(AppNotification notification, bool isRead) {
+  Future<void> _setRead(AppNotification notification, bool isRead) async {
     final index = _notifications.indexWhere(
       (item) => item.id == notification.id,
     );
@@ -151,28 +126,87 @@ class _NotificationsPageState extends State<NotificationsPage> {
       _notifications[index] = _notifications[index].copyWith(isRead: isRead);
     });
     _notifyParent();
+    final patientId = widget.patientId;
+    if (patientId == null) return;
+    try {
+      await FirebaseNotificationService.instance.setRead(
+        patientId,
+        notification.id,
+        isRead,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      final currentIndex = _notifications.indexWhere(
+        (item) => item.id == notification.id,
+      );
+      if (currentIndex >= 0) {
+        setState(() {
+          _notifications[currentIndex] = _notifications[currentIndex].copyWith(
+            isRead: !isRead,
+          );
+        });
+      }
+      _showSyncError();
+    }
   }
 
-  void _markAllAsRead() {
+  Future<void> _markAllAsRead() async {
     if (_unreadCount == 0) return;
+    final before = List<AppNotification>.of(_notifications);
     setState(() {
       _notifications = _notifications
           .map((notification) => notification.copyWith(isRead: true))
           .toList();
     });
     _notifyParent();
+    final patientId = widget.patientId;
+    if (patientId != null) {
+      try {
+        await FirebaseNotificationService.instance.markAllAsRead(
+          patientId,
+          before,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _notifications = before);
+        _showSyncError();
+        return;
+      }
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Toutes les notifications ont été lues.')),
     );
   }
 
-  void _delete(AppNotification notification) {
+  Future<void> _delete(AppNotification notification) async {
     final index = _notifications.indexWhere(
       (item) => item.id == notification.id,
     );
     if (index < 0) return;
     setState(() => _notifications.removeAt(index));
     _notifyParent();
+
+    final patientId = widget.patientId;
+    if (patientId != null) {
+      try {
+        await FirebaseNotificationService.instance.delete(
+          patientId,
+          notification.id,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _notifications.insert(
+            index.clamp(0, _notifications.length),
+            notification,
+          );
+        });
+        _showSyncError();
+        return;
+      }
+    }
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -181,10 +215,22 @@ class _NotificationsPageState extends State<NotificationsPage> {
           content: const Text('Notification supprimée.'),
           action: SnackBarAction(
             label: 'Annuler',
-            onPressed: () {
+            onPressed: () async {
               if (_notifications.any((item) => item.id == notification.id)) {
                 return;
               }
+              if (patientId != null) {
+                try {
+                  await FirebaseNotificationService.instance.restore(
+                    patientId,
+                    notification,
+                  );
+                } catch (_) {
+                  if (mounted) _showSyncError();
+                  return;
+                }
+              }
+              if (!mounted) return;
               setState(() {
                 _notifications.insert(
                   index.clamp(0, _notifications.length),
@@ -199,11 +245,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   void _openNotification(AppNotification notification) {
-    _setRead(notification, true);
+    unawaited(_setRead(notification, true));
     final action = notification.actionLabel;
     if (action == null) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$action : contenu bientôt disponible.')),
+    );
+  }
+
+  void _showSyncError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('La synchronisation Firebase a échoué. Réessayez.'),
+      ),
     );
   }
 
@@ -265,7 +319,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 18)),
-                if (visibleNotifications.isEmpty)
+                if (_hasStorageError)
+                  const SliverPadding(
+                    padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
+                    sliver: SliverToBoxAdapter(
+                      child: _NotificationStorageError(),
+                    ),
+                  ),
+                if (_isLoading)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: CircularProgressIndicator(color: _primary),
+                    ),
+                  )
+                else if (visibleNotifications.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: _EmptyNotifications(filter: _filter),
@@ -296,6 +364,32 @@ class _NotificationsPageState extends State<NotificationsPage> {
       ),
     );
   }
+}
+
+class _NotificationStorageError extends StatelessWidget {
+  const _NotificationStorageError();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF4F2),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFF2C2BC)),
+    ),
+    child: const Row(
+      children: [
+        Icon(Icons.cloud_off_rounded, color: Color(0xFFD92D20)),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'Les notifications ne peuvent pas se synchroniser pour le moment.',
+            style: TextStyle(color: _ink, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _NotificationSummary extends StatelessWidget {

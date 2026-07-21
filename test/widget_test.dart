@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:i_entier/main.dart';
+import 'package:i_entier/notification_service.dart';
 
 class _FakeUser implements User {
   @override
@@ -40,9 +41,11 @@ void main() {
           user: _FakeUser(),
           account: const {'name': 'Patient Test'},
           patientProfile: const {},
+          notificationStream: Stream.value(defaultAppNotifications()),
         ),
       ),
     );
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('home-header')), findsOneWidget);
     expect(find.text('I-ENTIER'), findsOneWidget);
@@ -86,6 +89,7 @@ void main() {
           user: _FakeUser(),
           account: const {'name': 'Patient Test'},
           patientProfile: const {},
+          notificationStream: Stream.value(defaultAppNotifications()),
         ),
       ),
     );
@@ -124,6 +128,7 @@ void main() {
           user: _FakeUser(),
           account: const {'name': 'Patient Test'},
           patientProfile: const {},
+          notificationStream: Stream.value(defaultAppNotifications()),
         ),
       ),
     );

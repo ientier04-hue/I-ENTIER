@@ -468,13 +468,14 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
                           saving: _saving,
                           onMoodSelected: (mood) =>
                               setState(() => _selectedMood = mood),
-                          onFeelingSelected: (feeling, selected) => setState(() {
-                            if (selected) {
-                              _selectedFeelings.add(feeling);
-                            } else {
-                              _selectedFeelings.remove(feeling);
-                            }
-                          }),
+                          onFeelingSelected: (feeling, selected) =>
+                              setState(() {
+                                if (selected) {
+                                  _selectedFeelings.add(feeling);
+                                } else {
+                                  _selectedFeelings.remove(feeling);
+                                }
+                              }),
                           onSave: _saveCheckIn,
                         ),
                         const SizedBox(height: 30),
@@ -685,8 +686,7 @@ class _DashboardActions extends StatelessWidget {
         spacing: gap,
         runSpacing: gap,
         children: [
-          for (final action in actions)
-            SizedBox(width: width, child: action),
+          for (final action in actions) SizedBox(width: width, child: action),
         ],
       );
     },

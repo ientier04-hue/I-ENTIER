@@ -36,4 +36,41 @@ void main() {
 
     expect(find.text('Aucune notification non lue'), findsOneWidget);
   });
+
+  testWidgets('n’affiche un rappel synchronisé qu’à son échéance', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final notifications = [
+      AppNotification(
+        id: 'due',
+        title: 'Rappel arrivé',
+        message: 'Ce rappel doit être visible.',
+        createdAt: now.subtract(const Duration(days: 1)),
+        scheduledAt: now.subtract(const Duration(minutes: 1)),
+        type: AppNotificationType.reminder,
+      ),
+      AppNotification(
+        id: 'future',
+        title: 'Rappel futur',
+        message: 'Ce rappel ne doit pas encore être visible.',
+        createdAt: now,
+        scheduledAt: now.add(const Duration(days: 1)),
+        type: AppNotificationType.reminder,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsPage(
+          notificationStream: Stream.value(notifications),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rappel arrivé'), findsOneWidget);
+    expect(find.text('Rappel futur'), findsNothing);
+    expect(find.text('1 nouvelle notification'), findsOneWidget);
+  });
 }

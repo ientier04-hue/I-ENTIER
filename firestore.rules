@@ -208,6 +208,13 @@ service cloud.firestore {
         allow delete: if signedIn() && request.auth.uid == patientId;
       }
 
+      // Laboratory reports are published by trusted backends and can only be
+      // read by the patient who owns the private medical record.
+      match /laboratoryResults/{resultId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+        allow write: if false;
+      }
+
       // Private preventive-care notebook. Patients can record completed
       // check-ups and the next date agreed with a healthcare professional.
       match /preventiveCareRecords/{recordId} {
@@ -310,6 +317,58 @@ service cloud.firestore {
         allow delete: if signedIn() && request.auth.uid == patientId;
       }
 
+      // Notification feed and scheduled alerts. Firestore is the shared source
+      // of truth; each signed-in device mirrors future entries to its local
+      // notification scheduler.
+      match /notifications/{notificationId} {
+        allow read: if signedIn() && request.auth.uid == patientId;
+
+        allow create: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.keys().hasOnly([
+            'title', 'message', 'type', 'isRead', 'scheduledAt',
+            'actionLabel', 'source', 'sourceId', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'title', 'message', 'type', 'isRead', 'source', 'sourceId',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.message.size() <= 300
+          && request.resource.data.type in [
+            'appointment', 'result', 'reminder', 'security'
+          ]
+          && request.resource.data.isRead is bool
+          && request.resource.data.source in [
+            'app', 'preventiveReminder', 'preventiveRecord',
+            'laboratoryResult', 'prescription', 'appointment', 'security'
+          ]
+          && request.resource.data.sourceId is string
+          && request.resource.data.sourceId.size() <= 120
+          && (!request.resource.data.keys().hasAny(['scheduledAt'])
+            || request.resource.data.scheduledAt is timestamp)
+          && (!request.resource.data.keys().hasAny(['actionLabel'])
+            || (request.resource.data.actionLabel is string
+              && request.resource.data.actionLabel.size() <= 80))
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdAt <= request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if signedIn()
+          && request.auth.uid == patientId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isRead', 'updatedAt'
+          ])
+          && request.resource.data.isRead is bool
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if signedIn() && request.auth.uid == patientId;
+      }
+
       // Scanned prescriptions belong to the patient. A trusted backend can
       // later create records with source == 'doctor' through the Admin SDK.
       match /prescriptions/{prescriptionId} {
@@ -339,6 +398,7 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if signedIn() && request.auth.uid == patientId;
       }
+
     }
 
     // Directories are readable after authentication, but data management must
