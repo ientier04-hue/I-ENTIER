@@ -18,6 +18,7 @@ import 'laboratory_page.dart';
 import 'mental_health_page.dart';
 import 'notification_service.dart';
 import 'notifications_page.dart';
+import 'onboarding_page.dart';
 import 'pharmacy_page.dart';
 import 'preventive_medicine_page.dart';
 
@@ -123,8 +124,15 @@ class IEntierApp extends StatelessWidget {
   );
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _hasSeenOnboarding = false;
 
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(
@@ -133,9 +141,28 @@ class AuthGate extends StatelessWidget {
       if (snapshot.connectionState == ConnectionState.waiting) {
         return const _LoadingScreen();
       }
-      return snapshot.hasData
-          ? AccountBootstrap(user: snapshot.data!)
-          : const SignInScreen();
+      if (snapshot.hasData) {
+        return AccountBootstrap(user: snapshot.data!);
+      }
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 650),
+        reverseDuration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .985, end: 1).animate(animation),
+            child: child,
+          ),
+        ),
+        child: _hasSeenOnboarding
+            ? const SignInScreen(key: ValueKey('sign-in'))
+            : OnboardingScreen(
+                key: const ValueKey('onboarding'),
+                onFinished: () => setState(() => _hasSeenOnboarding = true),
+              ),
+      );
     },
   );
 }
@@ -2042,7 +2069,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 820),
                   child: SizedBox(
-                    height: 76,
+                    height: 84,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -2090,7 +2117,7 @@ class _GlassNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassSurface(
-    borderRadius: 28,
+    borderRadius: 42,
     child: Row(
       children: List.generate(_destinations.length, (index) {
         final destination = _destinations[index];
@@ -2132,7 +2159,7 @@ class _GlassNavigationDestination extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(36),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
           child: Column(
@@ -5001,14 +5028,14 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 76,
+    width: 84,
     child: Semantics(
       button: true,
       label: 'Urgences',
       child: Tooltip(
         message: 'Urgences',
         child: _GlassSurface(
-          borderRadius: 38,
+          borderRadius: 42,
           child: Material(
             color: Colors.transparent,
             child: InkWell(

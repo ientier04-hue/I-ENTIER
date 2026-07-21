@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:i_entier/main.dart';
 import 'package:i_entier/notification_service.dart';
+import 'package:i_entier/onboarding_page.dart';
 
 class _FakeUser implements User {
   @override
@@ -22,6 +23,44 @@ class _FakeUser implements User {
 }
 
 void main() {
+  testWidgets('présente les quatre étapes avant la connexion', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    var finished = false;
+    await tester.pumpWidget(
+      MaterialApp(home: OnboardingScreen(onFinished: () => finished = true)),
+    );
+
+    expect(find.text('Votre santé.\nEnfin réunie.'), findsOneWidget);
+    expect(find.text('Passer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-next')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.text('Les bons soins,\nau bon moment.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-next')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.text('Un suivi qui vous\nressemble vraiment.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-next')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Vous gardez le\ncontrôle.'), findsOneWidget);
+    expect(find.text('Se connecter'), findsOneWidget);
+    final skipGuard = find.byKey(const ValueKey('skip-onboarding-guard'));
+    expect(tester.widget<IgnorePointer>(skipGuard).ignoring, isTrue);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-next')));
+    await tester.pump();
+    expect(finished, isTrue);
+  });
+
   testWidgets('affiche le portail de connexion', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SignInScreen()));
 
