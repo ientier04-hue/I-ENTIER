@@ -1923,7 +1923,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     wide ? 42 : 20,
                     wide ? 28 : 18,
                     wide ? 42 : 20,
-                    118,
+                    104,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1971,87 +1971,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                if (_selectedTab == 0)
-                  Positioned(
-                    right: wide ? 42 : 20,
-                    bottom: 94,
-                    child: _EmergencyButton(),
-                  ),
               ],
             ),
           ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
         child: Center(
           heightFactor: 1,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x24102A56),
-                    blurRadius: 30,
-                    spreadRadius: -4,
-                    offset: Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xF2FFFFFF),
-                          Color(0xDDEAF3FF),
-                          Color(0xE8F9FCFF),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: const Color(0xBFFFFFFF)),
-                    ),
-                    child: NavigationBar(
-                      height: 70,
-                      elevation: 0,
-                      backgroundColor: Colors.transparent,
-                      surfaceTintColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: SizedBox(
+              height: 76,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _GlassNavigationBar(
                       selectedIndex: _selectedTab,
                       onDestinationSelected: (index) =>
                           setState(() => _selectedTab = index),
-                      destinations: const [
-                        NavigationDestination(
-                          icon: Icon(Icons.home_outlined),
-                          selectedIcon: Icon(Icons.home_rounded),
-                          label: 'Accueil',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.medical_information_outlined),
-                          selectedIcon: Icon(Icons.medical_information_rounded),
-                          label: 'Personnel',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.local_hospital_outlined),
-                          selectedIcon: Icon(Icons.local_hospital_rounded),
-                          label: 'Institutions',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.monitor_heart_outlined),
-                          selectedIcon: Icon(Icons.monitor_heart_rounded),
-                          label: 'Suivi',
-                        ),
-                      ],
                     ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  const _EmergencyButton(),
+                ],
               ),
             ),
           ),
@@ -2059,6 +2004,160 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+class _GlassNavigationBar extends StatelessWidget {
+  const _GlassNavigationBar({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+
+  static const _destinations = [
+    (Icons.home_outlined, Icons.home_rounded, 'Accueil'),
+    (Icons.person_outline_rounded, Icons.person_rounded, 'Personnel'),
+    (
+      Icons.account_balance_outlined,
+      Icons.account_balance_rounded,
+      'Institution',
+    ),
+    (Icons.monitor_heart_outlined, Icons.monitor_heart_rounded, 'Suivi'),
+  ];
+
+  @override
+  Widget build(BuildContext context) => _GlassSurface(
+    borderRadius: 28,
+    child: Row(
+      children: List.generate(_destinations.length, (index) {
+        final destination = _destinations[index];
+        return Expanded(
+          child: _GlassNavigationDestination(
+            icon: destination.$1,
+            selectedIcon: destination.$2,
+            label: destination.$3,
+            selected: selectedIndex == index,
+            onTap: () => onDestinationSelected(index),
+          ),
+        );
+      }),
+    ),
+  );
+}
+
+class _GlassNavigationDestination extends StatelessWidget {
+  const _GlassNavigationDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: label,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: selected ? 42 : 34,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0x241778D4)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  selected ? selectedIcon : icon,
+                  size: 25,
+                  color: selected ? AppColors.primary : AppColors.navy,
+                ),
+              ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: selected ? AppColors.primary : AppColors.navy,
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _GlassSurface extends StatelessWidget {
+  const _GlassSurface({required this.child, required this.borderRadius});
+
+  final Widget child;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(borderRadius),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x2B102A56),
+          blurRadius: 32,
+          spreadRadius: -5,
+          offset: Offset(0, 14),
+        ),
+        BoxShadow(
+          color: Color(0x70FFFFFF),
+          blurRadius: 8,
+          offset: Offset(0, -2),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xD9FFFFFF), Color(0xA8EDF5FF), Color(0xB8F7FCFF)],
+            ),
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: Border.all(color: const Color(0xD9FFFFFF), width: 1.4),
+          ),
+          child: child,
+        ),
+      ),
+    ),
+  );
 }
 
 class _SectionHeading extends StatelessWidget {
@@ -4823,24 +4922,6 @@ class _EmergencyButton extends StatefulWidget {
 
 class _EmergencyButtonState extends State<_EmergencyButton> {
   static const _phoneChannel = MethodChannel('i_entier/phone');
-  Timer? _collapseTimer;
-  bool _isExpanded = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _collapseTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() => _isExpanded = false);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _collapseTimer?.cancel();
-    super.dispose();
-  }
 
   Future<void> _openEmergencySheet() async {
     await showModalBottomSheet<void>(
@@ -4916,37 +4997,47 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedSwitcher(
-    duration: const Duration(milliseconds: 220),
-    switchInCurve: Curves.easeOut,
-    switchOutCurve: Curves.easeIn,
-    transitionBuilder: (child, animation) => SizeTransition(
-      sizeFactor: animation,
-      axis: Axis.horizontal,
-      child: FadeTransition(opacity: animation, child: child),
-    ),
-    child: _isExpanded
-        ? FloatingActionButton.extended(
-            key: const ValueKey('emergency-expanded'),
-            onPressed: _openEmergencySheet,
-            backgroundColor: const Color(0xFFFF3029),
-            foregroundColor: Colors.white,
-            elevation: 7,
-            icon: const Icon(Icons.emergency),
-            label: const Text(
-              'Urgences',
-              style: TextStyle(fontWeight: FontWeight.bold),
+  Widget build(BuildContext context) => SizedBox(
+    width: 76,
+    child: Semantics(
+      button: true,
+      label: 'Urgences',
+      child: Tooltip(
+        message: 'Urgences',
+        child: _GlassSurface(
+          borderRadius: 38,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: const ValueKey('emergency-bottom-button'),
+              onTap: _openEmergencySheet,
+              customBorder: const CircleBorder(),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [Color(0x55FF3029), Color(0x00FF3029)],
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.emergency_rounded,
+                    size: 35,
+                    color: Color(0xFFFF3029),
+                    shadows: [Shadow(color: Color(0x66FF3029), blurRadius: 14)],
+                  ),
+                ],
+              ),
             ),
-          )
-        : FloatingActionButton(
-            key: const ValueKey('emergency-collapsed'),
-            onPressed: _openEmergencySheet,
-            backgroundColor: const Color(0xFFFF3029),
-            foregroundColor: Colors.white,
-            elevation: 7,
-            tooltip: 'Urgences',
-            child: const Icon(Icons.emergency),
           ),
+        ),
+      ),
+    ),
   );
 }
 
