@@ -2178,7 +2178,7 @@ class _GlassNavigationDestination extends StatelessWidget {
                 ),
                 child: Icon(
                   selected ? selectedIcon : icon,
-                  size: 27,
+                  size: 23,
                   color: selected ? AppColors.primary : AppColors.navy,
                 ),
               ),
@@ -2190,7 +2190,7 @@ class _GlassNavigationDestination extends StatelessWidget {
                   maxLines: 1,
                   style: TextStyle(
                     color: selected ? AppColors.primary : AppColors.navy,
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                     height: 1,
                   ),
@@ -5044,7 +5044,7 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
               customBorder: const CircleBorder(),
               child: const Icon(
                 Icons.emergency_rounded,
-                size: 37,
+                size: 33,
                 color: Color(0xFFFF3029),
               ),
             ),

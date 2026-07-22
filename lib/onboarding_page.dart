@@ -24,7 +24,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       title: 'Votre santé.\nEnfin réunie.',
       description:
           'Un seul espace pour comprendre, suivre et prendre soin de votre santé au quotidien.',
-      icon: Icons.all_inclusive_rounded,
+      imagePath: 'assets/onboarding/health-overview.jpg',
+      imageLabel:
+          'Une mère et sa fille préparent ensemble un petit-déjeuner équilibré',
       accent: Color(0xFF61E4D8),
       softAccent: Color(0xFFCCFBF4),
       visual: _OnboardingVisual.overview,
@@ -34,7 +36,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       title: 'Les bons soins,\nau bon moment.',
       description:
           'Repérez rapidement les professionnels, pharmacies et laboratoires utiles autour de vous.',
-      icon: Icons.near_me_rounded,
+      imagePath: 'assets/onboarding/nearby-care.jpg',
+      imageLabel:
+          'Une pharmacienne accompagne un patient dans une pharmacie de proximité',
       accent: Color(0xFF72A8FF),
       softAccent: Color(0xFFDDEAFF),
       visual: _OnboardingVisual.nearby,
@@ -44,7 +48,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       title: 'Un suivi qui vous\nressemble vraiment.',
       description:
           'Cycle, bien-être mental, prévention et indicateurs santé : voyez l’essentiel d’un coup d’œil.',
-      icon: Icons.monitor_heart_rounded,
+      imagePath: 'assets/onboarding/health-tracking.jpg',
+      imageLabel:
+          'Une femme prend soin de son bien-être lors d’une activité matinale en plein air',
       accent: Color(0xFFFF8CAA),
       softAccent: Color(0xFFFFDFE8),
       visual: _OnboardingVisual.tracking,
@@ -54,7 +60,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       title: 'Vous gardez le\ncontrôle.',
       description:
           'Vos informations restent dans votre espace personnel, avec un assistant santé disponible quand vous en avez besoin.',
-      icon: Icons.shield_rounded,
+      imagePath: 'assets/onboarding/private-care.jpg',
+      imageLabel:
+          'Une patiente échange en confiance avec son médecin dans un cabinet privé',
       accent: Color(0xFFFFC76A),
       softAccent: Color(0xFFFFEBC8),
       visual: _OnboardingVisual.secure,
@@ -540,35 +548,29 @@ class _MainVisualCard extends StatelessWidget {
       ],
     ),
     child: Stack(
-      alignment: Alignment.center,
+      fit: StackFit.expand,
       children: [
-        Positioned(
-          right: -25,
-          top: -30,
-          child: Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: data.accent.withValues(alpha: .12),
-            ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(55),
+          child: Image.asset(
+            data.imagePath,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            semanticLabel: data.imageLabel,
+            errorBuilder: (context, error, stackTrace) =>
+                ColoredBox(color: data.softAccent),
           ),
         ),
-        Container(
-          width: 112,
-          height: 112,
+        DecoratedBox(
           decoration: BoxDecoration(
-            color: data.softAccent,
-            borderRadius: BorderRadius.circular(36),
-            boxShadow: [
-              BoxShadow(
-                color: data.accent.withValues(alpha: .22),
-                blurRadius: 30,
-                offset: const Offset(0, 12),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(55),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.transparent, Color(0x2607182F)],
+              stops: [.62, 1],
+            ),
           ),
-          child: Icon(data.icon, color: _IntroColors.navy, size: 60),
         ),
       ],
     ),
@@ -831,7 +833,8 @@ class _OnboardingData {
     required this.eyebrow,
     required this.title,
     required this.description,
-    required this.icon,
+    required this.imagePath,
+    required this.imageLabel,
     required this.accent,
     required this.softAccent,
     required this.visual,
@@ -840,7 +843,8 @@ class _OnboardingData {
   final String eyebrow;
   final String title;
   final String description;
-  final IconData icon;
+  final String imagePath;
+  final String imageLabel;
   final Color accent;
   final Color softAccent;
   final _OnboardingVisual visual;
