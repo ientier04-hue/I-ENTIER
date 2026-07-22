@@ -2069,7 +2069,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 820),
                   child: SizedBox(
-                    height: 84,
+                    height: 78,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -2117,7 +2117,7 @@ class _GlassNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassSurface(
-    borderRadius: 42,
+    borderRadius: 39,
     child: Row(
       children: List.generate(_destinations.length, (index) {
         final destination = _destinations[index];
@@ -5028,14 +5028,14 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 84,
+    width: 78,
     child: Semantics(
       button: true,
       label: 'Urgences',
       child: Tooltip(
         message: 'Urgences',
         child: _GlassSurface(
-          borderRadius: 42,
+          borderRadius: 39,
           child: Material(
             color: Colors.transparent,
             child: InkWell(
