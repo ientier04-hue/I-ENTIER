@@ -68,6 +68,40 @@ void main() {
     expect(find.text('Continuer avec Google'), findsOneWidget);
   });
 
+  testWidgets('regroupe le profil en catégories et propose la déconnexion', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PatientProfileScreen(
+          user: _FakeUser(),
+          accountProfile: const {'displayName': 'Patient Test'},
+          initialProfile: const {
+            'sex': 'Femme',
+            'birthDate': '1990-02-10',
+            'phone': '509 3700 0000',
+            'emergencyContact': {
+              'name': 'Contact Test',
+              'relationship': 'Parent',
+              'phone': '509 3800 0000',
+            },
+          },
+        ),
+      ),
+    );
+
+    expect(find.text('Identité'), findsOneWidget);
+    expect(find.text('Coordonnées et mesures'), findsOneWidget);
+    expect(find.text('Contact d’urgence'), findsOneWidget);
+    expect(find.text('Dossier médical'), findsOneWidget);
+    expect(find.text('Suivi et couverture'), findsOneWidget);
+    expect(find.text('Se déconnecter'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('affiche le header Material 3 compact sur mobile', (
     tester,
   ) async {

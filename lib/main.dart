@@ -871,6 +871,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   String? _pregnancyStatus;
   DateTime? _birthDate;
   bool _saving = false;
+  bool _signingOut = false;
   final Set<String> _selectedConditions = <String>{};
   static const _conditionOptions = [
     'Diabète',
@@ -1103,6 +1104,49 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     }
   }
 
+  Future<void> _signOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Se déconnecter ?'),
+        content: const Text(
+          'Vous devrez vous reconnecter pour accéder à votre espace santé.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Se déconnecter'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _signingOut = true);
+    try {
+      if (!kIsWeb) await GoogleSignIn().signOut();
+      await FirebaseAuth.instance.signOut();
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _signingOut = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('La déconnexion a échoué. Veuillez réessayer.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final age = _birthDate == null ? null : _ageFrom(_birthDate!);
@@ -1160,339 +1204,394 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       ),
                     ],
                     const SizedBox(height: 28),
-                    _profileLabel('Nom complet'),
-                    TextFormField(
-                      controller: _nameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: _profileDecoration('Votre nom complet'),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Votre nom est requis.'
-                          : null,
-                    ),
-                    const SizedBox(height: 18),
-                    _profileLabel('Sexe'),
-                    DropdownButtonFormField<String>(
-                      initialValue: _sex?.isEmpty ?? true ? null : _sex,
-                      decoration: _profileDecoration('Sélectionnez votre sexe'),
-                      items: const [
-                        DropdownMenuItem(value: 'Femme', child: Text('Femme')),
-                        DropdownMenuItem(value: 'Homme', child: Text('Homme')),
-                        DropdownMenuItem(value: 'Autre', child: Text('Autre')),
-                        DropdownMenuItem(
-                          value: 'Préfère ne pas répondre',
-                          child: Text('Préfère ne pas répondre'),
+                    _ProfileCategoryCard(
+                      icon: Icons.badge_outlined,
+                      title: 'Identité',
+                      description:
+                          'Vos informations personnelles essentielles.',
+                      children: [
+                        _profileLabel('Nom complet'),
+                        TextFormField(
+                          controller: _nameController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: _profileDecoration('Votre nom complet'),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Votre nom est requis.'
+                              : null,
                         ),
-                      ],
-                      onChanged: (value) => setState(() => _sex = value),
-                      validator: (value) =>
-                          value == null ? 'Sélectionnez une option.' : null,
-                    ),
-                    const SizedBox(height: 18),
-                    _profileLabel('Date de naissance'),
-                    InkWell(
-                      onTap: _pickBirthDate,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InputDecorator(
-                        decoration: _profileDecoration(
-                          'Sélectionnez votre date de naissance',
+                        const SizedBox(height: 18),
+                        _profileLabel('Sexe'),
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: _sex?.isEmpty ?? true ? null : _sex,
+                          decoration: _profileDecoration(
+                            'Sélectionnez votre sexe',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'Femme',
+                              child: Text('Femme'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Homme',
+                              child: Text('Homme'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Autre',
+                              child: Text('Autre'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Préfère ne pas répondre',
+                              child: Text('Préfère ne pas répondre'),
+                            ),
+                          ],
+                          onChanged: (value) => setState(() => _sex = value),
+                          validator: (value) =>
+                              value == null ? 'Sélectionnez une option.' : null,
                         ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.calendar_month_outlined,
-                              color: AppColors.primary,
+                        const SizedBox(height: 18),
+                        _profileLabel('Date de naissance'),
+                        InkWell(
+                          onTap: _pickBirthDate,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InputDecorator(
+                            decoration: _profileDecoration(
+                              'Sélectionnez votre date de naissance',
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _birthDate == null
-                                    ? 'Sélectionnez votre date de naissance'
-                                    : '${_birthDate!.day.toString().padLeft(2, '0')}/${_birthDate!.month.toString().padLeft(2, '0')}/${_birthDate!.year}',
-                              ),
-                            ),
-                            if (age != null)
-                              Text(
-                                '$age ans',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.calendar_month_outlined,
                                   color: AppColors.primary,
                                 ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _birthDate == null
+                                        ? 'Sélectionnez votre date de naissance'
+                                        : '${_birthDate!.day.toString().padLeft(2, '0')}/${_birthDate!.month.toString().padLeft(2, '0')}/${_birthDate!.year}',
+                                  ),
+                                ),
+                                if (age != null)
+                                  Text(
+                                    '$age ans',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_birthDate == null)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Text(
+                              'La date de naissance est requise.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFB3261E),
                               ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _ProfileCategoryCard(
+                      icon: Icons.monitor_heart_outlined,
+                      title: 'Coordonnées et mesures',
+                      description:
+                          'Vos coordonnées et principaux repères corporels.',
+                      children: [
+                        const SizedBox(height: 18),
+                        _profileLabel('Poids'),
+                        TextFormField(
+                          controller: _weightController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9.,]'),
+                            ),
                           ],
-                        ),
-                      ),
-                    ),
-                    if (_birthDate == null)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Text(
-                          'La date de naissance est requise.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFFB3261E),
+                          decoration: _profileDecoration(
+                            'Votre poids',
+                          ).copyWith(suffixText: 'kg'),
+                          onChanged: (_) => setState(() {}),
+                          validator: (value) => _profileMeasurementError(
+                            value,
+                            label: 'Le poids',
+                            minimum: 1,
+                            maximum: 500,
                           ),
                         ),
-                      ),
-                    const SizedBox(height: 18),
-                    _profileLabel('Poids'),
-                    TextFormField(
-                      controller: _weightController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                      ],
-                      decoration: _profileDecoration(
-                        'Votre poids',
-                      ).copyWith(suffixText: 'kg'),
-                      onChanged: (_) => setState(() {}),
-                      validator: (value) => _profileMeasurementError(
-                        value,
-                        label: 'Le poids',
-                        minimum: 1,
-                        maximum: 500,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _profileLabel('Taille'),
-                    TextFormField(
-                      controller: _heightController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                      ],
-                      decoration: _profileDecoration(
-                        'Votre taille',
-                      ).copyWith(suffixText: 'cm'),
-                      onChanged: (_) => setState(() {}),
-                      validator: (value) => _profileMeasurementError(
-                        value,
-                        label: 'La taille',
-                        minimum: 30,
-                        maximum: 300,
-                      ),
-                    ),
-                    if (bodyMassIndex != null) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 11,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'IMC calculé : ${bodyMassIndex.toStringAsFixed(1)}',
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
+                        const SizedBox(height: 18),
+                        _profileLabel('Taille'),
+                        TextFormField(
+                          controller: _heightController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9.,]'),
+                            ),
+                          ],
+                          decoration: _profileDecoration(
+                            'Votre taille',
+                          ).copyWith(suffixText: 'cm'),
+                          onChanged: (_) => setState(() {}),
+                          validator: (value) => _profileMeasurementError(
+                            value,
+                            label: 'La taille',
+                            minimum: 30,
+                            maximum: 300,
                           ),
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                    _profileLabel('Numéro de téléphone'),
-                    TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [_phoneInputFormatter],
-                      decoration: _profileDecoration(
-                        'Votre numéro de téléphone',
-                      ),
-                      validator: (value) => _phoneError(
-                        value,
-                        requiredMessage: 'Votre numéro est requis.',
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    _profileSectionTitle(
-                      'Contact d’urgence',
-                      'Cette personne pourra être contactée en cas de besoin.',
-                    ),
-                    _profileLabel('Nom complet'),
-                    TextFormField(
-                      controller: _emergencyNameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: _profileDecoration(
-                        'Nom du contact d’urgence',
-                      ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Le nom du contact est requis.'
-                          : null,
-                    ),
-                    const SizedBox(height: 18),
-                    _profileLabel('Lien avec vous'),
-                    TextFormField(
-                      controller: _emergencyRelationshipController,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: _profileDecoration(
-                        'Ex. parent, conjoint(e), ami(e)',
-                      ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Le lien avec le contact est requis.'
-                          : null,
+                        if (bodyMassIndex != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 11,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'IMC calculé : ${bodyMassIndex.toStringAsFixed(1)}',
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        _profileLabel('Numéro de téléphone'),
+                        TextFormField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [_phoneInputFormatter],
+                          decoration: _profileDecoration(
+                            'Votre numéro de téléphone',
+                          ),
+                          validator: (value) => _phoneError(
+                            value,
+                            requiredMessage: 'Votre numéro est requis.',
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 18),
-                    _profileLabel('Téléphone du contact'),
-                    TextFormField(
-                      controller: _emergencyPhoneController,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [_phoneInputFormatter],
-                      decoration: _profileDecoration(
-                        'Numéro du contact d’urgence',
-                      ),
-                      validator: (value) => _phoneError(
-                        value,
-                        requiredMessage:
-                            'Le numéro du contact d’urgence est requis.',
-                      ),
+                    _ProfileCategoryCard(
+                      icon: Icons.emergency_outlined,
+                      title: 'Contact d’urgence',
+                      description:
+                          'Cette personne pourra être contactée en cas de besoin.',
+                      children: [
+                        _profileLabel('Nom complet'),
+                        TextFormField(
+                          controller: _emergencyNameController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: _profileDecoration(
+                            'Nom du contact d’urgence',
+                          ),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Le nom du contact est requis.'
+                              : null,
+                        ),
+                        const SizedBox(height: 18),
+                        _profileLabel('Lien avec vous'),
+                        TextFormField(
+                          controller: _emergencyRelationshipController,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: _profileDecoration(
+                            'Ex. parent, conjoint(e), ami(e)',
+                          ),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Le lien avec le contact est requis.'
+                              : null,
+                        ),
+                        const SizedBox(height: 18),
+                        _profileLabel('Téléphone du contact'),
+                        TextFormField(
+                          controller: _emergencyPhoneController,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [_phoneInputFormatter],
+                          decoration: _profileDecoration(
+                            'Numéro du contact d’urgence',
+                          ),
+                          validator: (value) => _phoneError(
+                            value,
+                            requiredMessage:
+                                'Le numéro du contact d’urgence est requis.',
+                          ),
+                        ),
+                      ],
                     ),
                     if (!widget.isOnboarding) ...[
-                      const SizedBox(height: 34),
-                      _profileSectionTitle(
-                        'Informations complémentaires',
-                        'Ces renseignements sont facultatifs et peuvent être modifiés à tout moment.',
-                      ),
-                      _profileLabel('Adresse ou commune'),
-                      TextFormField(
-                        controller: _addressController,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: _profileDecoration(
-                          'Votre adresse ou votre commune (facultatif)',
-                        ),
+                      const SizedBox(height: 18),
+                      _ProfileCategoryCard(
+                        icon: Icons.medical_information_outlined,
+                        title: 'Dossier médical',
+                        description:
+                            'Vos antécédents et informations utiles aux soins.',
+                        children: [
+                          _profileLabel('Adresse ou commune'),
+                          TextFormField(
+                            controller: _addressController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: _profileDecoration(
+                              'Votre adresse ou votre commune (facultatif)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _profileLabel('Groupe sanguin'),
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            initialValue: _bloodTypeOptions.contains(_bloodType)
+                                ? _bloodType
+                                : null,
+                            decoration: _profileDecoration(
+                              'Sélectionnez votre groupe (facultatif)',
+                            ),
+                            items: _bloodTypeOptions
+                                .map(
+                                  (option) => DropdownMenuItem(
+                                    value: option,
+                                    child: Text(option),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _bloodType = value),
+                          ),
+                          const SizedBox(height: 24),
+                          _profileLabel('Maladies ou antécédents'),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _conditionOptions
+                                .map(
+                                  (condition) => FilterChip(
+                                    label: Text(condition),
+                                    selected: _selectedConditions.contains(
+                                      condition,
+                                    ),
+                                    onSelected: (selected) => setState(
+                                      () => selected
+                                          ? _selectedConditions.add(condition)
+                                          : _selectedConditions.remove(
+                                              condition,
+                                            ),
+                                    ),
+                                    selectedColor: const Color(0xFFE7F0FF),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _conditionsController,
+                            maxLines: 2,
+                            decoration: _profileDecoration(
+                              'Autres maladies, séparées par des virgules (facultatif)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _profileLabel('Allergies'),
+                          TextFormField(
+                            controller: _allergiesController,
+                            maxLines: 2,
+                            decoration: _profileDecoration(
+                              'Allergies médicamenteuses ou alimentaires (facultatif)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _profileLabel('Médicaments actuels'),
+                          TextFormField(
+                            controller: _medicationsController,
+                            maxLines: 2,
+                            decoration: _profileDecoration(
+                              'Médicaments séparés par des virgules (facultatif)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _profileLabel(
+                            'Interventions chirurgicales antérieures',
+                          ),
+                          TextFormField(
+                            controller: _surgeriesController,
+                            maxLines: 2,
+                            decoration: _profileDecoration(
+                              'Interventions séparées par des virgules (facultatif)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _profileLabel('Handicap ou besoin particulier'),
+                          TextFormField(
+                            controller: _specialNeedsController,
+                            maxLines: 2,
+                            decoration: _profileDecoration(
+                              'Besoin d’accessibilité ou accompagnement (facultatif)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _profileLabel('Grossesse'),
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            initialValue:
+                                _pregnancyOptions.contains(_pregnancyStatus)
+                                ? _pregnancyStatus
+                                : null,
+                            decoration: _profileDecoration(
+                              'Sélectionnez une option (facultatif)',
+                            ),
+                            items: _pregnancyOptions
+                                .map(
+                                  (option) => DropdownMenuItem(
+                                    value: option,
+                                    child: Text(option),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _pregnancyStatus = value),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 18),
-                      _profileLabel('Groupe sanguin'),
-                      DropdownButtonFormField<String>(
-                        initialValue: _bloodTypeOptions.contains(_bloodType)
-                            ? _bloodType
-                            : null,
-                        decoration: _profileDecoration(
-                          'Sélectionnez votre groupe (facultatif)',
-                        ),
-                        items: _bloodTypeOptions
-                            .map(
-                              (option) => DropdownMenuItem(
-                                value: option,
-                                child: Text(option),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => _bloodType = value),
-                      ),
-                      const SizedBox(height: 24),
-                      _profileLabel('Maladies ou antécédents'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _conditionOptions
-                            .map(
-                              (condition) => FilterChip(
-                                label: Text(condition),
-                                selected: _selectedConditions.contains(
-                                  condition,
-                                ),
-                                onSelected: (selected) => setState(
-                                  () => selected
-                                      ? _selectedConditions.add(condition)
-                                      : _selectedConditions.remove(condition),
-                                ),
-                                selectedColor: const Color(0xFFE7F0FF),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _conditionsController,
-                        maxLines: 2,
-                        decoration: _profileDecoration(
-                          'Autres maladies, séparées par des virgules (facultatif)',
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _profileLabel('Allergies'),
-                      TextFormField(
-                        controller: _allergiesController,
-                        maxLines: 2,
-                        decoration: _profileDecoration(
-                          'Allergies médicamenteuses ou alimentaires (facultatif)',
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _profileLabel('Médicaments actuels'),
-                      TextFormField(
-                        controller: _medicationsController,
-                        maxLines: 2,
-                        decoration: _profileDecoration(
-                          'Médicaments séparés par des virgules (facultatif)',
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _profileLabel('Interventions chirurgicales antérieures'),
-                      TextFormField(
-                        controller: _surgeriesController,
-                        maxLines: 2,
-                        decoration: _profileDecoration(
-                          'Interventions séparées par des virgules (facultatif)',
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _profileLabel('Handicap ou besoin particulier'),
-                      TextFormField(
-                        controller: _specialNeedsController,
-                        maxLines: 2,
-                        decoration: _profileDecoration(
-                          'Besoin d’accessibilité ou accompagnement (facultatif)',
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _profileLabel('Grossesse'),
-                      DropdownButtonFormField<String>(
-                        initialValue:
-                            _pregnancyOptions.contains(_pregnancyStatus)
-                            ? _pregnancyStatus
-                            : null,
-                        decoration: _profileDecoration(
-                          'Sélectionnez une option (facultatif)',
-                        ),
-                        items: _pregnancyOptions
-                            .map(
-                              (option) => DropdownMenuItem(
-                                value: option,
-                                child: Text(option),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => _pregnancyStatus = value),
-                      ),
-                      const SizedBox(height: 18),
-                      _profileLabel('Médecin traitant'),
-                      TextFormField(
-                        controller: _primaryDoctorController,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: _profileDecoration(
-                          'Nom du médecin traitant (facultatif)',
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      _profileLabel('Assurance ou couverture médicale'),
-                      TextFormField(
-                        controller: _insuranceController,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: _profileDecoration(
-                          'Nom de l’assurance ou couverture (facultatif)',
-                        ),
+                      _ProfileCategoryCard(
+                        icon: Icons.health_and_safety_outlined,
+                        title: 'Suivi et couverture',
+                        description:
+                            'Les professionnels et organismes qui vous accompagnent.',
+                        children: [
+                          _profileLabel('Médecin traitant'),
+                          TextFormField(
+                            controller: _primaryDoctorController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: _profileDecoration(
+                              'Nom du médecin traitant (facultatif)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _profileLabel('Assurance ou couverture médicale'),
+                          TextFormField(
+                            controller: _insuranceController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: _profileDecoration(
+                              'Nom de l’assurance ou couverture (facultatif)',
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     const SizedBox(height: 30),
@@ -1518,6 +1617,33 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   : 'Enregistrer les modifications',
                             ),
                     ),
+                    if (!widget.isOnboarding) ...[
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        onPressed: _signingOut ? null : _signOut,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(54),
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                          side: BorderSide(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                        ),
+                        icon: _signingOut
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.logout_rounded),
+                        label: Text(
+                          _signingOut ? 'Déconnexion…' : 'Se déconnecter',
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1537,24 +1663,82 @@ Widget _profileLabel(String value) => Padding(
   ),
 );
 
-Widget _profileSectionTitle(String title, String description) => Padding(
-  padding: const EdgeInsets.only(bottom: 20),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        title,
-        style: const TextStyle(
-          color: AppColors.navy,
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
+class _ProfileCategoryCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final List<Widget> children;
+
+  const _ProfileCategoryCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: AppColors.border),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0A102A43),
+          blurRadius: 18,
+          offset: Offset(0, 7),
         ),
-      ),
-      const SizedBox(height: 5),
-      Text(description, style: const TextStyle(color: AppColors.muted)),
-    ],
-  ),
-);
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 22),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        ...children,
+      ],
+    ),
+  );
+}
 
 InputDecoration _profileDecoration(String hint) => InputDecoration(
   hintText: hint,
