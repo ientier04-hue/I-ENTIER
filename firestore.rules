@@ -688,8 +688,8 @@ service cloud.firestore {
         && request.resource.data.providerName is string
         && request.resource.data.providerName.size() > 0
         && request.resource.data.providerName.size() <= 160
-        && request.resource.data.service is string
-        && request.resource.data.service.size() <= 160
+        && request.resource.data['service'] is string
+        && request.resource.data['service'].size() <= 160
         && request.resource.data.appointmentMode
           in ['inPerson', 'homeVisit', 'video']
         && request.resource.data.location is string
@@ -726,13 +726,13 @@ service cloud.firestore {
         && request.resource.data.respondedAt == request.time
         && request.resource.data.updatedAt == request.time
         && getAfter(
-          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/appointment_$(appointmentId)
+          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/$('appointment_' + appointmentId)
         ).data.source == 'appointment'
         && getAfter(
-          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/appointment_$(appointmentId)
+          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/$('appointment_' + appointmentId)
         ).data.sourceId == appointmentId
         && getAfter(
-          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/appointment_$(appointmentId)
+          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/$('appointment_' + appointmentId)
         ).data.createdAt == request.time;
 
       allow delete: if false;
