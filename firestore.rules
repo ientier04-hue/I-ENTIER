@@ -6,6 +6,159 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function validProviderProfile(data) {
+      return data.keys().hasOnly([
+          'ownerUid', 'accountType', 'displayName', 'category',
+          'registrationNumber', 'contactPerson', 'workplace', 'phone', 'email',
+          'address', 'description', 'experience', 'qualifications', 'services',
+          'schedule', 'available', 'isVisible', 'verificationStatus',
+          'rejectionReason', 'termsAccepted', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'ownerUid', 'accountType', 'displayName', 'category',
+          'registrationNumber', 'contactPerson', 'workplace', 'phone', 'email',
+          'address', 'description', 'experience', 'qualifications', 'services',
+          'schedule', 'available', 'isVisible', 'verificationStatus',
+          'rejectionReason', 'termsAccepted', 'createdAt', 'updatedAt'
+        ])
+        && data.accountType in ['professional', 'institution']
+        && data.displayName is string
+        && data.displayName.size() > 1
+        && data.displayName.size() <= 140
+        && data.category is string
+        && data.category.size() > 1
+        && data.category.size() <= 120
+        && data.registrationNumber is string
+        && data.registrationNumber.size() > 1
+        && data.registrationNumber.size() <= 120
+        && data.contactPerson is string
+        && data.contactPerson.size() <= 140
+        && data.workplace is string
+        && data.workplace.size() <= 160
+        && data.phone is string
+        && data.phone.size() > 4
+        && data.phone.size() <= 40
+        && data.email is string
+        && data.email.size() > 4
+        && data.email.size() <= 180
+        && data.address is string
+        && data.address.size() > 3
+        && data.address.size() <= 300
+        && data.description is string
+        && data.description.size() > 3
+        && data.description.size() <= 1500
+        && data.experience is string
+        && data.experience.size() <= 300
+        && data.qualifications is string
+        && data.qualifications.size() <= 800
+        && data.services is string
+        && data.services.size() > 1
+        && data.services.size() <= 1200
+        && data.schedule is string
+        && data.schedule.size() > 1
+        && data.schedule.size() <= 500
+        && data.available is bool
+        && data.isVisible is bool
+        && data.verificationStatus in ['pending', 'approved', 'rejected']
+        && data.rejectionReason is string
+        && data.rejectionReason.size() <= 600
+        && data.termsAccepted == true
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function providerMayPublish(type) {
+      let profile = getAfter(
+        /databases/$(database)/documents/providerProfiles/$(request.auth.uid)
+      );
+      return signedIn()
+        && profile.data.ownerUid == request.auth.uid
+        && profile.data.accountType == type
+        && profile.data.verificationStatus == 'approved'
+        && profile.data.isVisible == true;
+    }
+
+    function validProfessionalDirectory(data, ownerId) {
+      return data.keys().hasOnly([
+          'ownerUid', 'nomComplet', 'specialite', 'etablissement', 'biographie',
+          'experience', 'qualification', 'services', 'horaires', 'adresse',
+          'telephone', 'email', 'disponible', 'isPublished',
+          'verificationStatus', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'ownerUid', 'nomComplet', 'specialite', 'etablissement', 'biographie',
+          'experience', 'qualification', 'services', 'horaires', 'adresse',
+          'telephone', 'email', 'disponible', 'isPublished',
+          'verificationStatus', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == ownerId
+        && data.nomComplet is string
+        && data.nomComplet.size() > 1
+        && data.nomComplet.size() <= 140
+        && data.specialite is string
+        && data.specialite.size() > 1
+        && data.specialite.size() <= 120
+        && data.etablissement is string
+        && data.etablissement.size() <= 160
+        && data.biographie is string
+        && data.biographie.size() <= 1500
+        && data.experience is string
+        && data.experience.size() <= 300
+        && data.qualification is string
+        && data.qualification.size() <= 800
+        && data.services is string
+        && data.services.size() <= 1200
+        && data.horaires is string
+        && data.horaires.size() <= 500
+        && data.adresse is string
+        && data.adresse.size() <= 300
+        && data.telephone is string
+        && data.telephone.size() <= 40
+        && data.email is string
+        && data.email.size() <= 180
+        && data.disponible is bool
+        && data.isPublished == true
+        && data.verificationStatus == 'approved'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validInstitutionDirectory(data, ownerId) {
+      return data.keys().hasOnly([
+          'ownerUid', 'nom', 'type', 'description', 'services', 'horaires',
+          'adresse', 'telephone', 'email', 'isPublished', 'verificationStatus',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'ownerUid', 'nom', 'type', 'description', 'services', 'horaires',
+          'adresse', 'telephone', 'email', 'isPublished', 'verificationStatus',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == ownerId
+        && data.nom is string
+        && data.nom.size() > 1
+        && data.nom.size() <= 160
+        && data.type is string
+        && data.type.size() > 1
+        && data.type.size() <= 120
+        && data.description is string
+        && data.description.size() <= 1500
+        && data.services is string
+        && data.services.size() <= 1200
+        && data.horaires is string
+        && data.horaires.size() <= 500
+        && data.adresse is string
+        && data.adresse.size() <= 300
+        && data.telephone is string
+        && data.telephone.size() <= 40
+        && data.email is string
+        && data.email.size() <= 180
+        && data.isPublished == true
+        && data.verificationStatus == 'approved'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     // Account data: identity and preferences, separate from health records.
     match /user/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
@@ -401,16 +554,90 @@ service cloud.firestore {
 
     }
 
-    // Directories are readable after authentication, but data management must
-    // be handled by an admin backend or the Firebase console.
+    // Provider applications are private. A client can submit and edit its own
+    // data, but only a trusted Admin SDK process may change the review status.
+    match /providerProfiles/{providerId} {
+      allow read: if signedIn() && request.auth.uid == providerId;
+
+      allow create: if signedIn()
+        && request.auth.uid == providerId
+        && validProviderProfile(request.resource.data)
+        && request.resource.data.ownerUid == providerId
+        && request.resource.data.verificationStatus == 'pending'
+        && request.resource.data.rejectionReason == ''
+        && request.resource.data.isVisible == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && request.auth.uid == providerId
+        && validProviderProfile(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'category', 'registrationNumber', 'contactPerson',
+          'workplace', 'phone', 'email', 'address', 'description', 'experience',
+          'qualifications', 'services', 'schedule', 'available', 'isVisible',
+          'termsAccepted', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.accountType == resource.data.accountType
+        && request.resource.data.verificationStatus
+          == resource.data.verificationStatus
+        && request.resource.data.rejectionReason
+          == resource.data.rejectionReason
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (resource.data.verificationStatus == 'approved'
+          || request.resource.data.isVisible == false)
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
+    // Verified providers manage only their own public directory document.
+    // Removing a listing remains possible even if verification is revoked.
     match /personnelMedical/{documentId} {
       allow read: if signedIn();
-      allow write: if false;
+
+      allow create: if signedIn()
+        && request.auth.uid == documentId
+        && providerMayPublish('professional')
+        && validProfessionalDirectory(request.resource.data, documentId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && request.auth.uid == documentId
+        && resource.data.ownerUid == request.auth.uid
+        && providerMayPublish('professional')
+        && validProfessionalDirectory(request.resource.data, documentId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if signedIn()
+        && request.auth.uid == documentId
+        && resource.data.ownerUid == request.auth.uid;
     }
 
     match /institution/{documentId} {
       allow read: if signedIn();
-      allow write: if false;
+
+      allow create: if signedIn()
+        && request.auth.uid == documentId
+        && providerMayPublish('institution')
+        && validInstitutionDirectory(request.resource.data, documentId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && request.auth.uid == documentId
+        && resource.data.ownerUid == request.auth.uid
+        && providerMayPublish('institution')
+        && validInstitutionDirectory(request.resource.data, documentId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if signedIn()
+        && request.auth.uid == documentId
+        && resource.data.ownerUid == request.auth.uid;
     }
 
     // Deny every collection not explicitly listed above.
