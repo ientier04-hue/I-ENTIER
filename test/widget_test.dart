@@ -105,7 +105,7 @@ void main() {
     );
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Personnel'));
+    await tester.tap(find.text('Annuaire'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-header')), findsNothing);
@@ -115,6 +115,46 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-header')), findsOneWidget);
   });
+
+  testWidgets(
+    'fusionne personnel et institutions dans un annuaire avec sélecteur',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomeScreen(
+            user: _FakeUser(),
+            account: const {'name': 'Patient Test'},
+            patientProfile: const {},
+            notificationStream: Stream.value(defaultAppNotifications()),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Annuaire'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('directory-type-switch')),
+        findsOneWidget,
+      );
+      expect(find.text('Personnel médical'), findsOneWidget);
+      expect(find.text('Institution'), findsNothing);
+      expect(find.text('Institutions'), findsOneWidget);
+
+      await tester.tap(find.text('Institutions'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Personnel médical'), findsNothing);
+      expect(
+        find.text('Des soins de qualité, partout où vous êtes.'),
+        findsOneWidget,
+      );
+      expect(find.text('Annuaire'), findsOneWidget);
+    },
+  );
 
   testWidgets('la croix ferme toute la feuille AI avec le clavier ouvert', (
     tester,

@@ -38,6 +38,7 @@ class NotificationsPage extends StatefulWidget {
   final Stream<List<AppNotification>>? notificationStream;
   final List<AppNotification>? notifications;
   final ValueChanged<List<AppNotification>>? onNotificationsChanged;
+  final VoidCallback? onAppointmentTap;
 
   const NotificationsPage({
     super.key,
@@ -45,6 +46,7 @@ class NotificationsPage extends StatefulWidget {
     this.notificationStream,
     this.notifications,
     this.onNotificationsChanged,
+    this.onAppointmentTap,
   });
 
   @override
@@ -260,6 +262,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   void _openNotification(AppNotification notification) {
     unawaited(_setRead(notification, true));
+    if (notification.source == 'appointment' &&
+        widget.onAppointmentTap != null) {
+      widget.onAppointmentTap!();
+      return;
+    }
     final action = notification.actionLabel;
     if (action == null) return;
     ScaffoldMessenger.of(context).showSnackBar(

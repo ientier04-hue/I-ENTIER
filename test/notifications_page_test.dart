@@ -73,4 +73,35 @@ void main() {
     expect(find.text('Rappel futur'), findsNothing);
     expect(find.text('1 nouvelle notification'), findsOneWidget);
   });
+
+  testWidgets('ouvre la page Rendez-vous depuis une réponse professionnelle', (
+    tester,
+  ) async {
+    var opened = false;
+    final notification = AppNotification(
+      id: 'appointment_request-1',
+      title: 'Rendez-vous confirmé',
+      message: 'Dre Marie Jean a confirmé votre demande de rendez-vous.',
+      createdAt: DateTime.now(),
+      type: AppNotificationType.appointment,
+      actionLabel: 'Voir le rendez-vous',
+      source: 'appointment',
+      sourceId: 'request-1',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsPage(
+          notifications: [notification],
+          onAppointmentTap: () => opened = true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Rendez-vous confirmé'));
+    await tester.pump();
+
+    expect(opened, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 }

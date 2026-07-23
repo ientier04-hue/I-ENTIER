@@ -11,6 +11,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'appointments.dart';
 import 'firebase_options.dart';
 import 'cycle_tracking_page.dart';
 import 'health_tracking_page.dart';
@@ -1808,6 +1809,18 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _usesFirebaseNotifications =>
       widget.notificationStream == null && Firebase.apps.isNotEmpty;
 
+  String get _patientName {
+    final accountName = _profileText(widget.account, [
+      'displayName',
+      'fullName',
+      'name',
+    ]);
+    if (accountName.isNotEmpty) return accountName;
+    return widget.user.displayName?.trim().isNotEmpty == true
+        ? widget.user.displayName!.trim()
+        : 'Patient i-ENTIER';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1870,6 +1883,10 @@ class _HomeScreenState extends State<HomeScreen> {
           onNotificationsChanged: (notifications) {
             if (!mounted) return;
             setState(() => _notifications = List.of(notifications));
+          },
+          onAppointmentTap: () {
+            Navigator.of(context).pop();
+            if (mounted) setState(() => _selectedTab = 2);
           },
         ),
       ),
@@ -2047,10 +2064,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: _AssistantCard(onComposeTap: _openAiAssistant),
                         ),
                       ] else if (_selectedTab == 1)
-                        const _PersonnelPage()
+                        _HealthDirectoryPage(
+                          patientId: widget.user.uid,
+                          patientName: _patientName,
+                        )
                       else if (_selectedTab == 2)
-                        const _InstitutionsPage(),
-                      if (_selectedTab == 3)
+                        PatientAppointmentsPage(
+                          patientId: widget.user.uid,
+                          repository: Firebase.apps.isEmpty
+                              ? null
+                              : FirestorePatientAppointmentRepository(),
+                        )
+                      else if (_selectedTab == 3)
                         HealthTrackingPage(patientId: widget.user.uid),
                     ],
                   ),
@@ -2106,11 +2131,11 @@ class _GlassNavigationBar extends StatelessWidget {
 
   static const _destinations = [
     (Icons.home_outlined, Icons.home_rounded, 'Accueil'),
-    (Icons.person_outline_rounded, Icons.person_rounded, 'Personnel'),
+    (Icons.people_alt_outlined, Icons.people_alt_rounded, 'Annuaire'),
     (
-      Icons.account_balance_rounded,
-      Icons.account_balance_rounded,
-      'Institution',
+      Icons.calendar_month_outlined,
+      Icons.calendar_month_rounded,
+      'Rendez-vous',
     ),
     (Icons.monitor_heart_outlined, Icons.monitor_heart_rounded, 'Suivi'),
   ];
@@ -2279,8 +2304,173 @@ class _SectionHeading extends StatelessWidget {
   );
 }
 
-class _PersonnelPage extends StatelessWidget {
-  const _PersonnelPage();
+enum _DirectoryType { personnel, institutions }
+
+class _HealthDirectoryPage extends StatefulWidget {
+  final String patientId;
+  final String patientName;
+
+  const _HealthDirectoryPage({
+    required this.patientId,
+    required this.patientName,
+  });
+
+  @override
+  State<_HealthDirectoryPage> createState() => _HealthDirectoryPageState();
+}
+
+class _HealthDirectoryPageState extends State<_HealthDirectoryPage> {
+  _DirectoryType _selectedType = _DirectoryType.personnel;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _DirectoryTypeSwitch(
+        selectedType: _selectedType,
+        onSelected: (type) => setState(() => _selectedType = type),
+      ),
+      const SizedBox(height: 24),
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: _selectedType == _DirectoryType.personnel
+            ? _PersonnelDirectory(
+                key: const ValueKey('personnel-directory'),
+                patientId: widget.patientId,
+                patientName: widget.patientName,
+              )
+            : _InstitutionsDirectory(
+                key: ValueKey('institutions-directory'),
+                patientId: widget.patientId,
+                patientName: widget.patientName,
+              ),
+      ),
+    ],
+  );
+}
+
+class _DirectoryTypeSwitch extends StatelessWidget {
+  const _DirectoryTypeSwitch({
+    required this.selectedType,
+    required this.onSelected,
+  });
+
+  final _DirectoryType selectedType;
+  final ValueChanged<_DirectoryType> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Type d’annuaire',
+    child: Container(
+      key: const ValueKey('directory-type-switch'),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F0FA),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _DirectoryTypeOption(
+              icon: Icons.medical_services_outlined,
+              label: 'Personnel',
+              selected: selectedType == _DirectoryType.personnel,
+              onTap: () => onSelected(_DirectoryType.personnel),
+            ),
+          ),
+          Expanded(
+            child: _DirectoryTypeOption(
+              icon: Icons.account_balance_outlined,
+              label: 'Institutions',
+              selected: selectedType == _DirectoryType.institutions,
+              onTap: () => onSelected(_DirectoryType.institutions),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _DirectoryTypeOption extends StatelessWidget {
+  const _DirectoryTypeOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: label,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x1A173A63),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? AppColors.primary : AppColors.muted,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? AppColors.primary : AppColors.navy,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _PersonnelDirectory extends StatelessWidget {
+  final String patientId;
+  final String patientName;
+
+  const _PersonnelDirectory({
+    super.key,
+    required this.patientId,
+    required this.patientName,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
@@ -2356,7 +2546,11 @@ class _PersonnelPage extends StatelessWidget {
             return _DirectoryGrid(
               children: [
                 for (final record in records)
-                  _ProfessionalCard(professional: record),
+                  _ProfessionalCard(
+                    professional: record,
+                    patientId: patientId,
+                    patientName: patientName,
+                  ),
               ],
             );
           },
@@ -2365,8 +2559,15 @@ class _PersonnelPage extends StatelessWidget {
   );
 }
 
-class _InstitutionsPage extends StatelessWidget {
-  const _InstitutionsPage();
+class _InstitutionsDirectory extends StatelessWidget {
+  final String patientId;
+  final String patientName;
+
+  const _InstitutionsDirectory({
+    super.key,
+    required this.patientId,
+    required this.patientName,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
@@ -2427,7 +2628,11 @@ class _InstitutionsPage extends StatelessWidget {
             return _DirectoryGrid(
               children: [
                 for (final record in records)
-                  _InstitutionCard(institution: record),
+                  _InstitutionCard(
+                    institution: record,
+                    patientId: patientId,
+                    patientName: patientName,
+                  ),
               ],
             );
           },
@@ -2483,14 +2688,25 @@ class _DirectoryCardTapTarget extends StatelessWidget {
 
 class _ProfessionalCard extends StatelessWidget {
   final _Professional professional;
-  const _ProfessionalCard({required this.professional});
+  final String patientId;
+  final String patientName;
+
+  const _ProfessionalCard({
+    required this.professional,
+    required this.patientId,
+    required this.patientName,
+  });
 
   @override
   Widget build(BuildContext context) => _DirectoryCardTapTarget(
     label: 'Voir le profil de ${professional.name}',
     onTap: () => Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => _ProfessionalDetailPage(professional: professional),
+        builder: (_) => _ProfessionalDetailPage(
+          professional: professional,
+          patientId: patientId,
+          patientName: patientName,
+        ),
       ),
     ),
     child: Container(
@@ -2791,6 +3007,7 @@ class _DirectoryFeedback extends StatelessWidget {
 }
 
 class _Professional {
+  final String id;
   final String name;
   final String role;
   final String workplace;
@@ -2808,6 +3025,7 @@ class _Professional {
   final bool available;
 
   const _Professional({
+    required this.id,
     required this.name,
     required this.role,
     required this.workplace,
@@ -2851,6 +3069,9 @@ class _Professional {
       'title',
     ]);
     return _Professional(
+      id: _field(data, ['ownerUid']).isEmpty
+          ? doc.id
+          : _field(data, ['ownerUid']),
       name: resolvedName,
       role: role.isEmpty ? 'Professionnel de santé' : role,
       workplace: _field(data, [
@@ -2921,6 +3142,7 @@ class _Professional {
 }
 
 class _Institution {
+  final String id;
   final String name;
   final String type;
   final String description;
@@ -2932,8 +3154,10 @@ class _Institution {
   final String email;
   final IconData icon;
   final Color color;
+  final bool available;
 
   const _Institution({
+    required this.id,
     required this.name,
     required this.type,
     required this.description,
@@ -2945,6 +3169,7 @@ class _Institution {
     required this.email,
     required this.icon,
     required this.color,
+    required this.available,
   });
 
   factory _Institution.fromFirestore(
@@ -2973,6 +3198,9 @@ class _Institution {
         normalizedCategory.contains('hopital') ||
         normalizedCategory.contains('hospital');
     return _Institution(
+      id: _field(data, ['ownerUid']).isEmpty
+          ? doc.id
+          : _field(data, ['ownerUid']),
       name: name.isEmpty ? 'Institution de santé' : name,
       type: type,
       description: _field(data, [
@@ -3011,6 +3239,11 @@ class _Institution {
           : isHospital
           ? const Color(0xFFE8F1FF)
           : const Color(0xFFE8F8F4),
+      available: _boolean(data, [
+        'disponible',
+        'available',
+        'isAvailable',
+      ], fallback: true),
     );
   }
 }
@@ -3072,14 +3305,25 @@ String _initials(String value) => value
 
 class _InstitutionCard extends StatelessWidget {
   final _Institution institution;
-  const _InstitutionCard({required this.institution});
+  final String patientId;
+  final String patientName;
+
+  const _InstitutionCard({
+    required this.institution,
+    required this.patientId,
+    required this.patientName,
+  });
 
   @override
   Widget build(BuildContext context) => _DirectoryCardTapTarget(
     label: 'Voir les détails de ${institution.name}',
     onTap: () => Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => _InstitutionDetailPage(institution: institution),
+        builder: (_) => _InstitutionDetailPage(
+          institution: institution,
+          patientId: patientId,
+          patientName: patientName,
+        ),
       ),
     ),
     child: Container(
@@ -3230,7 +3474,14 @@ class _OpenProfileIndicator extends StatelessWidget {
 
 class _ProfessionalDetailPage extends StatelessWidget {
   final _Professional professional;
-  const _ProfessionalDetailPage({required this.professional});
+  final String patientId;
+  final String patientName;
+
+  const _ProfessionalDetailPage({
+    required this.professional,
+    required this.patientId,
+    required this.patientName,
+  });
 
   @override
   Widget build(BuildContext context) => _DirectoryDetailScaffold(
@@ -3249,6 +3500,20 @@ class _ProfessionalDetailPage extends StatelessWidget {
         title: professional.name,
         subtitle: professional.role,
         status: _StatusBadge(available: professional.available),
+      ),
+      const SizedBox(height: 16),
+      _AppointmentBookingAction(
+        patientId: patientId,
+        patientName: patientName,
+        target: ProviderBookingTarget(
+          id: professional.id,
+          type: 'professional',
+          name: professional.name,
+          service: professional.role,
+          schedule: professional.schedule,
+          address: professional.address,
+          available: professional.available,
+        ),
       ),
       if (professional.biography.isNotEmpty) ...[
         const SizedBox(height: 18),
@@ -3347,7 +3612,14 @@ class _ProfessionalDetailPage extends StatelessWidget {
 
 class _InstitutionDetailPage extends StatelessWidget {
   final _Institution institution;
-  const _InstitutionDetailPage({required this.institution});
+  final String patientId;
+  final String patientName;
+
+  const _InstitutionDetailPage({
+    required this.institution,
+    required this.patientId,
+    required this.patientName,
+  });
 
   @override
   Widget build(BuildContext context) => _DirectoryDetailScaffold(
@@ -3358,6 +3630,21 @@ class _InstitutionDetailPage extends StatelessWidget {
         leading: Icon(institution.icon, size: 38, color: AppColors.primary),
         title: institution.name,
         subtitle: institution.type,
+        status: _StatusBadge(available: institution.available),
+      ),
+      const SizedBox(height: 16),
+      _AppointmentBookingAction(
+        patientId: patientId,
+        patientName: patientName,
+        target: ProviderBookingTarget(
+          id: institution.id,
+          type: 'institution',
+          name: institution.name,
+          service: institution.type,
+          schedule: institution.schedule,
+          address: institution.address,
+          available: institution.available,
+        ),
       ),
       if (institution.description.isNotEmpty) ...[
         const SizedBox(height: 18),
@@ -3433,6 +3720,55 @@ class _InstitutionDetailPage extends StatelessWidget {
         ),
       ],
     ],
+  );
+}
+
+class _AppointmentBookingAction extends StatelessWidget {
+  final String patientId;
+  final String patientName;
+  final ProviderBookingTarget target;
+
+  const _AppointmentBookingAction({
+    required this.patientId,
+    required this.patientName,
+    required this.target,
+  });
+
+  Future<void> _openBooking(BuildContext context) async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AppointmentBookingPage(
+          patientId: patientId,
+          patientName: patientName,
+          provider: target,
+        ),
+      ),
+    );
+    if (created == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Demande envoyée. Vous pouvez la suivre dans Rendez-vous.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FilledButton.icon(
+    key: const ValueKey('book-appointment'),
+    onPressed: target.available && target.schedule.trim().isNotEmpty
+        ? () => _openBooking(context)
+        : null,
+    icon: Icon(
+      target.available
+          ? Icons.calendar_month_rounded
+          : Icons.event_busy_outlined,
+    ),
+    label: Text(
+      target.available ? 'Prendre rendez-vous' : 'Réservation indisponible',
+    ),
   );
 }
 

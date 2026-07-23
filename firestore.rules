@@ -6,6 +6,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/administrators/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/administrators/$(request.auth.uid)
+        ).data.active == true;
+    }
+
     function validProviderProfile(data) {
       return data.keys().hasOnly([
           'ownerUid', 'accountType', 'displayName', 'category',
@@ -78,6 +88,38 @@ service cloud.firestore {
         && profile.data.isVisible == true;
     }
 
+    function appointmentProviderExists(data) {
+      return (
+          data.providerType == 'professional'
+          && exists(
+            /databases/$(database)/documents/personnelMedical/$(data.providerId)
+          )
+          && get(
+            /databases/$(database)/documents/personnelMedical/$(data.providerId)
+          ).data.ownerUid == data.providerId
+          && get(
+            /databases/$(database)/documents/personnelMedical/$(data.providerId)
+          ).data.disponible == true
+        )
+        || (
+          data.providerType == 'institution'
+          && exists(
+            /databases/$(database)/documents/institution/$(data.providerId)
+          )
+          && get(
+            /databases/$(database)/documents/institution/$(data.providerId)
+          ).data.ownerUid == data.providerId
+          && (
+            !get(
+              /databases/$(database)/documents/institution/$(data.providerId)
+            ).data.keys().hasAny(['disponible'])
+            || get(
+              /databases/$(database)/documents/institution/$(data.providerId)
+            ).data.disponible == true
+          )
+        );
+    }
+
     function validProfessionalDirectory(data, ownerId) {
       return data.keys().hasOnly([
           'ownerUid', 'nomComplet', 'specialite', 'etablissement', 'biographie',
@@ -126,13 +168,13 @@ service cloud.firestore {
     function validInstitutionDirectory(data, ownerId) {
       return data.keys().hasOnly([
           'ownerUid', 'nom', 'type', 'description', 'services', 'horaires',
-          'adresse', 'telephone', 'email', 'isPublished', 'verificationStatus',
-          'createdAt', 'updatedAt'
+          'adresse', 'telephone', 'email', 'disponible', 'isPublished',
+          'verificationStatus', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
           'ownerUid', 'nom', 'type', 'description', 'services', 'horaires',
-          'adresse', 'telephone', 'email', 'isPublished', 'verificationStatus',
-          'createdAt', 'updatedAt'
+          'adresse', 'telephone', 'email', 'disponible', 'isPublished',
+          'verificationStatus', 'createdAt', 'updatedAt'
         ])
         && data.ownerUid == ownerId
         && data.nom is string
@@ -153,10 +195,21 @@ service cloud.firestore {
         && data.telephone.size() <= 40
         && data.email is string
         && data.email.size() <= 180
+        && data.disponible is bool
         && data.isPublished == true
         && data.verificationStatus == 'approved'
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    // Administrator roles are provisioned outside client applications. A
+    // signed-in user may read its own role to learn whether access is active,
+    // but no client can create, modify, or delete an administrator.
+    match /administrators/{adminId} {
+      allow get: if signedIn()
+        && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     // Account data: identity and preferences, separate from health records.
@@ -511,6 +564,49 @@ service cloud.firestore {
           && request.resource.data.createdAt <= request.time
           && request.resource.data.updatedAt == request.time;
 
+        // A provider response is committed in the same batch as the matching
+        // appointment decision. The deterministic identifier prevents a
+        // provider from flooding a patient's feed for one request.
+        allow create: if signedIn()
+          && request.auth.uid != patientId
+          && request.resource.data.keys().hasOnly([
+            'title', 'message', 'type', 'isRead', 'actionLabel', 'source',
+            'sourceId', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'title', 'message', 'type', 'isRead', 'actionLabel', 'source',
+            'sourceId', 'createdAt', 'updatedAt'
+          ])
+          && notificationId
+            == 'appointment_' + request.resource.data.sourceId
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.message.size() <= 300
+          && request.resource.data.type == 'appointment'
+          && request.resource.data.isRead == false
+          && request.resource.data.actionLabel == 'Voir le rendez-vous'
+          && request.resource.data.source == 'appointment'
+          && request.resource.data.sourceId is string
+          && request.resource.data.sourceId.size() > 0
+          && request.resource.data.sourceId.size() <= 120
+          && get(
+            /databases/$(database)/documents/appointments/$(request.resource.data.sourceId)
+          ).data.patientId == patientId
+          && get(
+            /databases/$(database)/documents/appointments/$(request.resource.data.sourceId)
+          ).data.providerId == request.auth.uid
+          && get(
+            /databases/$(database)/documents/appointments/$(request.resource.data.sourceId)
+          ).data.status == 'pending'
+          && getAfter(
+            /databases/$(database)/documents/appointments/$(request.resource.data.sourceId)
+          ).data.status in ['confirmed', 'cancelled']
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
         allow update: if signedIn()
           && request.auth.uid == patientId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -554,10 +650,100 @@ service cloud.firestore {
 
     }
 
-    // Provider applications are private. A client can submit and edit its own
-    // data, but only a trusted Admin SDK process may change the review status.
+    // Appointment requests are shared only between the patient who created
+    // them and the selected provider. A provider decision must atomically
+    // create the matching patient notification.
+    match /appointments/{appointmentId} {
+      allow read: if signedIn()
+        && (
+          resource.data.patientId == request.auth.uid
+          || resource.data.providerId == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && appointmentId.size() > 0
+        && appointmentId.size() <= 120
+        && request.auth.uid == request.resource.data.patientId
+        && request.resource.data.keys().hasOnly([
+          'patientId', 'patientName', 'providerId', 'providerType',
+          'providerName', 'service', 'appointmentMode', 'location',
+          'scheduledAt', 'scheduleLabel', 'status', 'patientNote',
+          'responseNote', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'patientId', 'patientName', 'providerId', 'providerType',
+          'providerName', 'service', 'appointmentMode', 'location',
+          'scheduledAt', 'scheduleLabel', 'status', 'patientNote',
+          'responseNote', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.patientId is string
+        && request.resource.data.patientName is string
+        && request.resource.data.patientName.size() > 0
+        && request.resource.data.patientName.size() <= 140
+        && request.resource.data.providerId is string
+        && request.resource.data.providerId.size() > 0
+        && request.resource.data.providerId.size() <= 128
+        && request.resource.data.providerType
+          in ['professional', 'institution']
+        && request.resource.data.providerName is string
+        && request.resource.data.providerName.size() > 0
+        && request.resource.data.providerName.size() <= 160
+        && request.resource.data.service is string
+        && request.resource.data.service.size() <= 160
+        && request.resource.data.appointmentMode
+          in ['inPerson', 'homeVisit', 'video']
+        && request.resource.data.location is string
+        && request.resource.data.location.size() <= 300
+        && (
+          request.resource.data.appointmentMode != 'homeVisit'
+          || request.resource.data.location.size() > 3
+        )
+        && request.resource.data.scheduledAt is timestamp
+        && request.resource.data.scheduledAt
+          > request.time + duration.value(30, 'm')
+        && request.resource.data.scheduledAt
+          < request.time + duration.value(366, 'd')
+        && request.resource.data.scheduleLabel is string
+        && request.resource.data.scheduleLabel.size() > 0
+        && request.resource.data.scheduleLabel.size() <= 500
+        && request.resource.data.status == 'pending'
+        && request.resource.data.patientNote is string
+        && request.resource.data.patientNote.size() <= 500
+        && request.resource.data.responseNote == ''
+        && appointmentProviderExists(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && resource.data.providerId == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'responseNote', 'respondedAt', 'updatedAt'
+        ])
+        && request.resource.data.status in ['confirmed', 'cancelled']
+        && request.resource.data.responseNote is string
+        && request.resource.data.responseNote.size() <= 500
+        && request.resource.data.respondedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && getAfter(
+          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/appointment_$(appointmentId)
+        ).data.source == 'appointment'
+        && getAfter(
+          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/appointment_$(appointmentId)
+        ).data.sourceId == appointmentId
+        && getAfter(
+          /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/appointment_$(appointmentId)
+        ).data.createdAt == request.time;
+
+      allow delete: if false;
+    }
+
+    // Provider applications are private. Providers manage their identity and
+    // presentation; active administrators may read requests and set only the
+    // fields needed for a review decision.
     match /providerProfiles/{providerId} {
-      allow read: if signedIn() && request.auth.uid == providerId;
+      allow read: if signedIn()
+        && (request.auth.uid == providerId || isAdmin());
 
       allow create: if signedIn()
         && request.auth.uid == providerId
@@ -589,7 +775,72 @@ service cloud.firestore {
           || request.resource.data.isVisible == false)
         && request.resource.data.updatedAt == request.time;
 
+      allow update: if isAdmin()
+        && validProviderProfile(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'verificationStatus', 'rejectionReason', 'isVisible', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.accountType == resource.data.accountType
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.verificationStatus
+          in ['approved', 'rejected']
+        && request.resource.data.verificationStatus
+          != resource.data.verificationStatus
+        && request.resource.data.isVisible == false
+        && (
+          (request.resource.data.verificationStatus == 'rejected'
+            && request.resource.data.rejectionReason is string
+            && request.resource.data.rejectionReason.size() > 0
+            && request.resource.data.rejectionReason.size() <= 600)
+          || (request.resource.data.verificationStatus == 'approved'
+            && request.resource.data.rejectionReason == '')
+        )
+        && request.resource.data.updatedAt == request.time;
+
       allow delete: if false;
+    }
+
+    // Every decision made by the administration interface creates a separate,
+    // immutable audit record. Audit records are never visible to providers.
+    match /providerReviews/{reviewId} {
+      allow read: if isAdmin();
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'profileId', 'adminUid', 'previousStatus', 'newStatus', 'reason',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'profileId', 'adminUid', 'previousStatus', 'newStatus', 'reason',
+          'createdAt'
+        ])
+        && request.resource.data.profileId is string
+        && request.resource.data.profileId.size() > 0
+        && request.resource.data.profileId.size() <= 128
+        && request.resource.data.adminUid == request.auth.uid
+        && request.resource.data.previousStatus
+          in ['pending', 'approved', 'rejected']
+        && request.resource.data.newStatus in ['approved', 'rejected']
+        && request.resource.data.previousStatus
+          != request.resource.data.newStatus
+        && get(
+          /databases/$(database)/documents/providerProfiles/$(request.resource.data.profileId)
+        ).data.verificationStatus == request.resource.data.previousStatus
+        && getAfter(
+          /databases/$(database)/documents/providerProfiles/$(request.resource.data.profileId)
+        ).data.verificationStatus == request.resource.data.newStatus
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 600
+        && (
+          (request.resource.data.newStatus == 'rejected'
+            && request.resource.data.reason.size() > 0)
+          || (request.resource.data.newStatus == 'approved'
+            && request.resource.data.reason == '')
+        )
+        && request.resource.data.createdAt == request.time;
+
+      allow update, delete: if false;
     }
 
     // Verified providers manage only their own public directory document.
@@ -612,9 +863,10 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
 
-      allow delete: if signedIn()
-        && request.auth.uid == documentId
-        && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isAdmin()
+        || (signedIn()
+          && request.auth.uid == documentId
+          && resource.data.ownerUid == request.auth.uid);
     }
 
     match /institution/{documentId} {
@@ -635,9 +887,10 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time;
 
-      allow delete: if signedIn()
-        && request.auth.uid == documentId
-        && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isAdmin()
+        || (signedIn()
+          && request.auth.uid == documentId
+          && resource.data.ownerUid == request.auth.uid);
     }
 
     // Deny every collection not explicitly listed above.
