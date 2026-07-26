@@ -35,6 +35,23 @@ Future<void> main() async {
 class IEntierApp extends StatelessWidget {
   const IEntierApp({super.key});
 
+  Widget _home() {
+    Widget home = const AuthGate();
+    assert(() {
+      home = switch (Uri.base.queryParameters['profile-preview']) {
+        'professional' => buildDirectoryProfilePreview(
+          DirectoryProfilePreviewType.professional,
+        ),
+        'institution' => buildDirectoryProfilePreview(
+          DirectoryProfilePreviewType.institution,
+        ),
+        _ => home,
+      };
+      return true;
+    }());
+    return home;
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'I-ENTIER',
@@ -44,7 +61,7 @@ class IEntierApp extends StatelessWidget {
     locale: const Locale('fr', 'HT'),
     supportedLocales: const [Locale('fr', 'HT'), Locale('fr')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
-    home: const AuthGate(),
+    home: _home(),
   );
 }
 
@@ -3439,6 +3456,7 @@ class _DirectoryFeedback extends StatelessWidget {
 class _Professional {
   final String id;
   final String name;
+  final String imageUrl;
   final String role;
   final String workplace;
   final String biography;
@@ -3462,6 +3480,7 @@ class _Professional {
   const _Professional({
     required this.id,
     required this.name,
+    required this.imageUrl,
     required this.role,
     required this.workplace,
     required this.biography,
@@ -3560,6 +3579,14 @@ class _Professional {
           ? doc.id
           : _field(data, ['ownerUid']),
       name: resolvedName,
+      imageUrl: _field(data, [
+        'photoUrl',
+        'photoURL',
+        'profilePhotoUrl',
+        'profileImageUrl',
+        'avatarUrl',
+        'imageUrl',
+      ]),
       role: role.isEmpty ? 'Professionnel de santé' : role,
       workplace: _field(data, [
         'etablissement',
@@ -3629,6 +3656,7 @@ class _Professional {
 class _Institution {
   final String id;
   final String name;
+  final String imageUrl;
   final String type;
   final String description;
   final String services;
@@ -3637,6 +3665,9 @@ class _Institution {
   final String schedule;
   final String phone;
   final String email;
+  final bool pricesPublished;
+  final String servicePrices;
+  final String roomPrices;
   final IconData icon;
   final Color color;
   final bool available;
@@ -3644,6 +3675,7 @@ class _Institution {
   const _Institution({
     required this.id,
     required this.name,
+    required this.imageUrl,
     required this.type,
     required this.description,
     required this.services,
@@ -3652,6 +3684,9 @@ class _Institution {
     required this.schedule,
     required this.phone,
     required this.email,
+    required this.pricesPublished,
+    required this.servicePrices,
+    required this.roomPrices,
     required this.icon,
     required this.color,
     required this.available,
@@ -3687,6 +3722,14 @@ class _Institution {
           ? doc.id
           : _field(data, ['ownerUid']),
       name: name.isEmpty ? 'Institution de santé' : name,
+      imageUrl: _field(data, [
+        'logoUrl',
+        'logoURL',
+        'photoUrl',
+        'photoURL',
+        'profileImageUrl',
+        'imageUrl',
+      ]),
       type: type,
       description: _field(data, [
         'description',
@@ -3714,6 +3757,9 @@ class _Institution {
         'contact',
       ]),
       email: _field(data, ['email', 'e-mail', 'courriel', 'mail']),
+      pricesPublished: _boolean(data, ['tarifsPublies'], fallback: false),
+      servicePrices: _field(data, ['tarifsServices']),
+      roomPrices: _field(data, ['tarifsChambres']),
       icon: isPharmacy
           ? Icons.medication_rounded
           : isHospital
@@ -3731,6 +3777,71 @@ class _Institution {
       ], fallback: true),
     );
   }
+}
+
+enum DirectoryProfilePreviewType { professional, institution }
+
+/// Aperçu stable des profils, accessible uniquement aux tests et au mode debug.
+Widget buildDirectoryProfilePreview(DirectoryProfilePreviewType type) {
+  const patientId = 'preview-patient';
+  const patientName = 'Patient aperçu';
+  return switch (type) {
+    DirectoryProfilePreviewType.professional => const _ProfessionalDetailPage(
+      patientId: patientId,
+      patientName: patientName,
+      professional: _Professional(
+        id: 'preview-professional',
+        name: 'Dr Nadège Pierre',
+        imageUrl: '',
+        role: 'Cardiologue',
+        workplace: 'Centre médical Saint-Joseph',
+        biography:
+            'Médecin cardiologue attentive, spécialisée dans la prévention '
+            'et le suivi personnalisé des maladies cardiovasculaires.',
+        experience: '12 ans',
+        qualification: 'Doctorat en médecine · Spécialisation en cardiologie',
+        schedule: 'Lun – Ven · 8 h 00 à 16 h 00',
+        appointmentSchedules: {},
+        enabledAppointmentModes: {},
+        hasAppointmentModeConfiguration: false,
+        availabilityPeriods: {},
+        defaultPrice: '2 500',
+        services: 'Consultation, ECG, suivi de l’hypertension',
+        address: '12, avenue Lamartine, Pétion-Ville',
+        distance: '2,4 km',
+        phone: '+509 3700 0000',
+        email: 'nadege.pierre@example.com',
+        initials: 'NP',
+        color: Color(0xFFE7F1FF),
+        available: true,
+      ),
+    ),
+    DirectoryProfilePreviewType.institution => const _InstitutionDetailPage(
+      patientId: patientId,
+      patientName: patientName,
+      institution: _Institution(
+        id: 'preview-institution',
+        name: 'Clinique Horizon Santé',
+        imageUrl: '',
+        type: 'Clinique pluridisciplinaire',
+        description:
+            'Une équipe de proximité réunissant consultations, examens et '
+            'soins essentiels dans un environnement accueillant.',
+        services: 'Médecine générale, pédiatrie, cardiologie et laboratoire',
+        address: '48, route de Frères, Pétion-Ville',
+        distance: '3,1 km',
+        schedule: 'Ouvert aujourd’hui · 7 h 00 à 19 h 00',
+        phone: '+509 2813 0000',
+        email: 'contact@horizon.example',
+        pricesPublished: true,
+        servicePrices: 'Consultations à partir de 1 500 HTG',
+        roomPrices: 'Chambres à partir de 6 000 HTG',
+        icon: Icons.local_hospital_rounded,
+        color: Color(0xFFE8F1FF),
+        available: true,
+      ),
+    ),
+  };
 }
 
 String _field(Map<String, dynamic> data, List<String> keys) {
@@ -3969,150 +4080,209 @@ class _ProfessionalDetailPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => _DirectoryDetailScaffold(
-    pageTitle: 'Profil du personnel',
-    children: [
-      _DirectoryDetailHero(
-        color: professional.color,
-        leading: Text(
-          professional.initials,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: AppColors.primary,
+  Widget build(BuildContext context) {
+    final hasContact =
+        professional.address.isNotEmpty ||
+        professional.distance.isNotEmpty ||
+        professional.phone.isNotEmpty ||
+        professional.email.isNotEmpty;
+
+    return _DirectoryDetailScaffold(
+      pageTitle: 'Profil professionnel',
+      tabs: [
+        _DirectoryProfileTab(
+          id: 'overview',
+          label: 'Aperçu',
+          icon: Icons.account_circle_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _DirectoryDetailHero(
+                color: professional.color,
+                leading: Text(
+                  professional.initials,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primary,
+                  ),
+                ),
+                imageUrl: professional.imageUrl,
+                title: professional.name,
+                subtitle: professional.role,
+                status: _StatusBadge(available: professional.available),
+                details: [
+                  if (professional.workplace.isNotEmpty)
+                    _ProfileHeroDetail(
+                      icon: Icons.local_hospital_outlined,
+                      value: professional.workplace,
+                    ),
+                  if (professional.address.isNotEmpty)
+                    _ProfileHeroDetail(
+                      icon: Icons.location_on_outlined,
+                      value: professional.address,
+                    ),
+                ],
+                highlights: [
+                  if (professional.experience.isNotEmpty)
+                    _ProfileHighlight(
+                      icon: Icons.workspace_premium_outlined,
+                      label: 'Expérience',
+                      value: professional.experience,
+                    ),
+                  if (professional.defaultPrice.isNotEmpty)
+                    _ProfileHighlight(
+                      icon: Icons.payments_outlined,
+                      label: 'Prix indicatif',
+                      value: '${professional.defaultPrice} HTG',
+                    ),
+                  if (professional.distance.isNotEmpty)
+                    _ProfileHighlight(
+                      icon: Icons.near_me_outlined,
+                      label: 'Distance',
+                      value: professional.distance,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _AppointmentBookingAction(
+                patientId: patientId,
+                patientName: patientName,
+                phone: professional.phone,
+                email: professional.email,
+                address: professional.address,
+                target: ProviderBookingTarget(
+                  id: professional.id,
+                  type: 'professional',
+                  name: professional.name,
+                  service: professional.role,
+                  schedule: professional.schedule,
+                  address: professional.address,
+                  available: professional.available,
+                  schedulesByMode: professional.appointmentSchedules,
+                  enabledModes: professional.enabledAppointmentModes,
+                  hasModeConfiguration:
+                      professional.hasAppointmentModeConfiguration,
+                  availabilityPeriods: professional.availabilityPeriods,
+                  defaultPrice: professional.defaultPrice,
+                ),
+              ),
+            ],
           ),
         ),
-        title: professional.name,
-        subtitle: professional.role,
-        status: _StatusBadge(available: professional.available),
-      ),
-      const SizedBox(height: 16),
-      _AppointmentBookingAction(
-        patientId: patientId,
-        patientName: patientName,
-        target: ProviderBookingTarget(
-          id: professional.id,
-          type: 'professional',
-          name: professional.name,
-          service: professional.role,
-          schedule: professional.schedule,
-          address: professional.address,
-          available: professional.available,
-          schedulesByMode: professional.appointmentSchedules,
-          enabledModes: professional.enabledAppointmentModes,
-          hasModeConfiguration: professional.hasAppointmentModeConfiguration,
-          availabilityPeriods: professional.availabilityPeriods,
-          defaultPrice: professional.defaultPrice,
-        ),
-      ),
-      if (professional.biography.isNotEmpty) ...[
-        const SizedBox(height: 18),
-        _DetailSection(
-          title: 'À propos',
-          children: [
-            _DetailEntry(
+        if (professional.biography.isNotEmpty)
+          _DirectoryProfileTab(
+            id: 'about',
+            label: 'À propos',
+            icon: Icons.person_outline_rounded,
+            child: _ProfileAboutCard(
+              title: 'À propos',
               icon: Icons.person_outline_rounded,
-              label: 'Présentation',
               value: professional.biography,
             ),
-          ],
-        ),
-      ],
-      const SizedBox(height: 18),
-      _DetailSection(
-        title: 'Informations professionnelles',
-        children: [
-          _DetailEntry(
-            icon: Icons.medical_services_outlined,
-            label: 'Spécialité',
-            value: professional.role,
           ),
-          if (professional.workplace.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.local_hospital_outlined,
-              label: 'Établissement',
-              value: professional.workplace,
-            ),
-          if (professional.experience.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.workspace_premium_outlined,
-              label: 'Expérience',
-              value: professional.experience,
-            ),
-          if (professional.qualification.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.school_outlined,
-              label: 'Formation et qualifications',
-              value: professional.qualification,
-            ),
-          if (professional.hasAppointmentModeConfiguration) ...[
-            for (final mode in AppointmentMode.values)
-              if (professional.enabledAppointmentModes.contains(mode) &&
-                  professional.appointmentSchedules[mode]!.isNotEmpty)
+        _DirectoryProfileTab(
+          id: 'information',
+          label: 'Informations',
+          icon: Icons.badge_outlined,
+          child: _DetailSection(
+            title: 'Informations professionnelles',
+            icon: Icons.badge_outlined,
+            children: [
+              _DetailEntry(
+                icon: Icons.medical_services_outlined,
+                label: 'Spécialité',
+                value: professional.role,
+              ),
+              if (professional.workplace.isNotEmpty)
                 _DetailEntry(
-                  icon: mode.icon,
-                  label: mode.label,
-                  value: professional.appointmentSchedules[mode]!,
+                  icon: Icons.local_hospital_outlined,
+                  label: 'Établissement',
+                  value: professional.workplace,
                 ),
-          ] else if (professional.schedule.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.schedule_outlined,
-              label: 'Horaires',
-              value: professional.schedule,
-            ),
-          if (professional.defaultPrice.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.payments_outlined,
-              label: 'Prix indicatif',
-              value: '${professional.defaultPrice} HTG',
-            ),
-          if (professional.services.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.health_and_safety_outlined,
-              label: 'Services et expertises',
-              value: professional.services,
-            ),
-        ],
-      ),
-      if (professional.address.isNotEmpty ||
-          professional.distance.isNotEmpty ||
-          professional.phone.isNotEmpty ||
-          professional.email.isNotEmpty) ...[
-        const SizedBox(height: 18),
-        _DetailSection(
-          title: 'Coordonnées',
-          children: [
-            if (professional.address.isNotEmpty)
-              _DetailEntry(
-                icon: Icons.location_on_outlined,
-                label: 'Adresse',
-                value: professional.address,
-              ),
-            if (professional.distance.isNotEmpty)
-              _DetailEntry(
-                icon: Icons.near_me_outlined,
-                label: 'Distance',
-                value: professional.distance,
-              ),
-            if (professional.phone.isNotEmpty)
-              _DetailEntry(
-                icon: Icons.phone_outlined,
-                label: 'Téléphone',
-                value: professional.phone,
-                copyValue: professional.phone,
-              ),
-            if (professional.email.isNotEmpty)
-              _DetailEntry(
-                icon: Icons.email_outlined,
-                label: 'E-mail',
-                value: professional.email,
-                copyValue: professional.email,
-              ),
-          ],
+              if (professional.experience.isNotEmpty)
+                _DetailEntry(
+                  icon: Icons.workspace_premium_outlined,
+                  label: 'Expérience',
+                  value: professional.experience,
+                ),
+              if (professional.qualification.isNotEmpty)
+                _DetailEntry(
+                  icon: Icons.school_outlined,
+                  label: 'Formation et qualifications',
+                  value: professional.qualification,
+                ),
+              if (professional.hasAppointmentModeConfiguration) ...[
+                for (final mode in AppointmentMode.values)
+                  if (professional.enabledAppointmentModes.contains(mode) &&
+                      professional.appointmentSchedules[mode]!.isNotEmpty)
+                    _DetailEntry(
+                      icon: mode.icon,
+                      label: mode.label,
+                      value: professional.appointmentSchedules[mode]!,
+                    ),
+              ] else if (professional.schedule.isNotEmpty)
+                _DetailEntry(
+                  icon: Icons.schedule_outlined,
+                  label: 'Horaires',
+                  value: professional.schedule,
+                ),
+              if (professional.defaultPrice.isNotEmpty)
+                _DetailEntry(
+                  icon: Icons.payments_outlined,
+                  label: 'Prix indicatif',
+                  value: '${professional.defaultPrice} HTG',
+                ),
+              if (professional.services.isNotEmpty)
+                _DetailEntry(
+                  icon: Icons.health_and_safety_outlined,
+                  label: 'Services et expertises',
+                  value: professional.services,
+                ),
+            ],
+          ),
         ),
+        if (hasContact)
+          _DirectoryProfileTab(
+            id: 'contact',
+            label: 'Coordonnées',
+            icon: Icons.contact_phone_outlined,
+            child: _DetailSection(
+              title: 'Coordonnées',
+              icon: Icons.contact_phone_outlined,
+              children: [
+                if (professional.address.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.location_on_outlined,
+                    label: 'Adresse',
+                    value: professional.address,
+                  ),
+                if (professional.distance.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.near_me_outlined,
+                    label: 'Distance',
+                    value: professional.distance,
+                  ),
+                if (professional.phone.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.phone_outlined,
+                    label: 'Téléphone',
+                    value: professional.phone,
+                    copyValue: professional.phone,
+                  ),
+                if (professional.email.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.email_outlined,
+                    label: 'E-mail',
+                    value: professional.email,
+                    copyValue: professional.email,
+                  ),
+              ],
+            ),
+          ),
       ],
-    ],
-  );
+    );
+  }
 }
 
 class _InstitutionDetailPage extends StatelessWidget {
@@ -4127,116 +4297,207 @@ class _InstitutionDetailPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => _DirectoryDetailScaffold(
-    pageTitle: 'Détails de l’institution',
-    children: [
-      _DirectoryDetailHero(
-        color: institution.color,
-        leading: Icon(institution.icon, size: 38, color: AppColors.primary),
-        title: institution.name,
-        subtitle: institution.type,
-        status: _StatusBadge(available: institution.available),
-      ),
-      const SizedBox(height: 16),
-      _AppointmentBookingAction(
-        patientId: patientId,
-        patientName: patientName,
-        target: ProviderBookingTarget(
-          id: institution.id,
-          type: 'institution',
-          name: institution.name,
-          service: institution.type,
-          schedule: institution.schedule,
-          address: institution.address,
-          available: institution.available,
+  Widget build(BuildContext context) {
+    final hasPrices =
+        institution.pricesPublished &&
+        (institution.servicePrices.isNotEmpty ||
+            institution.roomPrices.isNotEmpty);
+    final hasContact =
+        institution.address.isNotEmpty ||
+        institution.distance.isNotEmpty ||
+        institution.phone.isNotEmpty ||
+        institution.email.isNotEmpty;
+
+    return _DirectoryDetailScaffold(
+      pageTitle: 'Profil de l’institution',
+      tabs: [
+        _DirectoryProfileTab(
+          id: 'overview',
+          label: 'Aperçu',
+          icon: Icons.account_balance_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _DirectoryDetailHero(
+                color: institution.color,
+                leading: Icon(
+                  institution.icon,
+                  size: 38,
+                  color: AppColors.primary,
+                ),
+                imageUrl: institution.imageUrl,
+                title: institution.name,
+                subtitle: institution.type,
+                status: _StatusBadge(available: institution.available),
+                details: [
+                  if (institution.address.isNotEmpty)
+                    _ProfileHeroDetail(
+                      icon: Icons.location_on_outlined,
+                      value: institution.address,
+                    ),
+                ],
+                highlights: [
+                  if (institution.schedule.isNotEmpty)
+                    _ProfileHighlight(
+                      icon: Icons.schedule_outlined,
+                      label: 'Horaires',
+                      value: institution.schedule,
+                    ),
+                  if (institution.distance.isNotEmpty)
+                    _ProfileHighlight(
+                      icon: Icons.near_me_outlined,
+                      label: 'Distance',
+                      value: institution.distance,
+                    ),
+                  if (institution.services.isNotEmpty)
+                    _ProfileHighlight(
+                      icon: Icons.medical_services_outlined,
+                      label: 'Services',
+                      value: institution.services,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _AppointmentBookingAction(
+                patientId: patientId,
+                patientName: patientName,
+                phone: institution.phone,
+                email: institution.email,
+                address: institution.address,
+                target: ProviderBookingTarget(
+                  id: institution.id,
+                  type: 'institution',
+                  name: institution.name,
+                  service: institution.type,
+                  schedule: institution.schedule,
+                  address: institution.address,
+                  available: institution.available,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      if (institution.description.isNotEmpty) ...[
-        const SizedBox(height: 18),
-        _DetailSection(
-          title: 'À propos',
-          children: [
-            _DetailEntry(
+        if (institution.description.isNotEmpty)
+          _DirectoryProfileTab(
+            id: 'about',
+            label: 'À propos',
+            icon: Icons.info_outline_rounded,
+            child: _ProfileAboutCard(
+              title: 'À propos',
               icon: Icons.info_outline_rounded,
-              label: 'Présentation',
               value: institution.description,
             ),
-          ],
-        ),
-      ],
-      const SizedBox(height: 18),
-      _DetailSection(
-        title: 'Informations',
-        children: [
-          _DetailEntry(
-            icon: Icons.category_outlined,
-            label: 'Type d’institution',
-            value: institution.type,
           ),
-          if (institution.services.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.medical_services_outlined,
-              label: 'Services et spécialités',
-              value: institution.services,
-            ),
-          if (institution.schedule.isNotEmpty)
-            _DetailEntry(
-              icon: Icons.schedule_outlined,
-              label: 'Horaires',
-              value: institution.schedule,
-            ),
-        ],
-      ),
-      if (institution.address.isNotEmpty ||
-          institution.distance.isNotEmpty ||
-          institution.phone.isNotEmpty ||
-          institution.email.isNotEmpty) ...[
-        const SizedBox(height: 18),
-        _DetailSection(
-          title: 'Localisation et contact',
-          children: [
-            if (institution.address.isNotEmpty)
+        _DirectoryProfileTab(
+          id: 'information',
+          label: 'Informations',
+          icon: Icons.apartment_rounded,
+          child: _DetailSection(
+            title: 'Informations',
+            icon: Icons.apartment_rounded,
+            children: [
               _DetailEntry(
-                icon: Icons.location_on_outlined,
-                label: 'Adresse',
-                value: institution.address,
+                icon: Icons.category_outlined,
+                label: 'Type d’institution',
+                value: institution.type,
               ),
-            if (institution.distance.isNotEmpty)
-              _DetailEntry(
-                icon: Icons.near_me_outlined,
-                label: 'Distance',
-                value: institution.distance,
-              ),
-            if (institution.phone.isNotEmpty)
-              _DetailEntry(
-                icon: Icons.phone_outlined,
-                label: 'Téléphone',
-                value: institution.phone,
-                copyValue: institution.phone,
-              ),
-            if (institution.email.isNotEmpty)
-              _DetailEntry(
-                icon: Icons.email_outlined,
-                label: 'E-mail',
-                value: institution.email,
-                copyValue: institution.email,
-              ),
-          ],
+              if (institution.services.isNotEmpty)
+                _DetailEntry(
+                  icon: Icons.medical_services_outlined,
+                  label: 'Services et spécialités',
+                  value: institution.services,
+                ),
+              if (institution.schedule.isNotEmpty)
+                _DetailEntry(
+                  icon: Icons.schedule_outlined,
+                  label: 'Horaires',
+                  value: institution.schedule,
+                ),
+            ],
+          ),
         ),
+        if (hasPrices)
+          _DirectoryProfileTab(
+            id: 'prices',
+            label: 'Tarifs',
+            icon: Icons.payments_outlined,
+            child: _DetailSection(
+              title: 'Tarifs indicatifs',
+              icon: Icons.payments_outlined,
+              children: [
+                if (institution.servicePrices.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.medical_information_outlined,
+                    label: 'Services',
+                    value: institution.servicePrices,
+                  ),
+                if (institution.roomPrices.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.hotel_outlined,
+                    label: 'Chambres',
+                    value: institution.roomPrices,
+                  ),
+              ],
+            ),
+          ),
+        if (hasContact)
+          _DirectoryProfileTab(
+            id: 'contact',
+            label: 'Coordonnées',
+            icon: Icons.place_outlined,
+            child: _DetailSection(
+              title: 'Localisation et contact',
+              icon: Icons.place_outlined,
+              children: [
+                if (institution.address.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.location_on_outlined,
+                    label: 'Adresse',
+                    value: institution.address,
+                  ),
+                if (institution.distance.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.near_me_outlined,
+                    label: 'Distance',
+                    value: institution.distance,
+                  ),
+                if (institution.phone.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.phone_outlined,
+                    label: 'Téléphone',
+                    value: institution.phone,
+                    copyValue: institution.phone,
+                  ),
+                if (institution.email.isNotEmpty)
+                  _DetailEntry(
+                    icon: Icons.email_outlined,
+                    label: 'E-mail',
+                    value: institution.email,
+                    copyValue: institution.email,
+                  ),
+              ],
+            ),
+          ),
       ],
-    ],
-  );
+    );
+  }
 }
 
 class _AppointmentBookingAction extends StatelessWidget {
   final String patientId;
   final String patientName;
+  final String phone;
+  final String email;
+  final String address;
   final ProviderBookingTarget target;
 
   const _AppointmentBookingAction({
     required this.patientId,
     required this.patientName,
     required this.target,
+    this.phone = '',
+    this.email = '',
+    this.address = '',
   });
 
   Future<void> _openBooking(BuildContext context) async {
@@ -4260,100 +4521,361 @@ class _AppointmentBookingAction extends StatelessWidget {
     }
   }
 
+  Future<void> _openExternal(
+    BuildContext context, {
+    required Uri uri,
+    required String errorMessage,
+  }) async {
+    var launched = false;
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on PlatformException {
+      launched = false;
+    }
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => FilledButton.icon(
-    key: const ValueKey('book-appointment'),
-    onPressed: target.available && target.schedule.trim().isNotEmpty
-        ? () => _openBooking(context)
-        : null,
-    icon: Icon(
-      target.available
-          ? Icons.calendar_month_rounded
-          : Icons.event_busy_outlined,
+  Widget build(BuildContext context) {
+    final quickActions = <Widget>[
+      if (phone.isNotEmpty)
+        _ProfileQuickAction(
+          icon: Icons.phone_rounded,
+          label: 'Appeler',
+          onPressed: () => _openExternal(
+            context,
+            uri: Uri(scheme: 'tel', path: phone),
+            errorMessage: 'Impossible d’ouvrir l’application Téléphone.',
+          ),
+        ),
+      if (email.isNotEmpty)
+        _ProfileQuickAction(
+          icon: Icons.mail_outline_rounded,
+          label: 'E-mail',
+          onPressed: () => _openExternal(
+            context,
+            uri: Uri(scheme: 'mailto', path: email),
+            errorMessage: 'Impossible d’ouvrir l’application de messagerie.',
+          ),
+        ),
+      if (address.isNotEmpty)
+        _ProfileQuickAction(
+          icon: Icons.directions_outlined,
+          label: 'Itinéraire',
+          onPressed: () => _openExternal(
+            context,
+            uri: Uri.https('www.google.com', '/maps/search/', {
+              'api': '1',
+              'query': address,
+            }),
+            errorMessage: 'Impossible d’ouvrir l’itinéraire.',
+          ),
+        ),
+    ];
+
+    return Container(
+      key: const ValueKey('directory-profile-actions'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A173B66),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton.icon(
+            key: const ValueKey('book-appointment'),
+            onPressed: target.available && target.schedule.trim().isNotEmpty
+                ? () => _openBooking(context)
+                : null,
+            icon: Icon(
+              target.available
+                  ? Icons.calendar_month_rounded
+                  : Icons.event_busy_outlined,
+            ),
+            label: Text(
+              target.available
+                  ? 'Prendre rendez-vous'
+                  : 'Réservation indisponible',
+            ),
+          ),
+          if (quickActions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                for (var index = 0; index < quickActions.length; index++) ...[
+                  if (index > 0) const SizedBox(width: 8),
+                  Expanded(child: quickActions[index]),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileQuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _ProfileQuickAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+    onPressed: onPressed,
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 48),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+      side: const BorderSide(color: AppColors.border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
-    label: Text(
-      target.available ? 'Prendre rendez-vous' : 'Réservation indisponible',
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 19),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+        ),
+      ],
     ),
   );
 }
 
 class _DirectoryDetailScaffold extends StatelessWidget {
   final String pageTitle;
-  final List<Widget> children;
-  const _DirectoryDetailScaffold({
-    required this.pageTitle,
-    required this.children,
-  });
+  final List<_DirectoryProfileTab> tabs;
+
+  const _DirectoryDetailScaffold({required this.pageTitle, required this.tabs});
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.canvas,
-    appBar: AppBar(title: Text(pageTitle)),
-    body: SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
+  Widget build(BuildContext context) => DefaultTabController(
+    length: tabs.length,
+    child: Scaffold(
+      backgroundColor: AppColors.canvas,
+      appBar: AppBar(
+        title: Text(pageTitle),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: const Color(0x14102A56),
+        elevation: 0,
+        scrolledUnderElevation: 1,
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              key: const ValueKey('directory-profile-submenu'),
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: AppColors.border)),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 820),
+                  child: TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    labelColor: AppColors.primaryDark,
+                    unselectedLabelColor: AppColors.muted,
+                    indicator: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    tabs: [
+                      for (final tab in tabs)
+                        Tab(
+                          key: ValueKey('directory-profile-tab-${tab.id}'),
+                          height: 44,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 11),
+                            child: Row(
+                              children: [
+                                Icon(tab.icon, size: 18),
+                                const SizedBox(width: 7),
+                                Text(
+                                  tab.label,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  for (final tab in tabs)
+                    SingleChildScrollView(
+                      key: PageStorageKey<String>(
+                        'directory-profile-scroll-${tab.id}',
+                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 820),
+                          child: tab.child,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     ),
   );
 }
 
+class _DirectoryProfileTab {
+  final String id;
+  final String label;
+  final IconData icon;
+  final Widget child;
+
+  const _DirectoryProfileTab({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.child,
+  });
+}
+
 class _DirectoryDetailHero extends StatelessWidget {
   final Color color;
   final Widget leading;
+  final String imageUrl;
   final String title;
   final String subtitle;
   final Widget? status;
+  final List<_ProfileHeroDetail> details;
+  final List<_ProfileHighlight> highlights;
+
   const _DirectoryDetailHero({
     required this.color,
     required this.leading,
+    this.imageUrl = '',
     required this.title,
     required this.subtitle,
     this.status,
+    this.details = const [],
+    this.highlights = const [],
   });
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(22),
+    key: const ValueKey('directory-profile-hero'),
+    clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        colors: [Colors.white, Color(0xFFF3F7FD)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
+      color: Colors.white,
       borderRadius: BorderRadius.circular(28),
       border: Border.all(color: AppColors.border),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x10173B66),
+          color: Color(0x12173B66),
           blurRadius: 28,
           offset: Offset(0, 10),
         ),
       ],
     ),
-    child: Row(
+    child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 76,
-          height: 76,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(23),
-          ),
-          child: leading,
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: 118,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF0C4FC1),
+                    AppColors.primary,
+                    Color(0xFF36A4E8),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+            const Positioned(
+              top: -42,
+              right: -12,
+              child: _ProfileCoverOrb(size: 124, opacity: .11),
+            ),
+            const Positioned(
+              left: 118,
+              bottom: -32,
+              child: _ProfileCoverOrb(size: 78, opacity: .08),
+            ),
+            Positioned(
+              left: 20,
+              bottom: -46,
+              child: _ProfileAvatar(
+                color: color,
+                imageUrl: imageUrl,
+                fallback: leading,
+              ),
+            ),
+            if (status != null)
+              Positioned(
+                right: 16,
+                bottom: 14,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x24102A56),
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: status!,
+                ),
+              ),
+          ],
         ),
-        const SizedBox(width: 17),
-        Expanded(
+        const SizedBox(height: 56),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 21),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -4361,8 +4883,9 @@ class _DirectoryDetailHero extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: AppColors.navy,
-                  fontSize: 23,
-                  height: 1.15,
+                  fontSize: 25,
+                  height: 1.12,
+                  letterSpacing: -.45,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -4371,12 +4894,235 @@ class _DirectoryDetailHero extends StatelessWidget {
                 subtitle,
                 style: const TextStyle(
                   color: AppColors.primary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 15.5,
+                  height: 1.3,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              if (status != null) ...[const SizedBox(height: 11), status!],
+              if (details.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                for (var index = 0; index < details.length; index++) ...[
+                  if (index > 0) const SizedBox(height: 8),
+                  details[index],
+                ],
+              ],
+              if (highlights.isNotEmpty) ...[
+                const SizedBox(height: 19),
+                const Divider(height: 1, color: AppColors.border),
+                const SizedBox(height: 15),
+                _ProfileHighlightGrid(highlights: highlights),
+              ],
             ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProfileCoverOrb extends StatelessWidget {
+  final double size;
+  final double opacity;
+
+  const _ProfileCoverOrb({required this.size, required this.opacity});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: opacity),
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white.withValues(alpha: opacity)),
+    ),
+  );
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  final Color color;
+  final String imageUrl;
+  final Widget fallback;
+
+  const _ProfileAvatar({
+    required this.color,
+    required this.imageUrl,
+    required this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget fallbackAvatar() => ColoredBox(
+      color: color,
+      child: Center(child: fallback),
+    );
+
+    return Container(
+      width: 94,
+      height: 94,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(29),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x2B102A56),
+            blurRadius: 18,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
+        child: imageUrl.isEmpty
+            ? fallbackAvatar()
+            : Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallbackAvatar(),
+              ),
+      ),
+    );
+  }
+}
+
+class _ProfileHeroDetail extends StatelessWidget {
+  final IconData icon;
+  final String value;
+
+  const _ProfileHeroDetail({required this.icon, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 17, color: AppColors.muted),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontSize: 13.5,
+            height: 1.35,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _ProfileHighlight extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ProfileHighlight({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 88),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF5F8FD),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFEDF2F7)),
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 19, color: AppColors.primary),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 12.5,
+            height: 1.2,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProfileHighlightGrid extends StatelessWidget {
+  final List<_ProfileHighlight> highlights;
+
+  const _ProfileHighlightGrid({required this.highlights});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      for (var index = 0; index < highlights.length; index++) ...[
+        if (index > 0) const SizedBox(width: 8),
+        Expanded(child: highlights[index]),
+      ],
+    ],
+  );
+}
+
+class _ProfileAboutCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String value;
+
+  const _ProfileAboutCard({
+    required this.title,
+    required this.icon,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(19),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: AppColors.border),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x08173B66),
+          blurRadius: 16,
+          offset: Offset(0, 6),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ProfileSectionTitle(icon: icon, title: title),
+        const SizedBox(height: 14),
+        SelectableText(
+          value,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontSize: 14.5,
+            height: 1.55,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -4386,35 +5132,74 @@ class _DirectoryDetailHero extends StatelessWidget {
 
 class _DetailSection extends StatelessWidget {
   final String title;
+  final IconData icon;
   final List<Widget> children;
-  const _DetailSection({required this.title, required this.children});
+  const _DetailSection({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+    padding: const EdgeInsets.fromLTRB(18, 18, 18, 7),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(22),
       border: Border.all(color: AppColors.border),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x08173B66),
+          blurRadius: 16,
+          offset: Offset(0, 6),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.navy,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 10),
+        _ProfileSectionTitle(icon: icon, title: title),
+        const SizedBox(height: 11),
         for (var index = 0; index < children.length; index++) ...[
           if (index > 0) const Divider(height: 1, color: AppColors.border),
           children[index],
         ],
       ],
     ),
+  );
+}
+
+class _ProfileSectionTitle extends StatelessWidget {
+  final IconData icon;
+  final String title;
+
+  const _ProfileSectionTitle({required this.icon, required this.title});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.primarySoft,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, size: 20, color: AppColors.primary),
+      ),
+      const SizedBox(width: 11),
+      Expanded(
+        child: Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 18,
+            height: 1.2,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    ],
   );
 }
 

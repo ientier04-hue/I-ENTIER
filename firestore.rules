@@ -22,7 +22,10 @@ service cloud.firestore {
           'registrationNumber', 'contactPerson', 'workplace',
           'linkedInstitutionId', 'linkedInstitutionName', 'phone', 'email',
           'address', 'description', 'experience', 'qualifications', 'services',
-          'schedule', 'available', 'isVisible', 'verificationStatus',
+          'schedule', 'atProviderSchedule', 'homeVisitSchedule', 'videoSchedule',
+          'defaultPrice', 'institutionPricesPublished', 'servicePrices',
+          'roomPrices', 'availabilityConfigurations', 'atProviderEnabled',
+          'homeVisitEnabled', 'videoEnabled', 'available', 'isVisible', 'verificationStatus',
           'rejectionReason', 'termsAccepted', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
@@ -96,6 +99,39 @@ service cloud.firestore {
         && data.schedule is string
         && data.schedule.size() > 1
         && data.schedule.size() <= 500
+        && (
+          !data.keys().hasAny([
+            'atProviderSchedule', 'homeVisitSchedule', 'videoSchedule',
+            'defaultPrice', 'institutionPricesPublished', 'servicePrices',
+            'roomPrices', 'availabilityConfigurations', 'atProviderEnabled',
+            'homeVisitEnabled', 'videoEnabled'
+          ])
+          || (
+            data.keys().hasAll([
+              'atProviderSchedule', 'homeVisitSchedule', 'videoSchedule',
+              'defaultPrice', 'institutionPricesPublished', 'servicePrices',
+              'roomPrices', 'availabilityConfigurations', 'atProviderEnabled',
+              'homeVisitEnabled', 'videoEnabled'
+            ])
+            && data.atProviderSchedule is string
+            && data.atProviderSchedule.size() <= 500
+            && data.homeVisitSchedule is string
+            && data.homeVisitSchedule.size() <= 500
+            && data.videoSchedule is string
+            && data.videoSchedule.size() <= 500
+            && data.defaultPrice is string
+            && data.defaultPrice.size() <= 80
+            && data.institutionPricesPublished is bool
+            && data.servicePrices is string
+            && data.servicePrices.size() <= 1200
+            && data.roomPrices is string
+            && data.roomPrices.size() <= 1200
+            && data.availabilityConfigurations is map
+            && data.atProviderEnabled is bool
+            && data.homeVisitEnabled is bool
+            && data.videoEnabled is bool
+          )
+        )
         && data.available is bool
         && data.isVisible is bool
         && data.verificationStatus in ['pending', 'approved', 'rejected']
@@ -218,12 +254,14 @@ service cloud.firestore {
     function validInstitutionDirectory(data, ownerId) {
       return data.keys().hasOnly([
           'ownerUid', 'nom', 'type', 'description', 'services', 'horaires',
-          'adresse', 'telephone', 'email', 'disponible', 'isPublished',
+          'adresse', 'telephone', 'email', 'disponible', 'tarifsPublies',
+          'tarifsServices', 'tarifsChambres', 'isPublished',
           'verificationStatus', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasAll([
           'ownerUid', 'nom', 'type', 'description', 'services', 'horaires',
-          'adresse', 'telephone', 'email', 'disponible', 'isPublished',
+          'adresse', 'telephone', 'email', 'disponible', 'tarifsPublies',
+          'tarifsServices', 'tarifsChambres', 'isPublished',
           'verificationStatus', 'createdAt', 'updatedAt'
         ])
         && data.ownerUid == ownerId
@@ -246,6 +284,11 @@ service cloud.firestore {
         && data.email is string
         && data.email.size() <= 180
         && data.disponible is bool
+        && data.tarifsPublies is bool
+        && data.tarifsServices is string
+        && data.tarifsServices.size() <= 1200
+        && data.tarifsChambres is string
+        && data.tarifsChambres.size() <= 1200
         && data.isPublished == true
         && data.verificationStatus == 'approved'
         && data.createdAt is timestamp
@@ -812,7 +855,11 @@ service cloud.firestore {
           'displayName', 'category', 'registrationNumber', 'contactPerson',
           'workplace', 'linkedInstitutionId', 'linkedInstitutionName', 'phone',
           'email', 'address', 'description', 'experience', 'qualifications',
-          'services', 'schedule', 'available', 'isVisible', 'termsAccepted',
+          'services', 'schedule', 'atProviderSchedule', 'homeVisitSchedule',
+          'videoSchedule', 'defaultPrice', 'institutionPricesPublished',
+          'servicePrices', 'roomPrices', 'availabilityConfigurations',
+          'atProviderEnabled', 'homeVisitEnabled', 'videoEnabled', 'available',
+          'isVisible', 'termsAccepted',
           'updatedAt'
         ])
         && request.resource.data.ownerUid == resource.data.ownerUid
