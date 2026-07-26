@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -224,7 +224,7 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
   final Set<String> _selectedFeelings = <String>{};
   bool _saving = false;
 
-  CollectionReference<Map<String, dynamic>> get _entries => FirebaseFirestore
+  CollectionReference<Map<String, dynamic>> get _entries => SupabaseDatabase
       .instance
       .collection('patients')
       .doc(widget.patientId)
@@ -243,7 +243,7 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
 
   Stream<List<MentalHealthProfessional>> get _professionalsStream =>
       widget.professionalStream ??
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('personnelMedical')
           .limit(100)
           .snapshots()
@@ -315,13 +315,13 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
           content: Text('Votre point bien-être a été enregistré.'),
         ),
       );
-    } on FirebaseException catch (error) {
+    } on SupabaseDataException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(switch (error.code) {
               'permission-denied' =>
-                'Accès refusé par la sécurité Firebase. Réessayez après la mise à jour.',
+                'Accès refusé par la sécurité Supabase. Réessayez après la mise à jour.',
               'unavailable' =>
                 'Connexion indisponible. Vérifiez votre accès à Internet.',
               _ => 'Impossible d’enregistrer pour le moment.',
@@ -371,7 +371,7 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Entrée supprimée.')));
       }
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Suppression impossible.')),

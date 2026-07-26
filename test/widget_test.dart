@@ -1,26 +1,18 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:i_entier/main.dart';
 import 'package:i_entier/notification_service.dart';
 import 'package:i_entier/onboarding_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class _FakeUser implements User {
-  @override
-  String get uid => 'test-patient';
-
-  @override
-  String? get displayName => 'Patient Test';
-
-  @override
-  String? get email => 'patient@example.com';
-
-  @override
-  String? get photoURL => null;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+User fakeUser() => const User(
+  id: 'test-patient',
+  appMetadata: {},
+  userMetadata: {'full_name': 'Patient Test'},
+  aud: 'authenticated',
+  email: 'patient@example.com',
+  createdAt: '2026-07-20T00:00:00.000Z',
+);
 
 void main() {
   testWidgets('présente les quatre étapes avant la connexion', (tester) async {
@@ -149,7 +141,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: PatientProfileScreen(
-          user: _FakeUser(),
+          user: fakeUser(),
           accountProfile: const {'displayName': 'Patient Test'},
           initialProfile: const {
             'sex': 'Femme',
@@ -183,7 +175,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HomeScreen(
-          user: _FakeUser(),
+          user: fakeUser(),
           account: const {'name': 'Patient Test'},
           patientProfile: const {},
           notificationStream: Stream.value(defaultAppNotifications()),
@@ -231,7 +223,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: HomeScreen(
-            user: _FakeUser(),
+            user: fakeUser(),
             account: const {'name': 'Patient Test'},
             patientProfile: const {},
             notificationStream: Stream.value(defaultAppNotifications()),
@@ -271,7 +263,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HomeScreen(
-          user: _FakeUser(),
+          user: fakeUser(),
           account: const {'name': 'Patient Test'},
           patientProfile: const {},
           notificationStream: Stream.value(defaultAppNotifications()),
@@ -310,7 +302,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HomeScreen(
-          user: _FakeUser(),
+          user: fakeUser(),
           account: const {'name': 'Patient Test'},
           patientProfile: const {},
           notificationStream: Stream.value(defaultAppNotifications()),

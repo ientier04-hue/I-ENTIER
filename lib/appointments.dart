@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 
 const _appointmentPrimary = Color(0xFF176BFF);
@@ -194,12 +194,12 @@ abstract class PatientAppointmentRepository {
   });
 }
 
-class FirestorePatientAppointmentRepository
+class SupabasePatientAppointmentRepository
     implements PatientAppointmentRepository {
-  final FirebaseFirestore firestore;
+  final SupabaseDatabase firestore;
 
-  FirestorePatientAppointmentRepository({FirebaseFirestore? firestore})
-    : firestore = firestore ?? FirebaseFirestore.instance;
+  SupabasePatientAppointmentRepository({SupabaseDatabase? firestore})
+    : firestore = firestore ?? SupabaseDatabase.instance;
 
   @override
   Stream<List<Appointment>> watchForPatient(String patientId) => firestore
@@ -455,7 +455,7 @@ class AppointmentBookingPage extends StatefulWidget {
     required this.provider,
     PatientAppointmentRepository? repository,
     this.now,
-  }) : repository = repository ?? FirestorePatientAppointmentRepository();
+  }) : repository = repository ?? SupabasePatientAppointmentRepository();
 
   @override
   State<AppointmentBookingPage> createState() => _AppointmentBookingPageState();
@@ -543,7 +543,7 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } on FirebaseException catch (error) {
+    } on SupabaseDataException catch (error) {
       if (!mounted) return;
       _showError(
         error.code == 'permission-denied'

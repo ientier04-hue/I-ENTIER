@@ -1,7 +1,6 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -46,14 +45,14 @@ class _PharmacyPageState extends State<PharmacyPage> {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _institutions =>
       widget.institutionStream ??
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('institution')
           .limit(100)
           .snapshots();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _prescriptions =>
       widget.prescriptionStream ??
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('patients')
           .doc(widget.patientId)
           .collection('prescriptions')
@@ -139,7 +138,7 @@ class _PharmacyPageState extends State<PharmacyPage> {
       _savingPrescription = true;
     });
 
-    final document = FirebaseFirestore.instance
+    final document = SupabaseDatabase.instance
         .collection('patients')
         .doc(widget.patientId)
         .collection('prescriptions')
@@ -147,7 +146,7 @@ class _PharmacyPageState extends State<PharmacyPage> {
     final extension = _safeImageExtension(file.name);
     final storagePath =
         'prescriptions/${widget.patientId}/${document.id}.$extension';
-    final reference = FirebaseStorage.instance.ref(storagePath);
+    final reference = SupabaseStorage.instance.ref(storagePath);
 
     try {
       await reference.putData(
@@ -171,10 +170,10 @@ class _PharmacyPageState extends State<PharmacyPage> {
       if (mounted) {
         _showMessage('Ordonnance enregistrée dans votre dossier.');
       }
-    } on FirebaseException catch (error) {
+    } on SupabaseDataException catch (error) {
       try {
         await reference.delete();
-      } on FirebaseException {
+      } on SupabaseDataException {
         // Nothing to clean up when the upload itself did not finish.
       }
       if (mounted) {
@@ -217,19 +216,19 @@ class _PharmacyPageState extends State<PharmacyPage> {
     try {
       if (prescription.storagePath.isNotEmpty) {
         try {
-          await FirebaseStorage.instance.ref(prescription.storagePath).delete();
-        } on FirebaseException catch (error) {
+          await SupabaseStorage.instance.ref(prescription.storagePath).delete();
+        } on SupabaseDataException catch (error) {
           if (error.code != 'object-not-found') rethrow;
         }
       }
-      await FirebaseFirestore.instance
+      await SupabaseDatabase.instance
           .collection('patients')
           .doc(widget.patientId)
           .collection('prescriptions')
           .doc(prescription.id)
           .delete();
       if (mounted) _showMessage('Ordonnance supprimée.');
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) {
         _showMessage('Impossible de supprimer cette ordonnance.');
       }
@@ -973,7 +972,7 @@ class _PrescriptionThumbnailState extends State<_PrescriptionThumbnail> {
 
   Future<Uint8List?> _loadBytes() {
     if (widget.prescription.storagePath.isEmpty) return Future.value();
-    return FirebaseStorage.instance
+    return SupabaseStorage.instance
         .ref(widget.prescription.storagePath)
         .getData(8 * 1024 * 1024);
   }
@@ -1664,7 +1663,7 @@ class _NearbyPharmacies extends StatelessWidget {
           icon: Icons.lock_outline_rounded,
           title: 'Pharmacies indisponibles',
           message:
-              'Vérifiez l’accès à la collection Firestore « institution ».',
+              'Vérifiez l’accès à la table Supabase des institutions.',
         );
       }
       if (!snapshot.hasData) {
@@ -1694,7 +1693,7 @@ class _NearbyPharmacies extends StatelessWidget {
           icon: Icons.local_pharmacy_outlined,
           title: 'Aucune pharmacie enregistrée',
           message:
-              'Ajoutez des institutions de type « Pharmacie » dans Firestore avec leur adresse et leurs coordonnées.',
+              'Ajoutez des institutions de type « Pharmacie » dans Supabase avec leur adresse et leurs coordonnées.',
         );
       }
 

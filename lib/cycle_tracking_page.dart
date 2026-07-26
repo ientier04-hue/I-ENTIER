@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 
 const _rose = Color(0xFFE94C85);
@@ -333,7 +333,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
   DateTime get _today => _dateOnly(widget.now ?? DateTime.now());
 
   CollectionReference<Map<String, dynamic>> get _entriesReference =>
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('patients')
           .doc(widget.patientId)
           .collection('cycleEntries');
@@ -439,7 +439,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
 
         if (mounted) setState(() => _localEntries = updatedEntries);
       } else {
-        final batch = FirebaseFirestore.instance.batch();
+        final batch = SupabaseDatabase.instance.batch();
         var hasWrites = false;
 
         for (final oldEntry in oldEntries) {
@@ -496,7 +496,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
               : 'Les dates de vos règles ont été corrigées.',
         );
       }
-    } on FirebaseException catch (error) {
+    } on SupabaseDataException catch (error) {
       if (mounted) {
         _showMessage(
           error.code.contains('permission')
@@ -566,7 +566,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
         await _entriesReference.doc(entry.id).delete();
       }
       if (mounted) _showMessage('Votre journée a été enregistrée.');
-    } on FirebaseException catch (error) {
+    } on SupabaseDataException catch (error) {
       if (mounted) {
         _showMessage(
           error.code.contains('permission')
@@ -590,7 +590,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
         await _entriesReference.doc(entry.id).delete();
       }
       if (mounted) _showMessage('Journée supprimée du suivi.');
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) _showMessage('Impossible de supprimer cette journée.');
     } catch (_) {
       if (mounted) _showMessage('Impossible de supprimer cette journée.');

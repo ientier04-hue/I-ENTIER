@@ -873,8 +873,10 @@ service cloud.firestore {
           || request.resource.data.isVisible == false)
         && request.resource.data.updatedAt == request.time;
 
+      // The provider already submitted a validated profile. Re-running the
+      // complete schema validator here can exceed Firestore's 1,000-expression
+      // evaluation limit; the restricted diff below protects every other field.
       allow update: if isAdmin()
-        && validProviderProfile(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'verificationStatus', 'rejectionReason', 'isVisible', 'updatedAt'
         ])

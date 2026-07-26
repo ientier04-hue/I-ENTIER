@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 
 import 'notification_service.dart';
@@ -391,20 +391,20 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
 
   DateTime get _today => widget.now ?? DateTime.now();
 
-  CollectionReference<Map<String, dynamic>> get _records => FirebaseFirestore
+  CollectionReference<Map<String, dynamic>> get _records => SupabaseDatabase
       .instance
       .collection('patients')
       .doc(widget.patientId)
       .collection('preventiveCareRecords');
 
-  CollectionReference<Map<String, dynamic>> get _reminders => FirebaseFirestore
+  CollectionReference<Map<String, dynamic>> get _reminders => SupabaseDatabase
       .instance
       .collection('patients')
       .doc(widget.patientId)
       .collection('preventiveCareReminders');
 
   CollectionReference<Map<String, dynamic>> get _notifications =>
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('patients')
           .doc(widget.patientId)
           .collection('notifications');
@@ -449,7 +449,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     final completedAt = data['completedAt'] as DateTime;
     final nextDueAt = data['nextDueAt'] as DateTime?;
     final record = _records.doc();
-    final batch = FirebaseFirestore.instance.batch();
+    final batch = SupabaseDatabase.instance.batch();
     batch.set(record, {
       ...data,
       'completedAt': Timestamp.fromDate(completedAt),
@@ -474,7 +474,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     }
     await batch.commit();
     if (nextDueAt != null) {
-      _notificationPermissionGranted = await FirebaseNotificationService
+      _notificationPermissionGranted = await SupabaseNotificationService
           .instance
           .requestPermission();
     }
@@ -489,7 +489,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     }
     final reminder = _reminders.doc();
     final scheduledAt = _atReminderTime(data['dueAt'] as DateTime);
-    final batch = FirebaseFirestore.instance.batch();
+    final batch = SupabaseDatabase.instance.batch();
     batch.set(reminder, {
       ...data,
       'dueAt': Timestamp.fromDate(data['dueAt'] as DateTime),
@@ -509,7 +509,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     await batch.commit();
-    _notificationPermissionGranted = await FirebaseNotificationService.instance
+    _notificationPermissionGranted = await SupabaseNotificationService.instance
         .requestPermission();
   }
 
@@ -583,7 +583,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     if (injected != null) {
       await injected(reminder.id);
     } else {
-      final batch = FirebaseFirestore.instance.batch();
+      final batch = SupabaseDatabase.instance.batch();
       batch.delete(_reminders.doc(reminder.id));
       batch.delete(_notifications.doc('preventive_${reminder.id}'));
       await batch.commit();
@@ -616,7 +616,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     if (confirmed != true) return;
     try {
       await _removeReminder(reminder);
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Suppression impossible. Réessayez.')),
@@ -644,7 +644,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
     if (!saved) return;
     try {
       await _removeReminder(reminder, showFeedback: false);
-    } on FirebaseException {
+    } on SupabaseDataException {
       // L’action reste enregistrée; le rappel pourra être supprimé plus tard.
     }
   }
@@ -676,7 +676,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
       if (injected != null) {
         await injected(record.id);
       } else {
-        final batch = FirebaseFirestore.instance.batch();
+        final batch = SupabaseDatabase.instance.batch();
         batch.delete(_records.doc(record.id));
         batch.delete(_notifications.doc('preventive_record_${record.id}'));
         await batch.commit();
@@ -686,7 +686,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Action supprimée.')));
       }
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Suppression impossible. Réessayez.')),
@@ -2951,7 +2951,7 @@ class _PreventiveRecordFormState extends State<_PreventiveRecordForm> {
         'note': _noteController.text.trim(),
       });
       if (mounted) Navigator.pop(context, true);
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -3199,7 +3199,7 @@ class _PreventiveReminderFormState extends State<_PreventiveReminderForm> {
         'note': _noteController.text.trim(),
       });
       if (mounted) Navigator.pop(context, true);
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Création du rappel impossible.')),

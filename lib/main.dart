@@ -2,19 +2,15 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_theme.dart';
 import 'appointments.dart';
-import 'firebase_options.dart';
 import 'cycle_tracking_page.dart';
 import 'health_tracking_page.dart';
 import 'laboratory_page.dart';
@@ -24,11 +20,13 @@ import 'notifications_page.dart';
 import 'onboarding_page.dart';
 import 'pharmacy_page.dart';
 import 'preventive_medicine_page.dart';
+import 'supabase_config.dart';
+import 'supabase_data.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await FirebaseNotificationService.instance.initialize();
+  await SupabaseConfig.initialize();
+  await SupabaseNotificationService.instance.initialize();
   runApp(const IEntierApp());
 }
 
@@ -77,7 +75,9 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(
-    stream: FirebaseAuth.instance.authStateChanges(),
+    stream: SupabaseConfig.client.auth.onAuthStateChange.map(
+      (state) => state.session?.user,
+    ),
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
         return const _LoadingScreen();
@@ -120,7 +120,7 @@ class _AccountBootstrapState extends State<AccountBootstrap> {
   late final Future<Map<String, dynamic>> _account = _loadAccount();
 
   Future<Map<String, dynamic>> _loadAccount() async {
-    final reference = FirebaseFirestore.instance
+    final reference = SupabaseDatabase.instance
         .collection('user')
         .doc(widget.user.uid);
     final snapshot = await reference.get();
@@ -190,7 +190,7 @@ class PatientProfileGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
+        stream: SupabaseDatabase.instance
             .collection('patients')
             .doc(user.uid)
             .snapshots(),
@@ -243,36 +243,19 @@ class _SignInScreenState extends State<SignInScreen> {
       _error = null;
     });
     try {
-      if (kIsWeb) {
-        final provider = GoogleAuthProvider()
-          ..setCustomParameters({'prompt': 'select_account'});
-        await FirebaseAuth.instance.signInWithPopup(provider);
-      } else {
-        final googleUser = await GoogleSignIn().signIn();
-        if (googleUser == null) return;
-        final googleAuth = await googleUser.authentication;
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-        await FirebaseAuth.instance.signInWithCredential(credential);
-      }
-    } on FirebaseAuthException catch (error) {
-      _error = _friendlyAuthError(error.code);
+      await SupabaseConfig.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : SupabaseConfig.oauthRedirectUrl,
+        queryParams: const {'prompt': 'select_account'},
+      );
+    } on AuthException catch (error) {
+      _error = error.message;
     } catch (_) {
       _error = 'La connexion Google n’a pas abouti. Réessayez.';
     } finally {
       if (mounted) setState(() => _isSigningIn = false);
     }
   }
-
-  String _friendlyAuthError(String code) => switch (code) {
-    'popup-closed-by-user' => 'La fenêtre de connexion a été fermée.',
-    'account-exists-with-different-credential' =>
-      'Ce compte utilise une autre méthode de connexion.',
-    'network-request-failed' => 'Vérifiez votre connexion Internet.',
-    _ => 'Connexion impossible pour le moment. Réessayez.',
-  };
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -980,10 +963,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     final medications = _profileCommaSeparated(_medicationsController.text);
     final surgeries = _profileCommaSeparated(_surgeriesController.text);
     try {
-      final accountReference = FirebaseFirestore.instance
+      final accountReference = SupabaseDatabase.instance
           .collection('user')
           .doc(widget.user.uid);
-      final patientReference = FirebaseFirestore.instance
+      final patientReference = SupabaseDatabase.instance
           .collection('patients')
           .doc(widget.user.uid);
       final patientData = <String, dynamic>{
@@ -1030,7 +1013,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         patientReference.set(patientData, SetOptions(merge: true)),
       ]);
       if (mounted && !widget.isOnboarding) Navigator.of(context).pop();
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1071,8 +1054,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
     setState(() => _signingOut = true);
     try {
-      if (!kIsWeb) await GoogleSignIn().signOut();
-      await FirebaseAuth.instance.signOut();
+      await SupabaseConfig.client.auth.signOut();
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
@@ -1789,7 +1771,7 @@ int _ageFrom(DateTime birthDate) {
 }
 
 /// Données indépendantes du rendu. La même structure peut venir plus tard
-/// d'une collection Firestore ou d'une API plutôt que de [_homeServices].
+/// d'une table Supabase ou d'une API plutôt que de [_homeServices].
 class HealthService {
   final String id;
   final String title;
@@ -1813,7 +1795,7 @@ class HealthService {
     this.icon,
   });
 
-  /// Format attendu, par exemple depuis Firebase :
+  /// Format attendu, par exemple depuis Supabase :
   /// {title, summary, imagePath, backgroundColor, accentColor, actionLabel}
   factory HealthService.fromMap(String id, Map<String, dynamic> data) =>
       HealthService(
@@ -1937,8 +1919,8 @@ class _HomeScreenState extends State<HomeScreen> {
     (_) => ScrollController(),
   );
 
-  bool get _usesFirebaseNotifications =>
-      widget.notificationStream == null && Firebase.apps.isNotEmpty;
+  bool get _usesSupabaseNotifications =>
+      widget.notificationStream == null && SupabaseConfig.isInitialized;
 
   String get _patientName {
     final accountName = _profileText(widget.account, [
@@ -1955,13 +1937,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.notificationStream == null && Firebase.apps.isEmpty) {
+    if (widget.notificationStream == null && !SupabaseConfig.isInitialized) {
       _notifications = defaultAppNotifications();
     }
     final notificationStream =
         widget.notificationStream ??
-        (_usesFirebaseNotifications
-            ? FirebaseNotificationService.instance.watchNotifications(
+        (_usesSupabaseNotifications
+            ? SupabaseNotificationService.instance.watchNotifications(
                 widget.user.uid,
               )
             : Stream.value(defaultAppNotifications()));
@@ -1976,9 +1958,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _notificationClock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
-    if (_usesFirebaseNotifications) {
+    if (_usesSupabaseNotifications) {
       unawaited(
-        FirebaseNotificationService.instance.startSync(widget.user.uid),
+        SupabaseNotificationService.instance.startSync(widget.user.uid),
       );
     }
   }
@@ -1997,8 +1979,8 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final controller in _tabScrollControllers) {
       controller.dispose();
     }
-    if (_usesFirebaseNotifications) {
-      unawaited(FirebaseNotificationService.instance.stopSync());
+    if (_usesSupabaseNotifications) {
+      unawaited(SupabaseNotificationService.instance.stopSync());
     }
     super.dispose();
   }
@@ -2007,7 +1989,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => NotificationsPage(
-          patientId: _usesFirebaseNotifications ? widget.user.uid : null,
+          patientId: _usesSupabaseNotifications ? widget.user.uid : null,
           notificationStream: widget.notificationStream,
           notifications: _notifications
               .where(
@@ -2185,9 +2167,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (index == 2) {
       return PatientAppointmentsPage(
         patientId: widget.user.uid,
-        repository: Firebase.apps.isEmpty
+        repository: !SupabaseConfig.isInitialized
             ? null
-            : FirestorePatientAppointmentRepository(),
+            : SupabasePatientAppointmentRepository(),
       );
     }
     if (index == 3) {
@@ -2827,8 +2809,8 @@ class _PersonnelDirectoryState extends State<_PersonnelDirectory> {
   @override
   void initState() {
     super.initState();
-    if (Firebase.apps.isNotEmpty) {
-      _personnelStream = FirebaseFirestore.instance
+    if (SupabaseConfig.isInitialized) {
+      _personnelStream = SupabaseDatabase.instance
           .collection('personnelMedical')
           .limit(50)
           .snapshots();
@@ -2916,7 +2898,7 @@ class _PersonnelDirectoryState extends State<_PersonnelDirectory> {
       const SizedBox(height: 22),
       const _SectionHeading(title: 'Professionnels recommandés'),
       const SizedBox(height: 6),
-      if (Firebase.apps.isEmpty)
+      if (!SupabaseConfig.isInitialized)
         const _DirectoryFeedback(
           icon: Icons.cloud_off_outlined,
           title: 'Annuaire en mode aperçu',
@@ -2988,8 +2970,8 @@ class _InstitutionsDirectoryState extends State<_InstitutionsDirectory> {
   @override
   void initState() {
     super.initState();
-    if (Firebase.apps.isNotEmpty) {
-      _institutionStream = FirebaseFirestore.instance
+    if (SupabaseConfig.isInitialized) {
+      _institutionStream = SupabaseDatabase.instance
           .collection('institution')
           .limit(50)
           .snapshots();
@@ -3021,7 +3003,7 @@ class _InstitutionsDirectoryState extends State<_InstitutionsDirectory> {
       const SizedBox(height: 22),
       const _SectionHeading(title: 'À proximité'),
       const SizedBox(height: 6),
-      if (Firebase.apps.isEmpty)
+      if (!SupabaseConfig.isInitialized)
         const _DirectoryFeedback(
           icon: Icons.cloud_off_outlined,
           title: 'Annuaire en mode aperçu',

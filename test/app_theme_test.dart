@@ -1,26 +1,18 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:i_entier/app_theme.dart';
 import 'package:i_entier/main.dart';
 import 'package:i_entier/notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class _ThemeTestUser implements User {
-  @override
-  String get uid => 'theme-test-patient';
-
-  @override
-  String? get displayName => 'Patient Test';
-
-  @override
-  String? get email => 'patient@example.com';
-
-  @override
-  String? get photoURL => null;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+User themeTestUser() => const User(
+  id: 'theme-test-patient',
+  appMetadata: {},
+  userMetadata: {'full_name': 'Patient Test'},
+  aud: 'authenticated',
+  email: 'patient@example.com',
+  createdAt: '2026-07-20T00:00:00.000Z',
+);
 
 Widget _buildHome({TextScaler textScaler = TextScaler.noScaling}) =>
     MaterialApp(
@@ -31,7 +23,7 @@ Widget _buildHome({TextScaler textScaler = TextScaler.noScaling}) =>
         child: child!,
       ),
       home: HomeScreen(
-        user: _ThemeTestUser(),
+        user: themeTestUser(),
         account: const {'displayName': 'Patient Test'},
         patientProfile: const {},
         notificationStream: Stream.value(defaultAppNotifications()),

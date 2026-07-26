@@ -1,17 +1,21 @@
-# i_entier
+# i-ENTIER Patient
 
-A new Flutter project.
+Application Flutter patient de l’écosystème i-ENTIER. L’authentification, les
+dossiers de santé, les rendez-vous, les notifications et les ordonnances sont
+stockés dans Supabase.
 
-## Getting Started
+## Démarrage
 
-This project is a starting point for a Flutter application.
+```sh
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+Le projet Supabase et la connexion Google sont documentés dans
+[docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Base de données
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Le schéma relationnel partagé par Patient, Professionnel et Administration est
+dans `supabase/migrations`. La migration démarre avec une base Supabase vide :
+les anciens comptes et données de test Firebase ne sont pas repris.

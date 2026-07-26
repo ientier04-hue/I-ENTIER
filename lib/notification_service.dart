@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'supabase_data.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -152,11 +152,11 @@ List<AppNotification> defaultAppNotifications([DateTime? referenceTime]) {
   ];
 }
 
-class FirebaseNotificationService {
-  FirebaseNotificationService._();
+class SupabaseNotificationService {
+  SupabaseNotificationService._();
 
-  static final FirebaseNotificationService instance =
-      FirebaseNotificationService._();
+  static final SupabaseNotificationService instance =
+      SupabaseNotificationService._();
 
   static const _payloadPrefix = 'ientier:';
   static const _channelId = 'ientier_health_reminders';
@@ -172,7 +172,7 @@ class FirebaseNotificationService {
   bool _initialized = false;
 
   CollectionReference<Map<String, dynamic>> _collection(String patientId) =>
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('patients')
           .doc(patientId)
           .collection('notifications');
@@ -230,7 +230,7 @@ class FirebaseNotificationService {
             });
       },
       onError: (Object error, StackTrace stackTrace) {
-        debugPrint('Lecture des notifications Firebase impossible: $error');
+        debugPrint('Lecture des notifications Supabase impossible: $error');
       },
     );
   }
@@ -278,7 +278,7 @@ class FirebaseNotificationService {
     Iterable<AppNotification> notifications,
   ) async {
     final unread = notifications.where((notification) => !notification.isRead);
-    final batch = FirebaseFirestore.instance.batch();
+    final batch = SupabaseDatabase.instance.batch();
     var count = 0;
     for (final notification in unread) {
       batch.update(_collection(patientId).doc(notification.id), {

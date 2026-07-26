@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -41,14 +41,14 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _institutions =>
       widget.institutionStream ??
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('institution')
           .limit(100)
           .snapshots();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _results =>
       widget.resultStream ??
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('patients')
           .doc(widget.patientId)
           .collection('laboratoryResults')
@@ -112,7 +112,7 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
             icon: Icons.lock_outline_rounded,
             title: 'Laboratoires indisponibles',
             message:
-                'Vérifiez l’accès à la collection Firestore « institution ».',
+                'Vérifiez l’accès à la table Supabase des institutions.',
           );
         }
         if (!snapshot.hasData) {
@@ -882,7 +882,7 @@ class _EmptyResult extends StatelessWidget {
         Text(
           hasLaboratories
               ? 'Modifiez votre recherche ou réinitialisez les filtres.'
-              : 'Ajoutez des institutions de type « Laboratoire » dans Firestore.',
+              : 'Ajoutez des institutions de type « Laboratoire » dans Supabase.',
           textAlign: TextAlign.center,
           style: const TextStyle(color: _muted, height: 1.4),
         ),

@@ -69,7 +69,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         widget.notificationStream ??
         (widget.patientId == null
             ? null
-            : FirebaseNotificationService.instance.watchNotifications(
+            : SupabaseNotificationService.instance.watchNotifications(
                 widget.patientId!,
               ));
     if (stream == null && widget.notifications == null) {
@@ -139,7 +139,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final patientId = widget.patientId;
     if (patientId == null) return;
     try {
-      await FirebaseNotificationService.instance.setRead(
+      await SupabaseNotificationService.instance.setRead(
         patientId,
         notification.id,
         isRead,
@@ -177,7 +177,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final patientId = widget.patientId;
     if (patientId != null) {
       try {
-        await FirebaseNotificationService.instance.markAllAsRead(
+        await SupabaseNotificationService.instance.markAllAsRead(
           patientId,
           before.where(
             (notification) => notification.isDeliveredAt(DateTime.now()),
@@ -208,7 +208,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final patientId = widget.patientId;
     if (patientId != null) {
       try {
-        await FirebaseNotificationService.instance.delete(
+        await SupabaseNotificationService.instance.delete(
           patientId,
           notification.id,
         );
@@ -240,7 +240,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               }
               if (patientId != null) {
                 try {
-                  await FirebaseNotificationService.instance.restore(
+                  await SupabaseNotificationService.instance.restore(
                     patientId,
                     notification,
                   );
@@ -276,7 +276,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void _showSyncError() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('La synchronisation Firebase a échoué. Réessayez.'),
+        content: Text('La synchronisation Supabase a échoué. Réessayez.'),
       ),
     );
   }

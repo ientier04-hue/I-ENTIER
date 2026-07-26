@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -112,7 +112,7 @@ class _HealthTrackingPageState extends State<HealthTrackingPage> {
   HealthMetric? _filter;
 
   CollectionReference<Map<String, dynamic>> get _measurements =>
-      FirebaseFirestore.instance
+      SupabaseDatabase.instance
           .collection('patients')
           .doc(widget.patientId)
           .collection('healthMeasurements');
@@ -163,7 +163,7 @@ class _HealthTrackingPageState extends State<HealthTrackingPage> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Mesure supprimée.')));
       }
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Impossible de supprimer la mesure.')),
@@ -766,7 +766,7 @@ class _MeasurementFormState extends State<_MeasurementForm> {
         'createdAt': FieldValue.serverTimestamp(),
       });
       if (mounted) Navigator.pop(context, true);
-    } on FirebaseException {
+    } on SupabaseDataException {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
