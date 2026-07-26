@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_theme.dart';
 import 'appointments.dart';
 import 'cycle_tracking_page.dart';
+import 'diagnostic_assessment_page.dart';
 import 'health_tracking_page.dart';
 import 'laboratory_page.dart';
 import 'mental_health_page.dart';
@@ -1839,6 +1840,16 @@ class HealthService {
 
 const _homeServices = <HealthService>[
   HealthService(
+    id: 'diagnostic-assiste',
+    title: 'Diagnostic assisté',
+    summary: 'Évaluez vos symptômes et sachez quelle suite donner',
+    imagePath: '',
+    backgroundColor: '#E5F1FF',
+    accentColor: '#176BFF',
+    actionLabel: 'Commencer',
+    icon: Icons.health_and_safety_outlined,
+  ),
+  HealthService(
     id: 'pharmacie',
     title: 'Pharmacie',
     summary: 'Commandez vos médicaments en ligne',
@@ -2108,6 +2119,18 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => PharmacyPage(patientId: widget.user.uid),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'diagnostic-assiste') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => DiagnosticAssessmentPage(
+            patientId: widget.user.uid,
+            patientProfile: widget.patientProfile,
+            onOpenAppointments: () => _selectTab(2),
+          ),
         ),
       );
       return;

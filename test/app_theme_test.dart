@@ -67,7 +67,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tous les services'), findsOneWidget);
-    expect(find.text('6 services'), findsOneWidget);
+    expect(find.text('7 services'), findsOneWidget);
+    expect(find.text('Diagnostic assisté'), findsOneWidget);
     expect(find.text('Pharmacie'), findsOneWidget);
   });
 
