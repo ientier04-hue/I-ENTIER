@@ -1,5 +1,8 @@
 import 'dart:ui' show PointerDeviceKind;
 
+// Flutter 3.44 moved CupertinoPageTransitionsBuilder out of material.dart.
+// ignore: unnecessary_import
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 /// Palette partagée par l’expérience I-ENTIER.
