@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:i_entier/preventive_medicine_page.dart';
@@ -29,6 +31,60 @@ void main() {
     expect(plan.map((item) => item.id), contains('colorectal-screening'));
     expect(plan.map((item) => item.id), isNot(contains('breast-awareness')));
   });
+
+  testWidgets(
+    'affiche le chargement jusqu’aux premières données puis le vrai état vide',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final recordController = StreamController<List<PreventiveCareRecord>>();
+      final reminderController =
+          StreamController<List<PreventiveCareReminder>>();
+      addTearDown(recordController.close);
+      addTearDown(reminderController.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PreventiveMedicinePage(
+            patientId: 'patient-test',
+            patientProfile: const {},
+            now: DateTime(2026, 7, 18),
+            recordStream: recordController.stream,
+            reminderStream: reminderController.stream,
+          ),
+        ),
+      );
+
+      final loading = find.byKey(const Key('preventive-loading'));
+      expect(loading, findsOneWidget);
+      expect(
+        tester.getSemantics(loading).getSemanticsData().label,
+        'Chargement de votre espace prévention',
+      );
+      expect(
+        find.byKey(const Key('preventive-empty-add-reminder')),
+        findsNothing,
+      );
+
+      recordController.add(const <PreventiveCareRecord>[]);
+      await tester.pump();
+
+      expect(loading, findsOneWidget);
+      expect(
+        find.byKey(const Key('preventive-empty-add-reminder')),
+        findsNothing,
+      );
+
+      reminderController.add(const <PreventiveCareReminder>[]);
+      await tester.pump();
+
+      expect(loading, findsNothing);
+      expect(
+        find.byKey(const Key('preventive-empty-add-reminder')),
+        findsOneWidget,
+      );
+      semantics.dispose();
+    },
+  );
 
   testWidgets('affiche le plan, les échéances et le carnet privé', (
     tester,
@@ -136,6 +192,35 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Votre carnet est indisponible'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('affiche l’erreur des rappels sans rester en chargement', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PreventiveMedicinePage(
+          patientId: 'patient-test',
+          patientProfile: const {},
+          now: DateTime(2026, 7, 18),
+          recordStream: Stream.value(const <PreventiveCareRecord>[]),
+          reminderStream: Stream<List<PreventiveCareReminder>>.error(
+            Exception('permission-denied'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('preventive-loading')), findsNothing);
+    expect(
+      find.text(
+        'Les rappels sont momentanément indisponibles. Votre carnet reste accessible.',
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

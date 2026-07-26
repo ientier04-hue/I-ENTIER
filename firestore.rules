@@ -19,7 +19,8 @@ service cloud.firestore {
     function validProviderProfile(data) {
       return data.keys().hasOnly([
           'ownerUid', 'accountType', 'displayName', 'category',
-          'registrationNumber', 'contactPerson', 'workplace', 'phone', 'email',
+          'registrationNumber', 'contactPerson', 'workplace',
+          'linkedInstitutionId', 'linkedInstitutionName', 'phone', 'email',
           'address', 'description', 'experience', 'qualifications', 'services',
           'schedule', 'available', 'isVisible', 'verificationStatus',
           'rejectionReason', 'termsAccepted', 'createdAt', 'updatedAt'
@@ -45,6 +46,34 @@ service cloud.firestore {
         && data.contactPerson.size() <= 140
         && data.workplace is string
         && data.workplace.size() <= 160
+        && (
+          !data.keys().hasAny(['linkedInstitutionId', 'linkedInstitutionName'])
+          || (
+            data.keys().hasAll([
+              'linkedInstitutionId', 'linkedInstitutionName'
+            ])
+            && data.linkedInstitutionId is string
+            && data.linkedInstitutionId.size() <= 160
+            && data.linkedInstitutionName is string
+            && data.linkedInstitutionName.size() <= 160
+            && (
+              (data.accountType == 'institution'
+                && data.linkedInstitutionId == ''
+                && data.linkedInstitutionName == '')
+              || (data.accountType == 'professional' && (
+                (data.linkedInstitutionId == ''
+                  && data.linkedInstitutionName == '')
+                || (data.linkedInstitutionId != ''
+                  && exists(
+                    /databases/$(database)/documents/institution/$(data.linkedInstitutionId)
+                  )
+                  && data.linkedInstitutionName == get(
+                    /databases/$(database)/documents/institution/$(data.linkedInstitutionId)
+                  ).data.nom)
+              ))
+            )
+          )
+        )
         && data.phone is string
         && data.phone.size() > 4
         && data.phone.size() <= 40
@@ -123,7 +152,8 @@ service cloud.firestore {
     function validProfessionalDirectory(data, ownerId) {
       return data.keys().hasOnly([
           'ownerUid', 'nomComplet', 'specialite', 'etablissement', 'biographie',
-          'experience', 'qualification', 'services', 'horaires', 'adresse',
+          'institutionId', 'institutionName', 'experience', 'qualification',
+          'services', 'horaires', 'adresse',
           'telephone', 'email', 'disponible', 'isPublished',
           'verificationStatus', 'createdAt', 'updatedAt'
         ])
@@ -142,6 +172,26 @@ service cloud.firestore {
         && data.specialite.size() <= 120
         && data.etablissement is string
         && data.etablissement.size() <= 160
+        && (
+          !data.keys().hasAny(['institutionId', 'institutionName'])
+          || (
+            data.keys().hasAll(['institutionId', 'institutionName'])
+            && data.institutionId is string
+            && data.institutionId.size() <= 160
+            && data.institutionName is string
+            && data.institutionName.size() <= 160
+            && (
+              (data.institutionId == '' && data.institutionName == '')
+              || (data.institutionId != ''
+                && exists(
+                  /databases/$(database)/documents/institution/$(data.institutionId)
+                )
+                && data.institutionName == get(
+                  /databases/$(database)/documents/institution/$(data.institutionId)
+                ).data.nom)
+            )
+          )
+        )
         && data.biographie is string
         && data.biographie.size() <= 1500
         && data.experience is string
@@ -760,9 +810,10 @@ service cloud.firestore {
         && validProviderProfile(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'category', 'registrationNumber', 'contactPerson',
-          'workplace', 'phone', 'email', 'address', 'description', 'experience',
-          'qualifications', 'services', 'schedule', 'available', 'isVisible',
-          'termsAccepted', 'updatedAt'
+          'workplace', 'linkedInstitutionId', 'linkedInstitutionName', 'phone',
+          'email', 'address', 'description', 'experience', 'qualifications',
+          'services', 'schedule', 'available', 'isVisible', 'termsAccepted',
+          'updatedAt'
         ])
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.accountType == resource.data.accountType

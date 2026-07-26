@@ -17,6 +17,44 @@ void main() {
     expect(find.text('Non lues (3)'), findsOneWidget);
   });
 
+  testWidgets(
+    'annonce l’état de lecture et masque les actions sans destination',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final notification = AppNotification(
+        id: 'result-without-destination',
+        title: 'Résultat disponible',
+        message: 'Votre résultat est prêt.',
+        createdAt: DateTime(2026, 7, 23),
+        type: AppNotificationType.result,
+        actionLabel: 'Voir le résultat',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: NotificationsPage(notifications: [notification])),
+      );
+
+      final semanticsFinder = find.byKey(
+        const Key('notification-semantics-result-without-destination'),
+      );
+      expect(
+        tester.getSemantics(semanticsFinder).getSemanticsData().label,
+        contains('Notification non lue'),
+      );
+      expect(find.text('Voir le résultat'), findsNothing);
+
+      await tester.tap(find.text('Résultat disponible'));
+      await tester.pump();
+
+      expect(
+        tester.getSemantics(semanticsFinder).getSemanticsData().label,
+        contains('Notification lue'),
+      );
+      expect(find.textContaining('bientôt disponible'), findsNothing);
+      semantics.dispose();
+    },
+  );
+
   testWidgets('permet de tout marquer comme lu et affiche l’état vide', (
     tester,
   ) async {
@@ -35,6 +73,107 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Aucune notification non lue'), findsOneWidget);
+  });
+
+  testWidgets('resynchronise le parent après un rollback de lecture', (
+    tester,
+  ) async {
+    final notification = AppNotification(
+      id: 'read-rollback',
+      title: 'Notification à lire',
+      message: 'Le stockage simulé échouera.',
+      createdAt: DateTime(2026, 7, 23),
+      type: AppNotificationType.reminder,
+    );
+    final changes = <List<AppNotification>>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsPage(
+          patientId: 'patient-without-firebase',
+          notificationStream: Stream.value([notification]),
+          onNotificationsChanged: (items) => changes.add(items),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    changes.clear();
+
+    await tester.tap(find.text('Notification à lire'));
+    await tester.pumpAndSettle();
+
+    expect(
+      changes.map((items) => items.single.isRead),
+      orderedEquals([true, false]),
+    );
+    expect(find.text('Non lues (1)'), findsOneWidget);
+  });
+
+  testWidgets('resynchronise le parent après un rollback de tout lire', (
+    tester,
+  ) async {
+    final notification = AppNotification(
+      id: 'all-read-rollback',
+      title: 'Notification non lue',
+      message: 'Le stockage simulé échouera.',
+      createdAt: DateTime(2026, 7, 23),
+      type: AppNotificationType.reminder,
+    );
+    final changes = <List<AppNotification>>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsPage(
+          patientId: 'patient-without-firebase',
+          notificationStream: Stream.value([notification]),
+          onNotificationsChanged: (items) => changes.add(items),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    changes.clear();
+
+    await tester.tap(find.byTooltip('Tout marquer comme lu'));
+    await tester.pumpAndSettle();
+
+    expect(
+      changes.map((items) => items.single.isRead),
+      orderedEquals([true, false]),
+    );
+    expect(find.text('Non lues (1)'), findsOneWidget);
+  });
+
+  testWidgets('resynchronise le parent après un rollback de suppression', (
+    tester,
+  ) async {
+    final notification = AppNotification(
+      id: 'delete-rollback',
+      title: 'Notification à conserver',
+      message: 'Le stockage simulé échouera.',
+      createdAt: DateTime(2026, 7, 23),
+      type: AppNotificationType.reminder,
+    );
+    final changes = <List<AppNotification>>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsPage(
+          patientId: 'patient-without-firebase',
+          notificationStream: Stream.value([notification]),
+          onNotificationsChanged: (items) => changes.add(items),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    changes.clear();
+
+    await tester.tap(find.byTooltip('Options de la notification'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Supprimer'));
+    await tester.pumpAndSettle();
+
+    expect(changes.map((items) => items.length), orderedEquals([0, 1]));
+    expect(find.text('Notification à conserver'), findsOneWidget);
   });
 
   testWidgets('n’affiche un rappel synchronisé qu’à son échéance', (
@@ -98,6 +237,7 @@ void main() {
       ),
     );
 
+    expect(find.text('Voir le rendez-vous'), findsOneWidget);
     await tester.tap(find.text('Rendez-vous confirmé'));
     await tester.pump();
 

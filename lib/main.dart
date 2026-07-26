@@ -7,10 +7,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_theme.dart';
 import 'appointments.dart';
 import 'firebase_options.dart';
 import 'cycle_tracking_page.dart';
@@ -37,90 +39,11 @@ class IEntierApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'I-ENTIER',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      useMaterial3: true,
-      scaffoldBackgroundColor: AppColors.canvas,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
-        primary: AppColors.primary,
-        secondary: AppColors.teal,
-        error: const Color(0xFFD92D20),
-        surface: Colors.white,
-      ),
-      fontFamily: 'Arial',
-      textTheme: const TextTheme(
-        headlineLarge: TextStyle(
-          fontWeight: FontWeight.w800,
-          color: AppColors.navy,
-          letterSpacing: -.8,
-        ),
-        headlineMedium: TextStyle(
-          fontWeight: FontWeight.w800,
-          color: AppColors.navy,
-          letterSpacing: -.5,
-        ),
-        titleLarge: TextStyle(
-          fontWeight: FontWeight.w800,
-          color: AppColors.navy,
-        ),
-        bodyLarge: TextStyle(color: AppColors.ink, height: 1.45),
-        bodyMedium: TextStyle(color: AppColors.muted, height: 1.4),
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.canvas,
-        foregroundColor: AppColors.navy,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleTextStyle: TextStyle(
-          color: AppColors.navy,
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 17,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
-      navigationBarTheme: const NavigationBarThemeData(
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.primarySoft,
-        surfaceTintColor: Colors.transparent,
-        labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-        ),
-      ),
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-    ),
+    theme: AppTheme.light,
+    scrollBehavior: const AppScrollBehavior(),
+    locale: const Locale('fr', 'HT'),
+    supportedLocales: const [Locale('fr', 'HT'), Locale('fr')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
     home: const AuthGate(),
   );
 }
@@ -1095,7 +1018,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Impossible d’enregistrer le profil. Vérifiez les règles Firestore.',
+            'Impossible d’enregistrer le profil. Vérifiez votre connexion et réessayez.',
           ),
         ),
       );
@@ -1848,17 +1771,6 @@ int _ageFrom(DateTime birthDate) {
   return age;
 }
 
-class AppColors {
-  static const primary = Color(0xFF176BFF);
-  static const primarySoft = Color(0xFFEAF1FF);
-  static const teal = Color(0xFF0AA6A6);
-  static const navy = Color(0xFF102A56);
-  static const ink = Color(0xFF344054);
-  static const muted = Color(0xFF667085);
-  static const border = Color(0xFFE4EAF2);
-  static const canvas = Color(0xFFF5F8FC);
-}
-
 /// Données indépendantes du rendu. La même structure peut venir plus tard
 /// d'une collection Firestore ou d'une API plutôt que de [_homeServices].
 class HealthService {
@@ -1904,12 +1816,25 @@ class HealthService {
 
   Color get background => _colorFromHex(backgroundColor, Colors.white);
   Color get accent => _colorFromHex(accentColor, AppColors.primary);
+  Color get contentColor => _contrast(AppColors.navy, background) >= 4.5
+      ? AppColors.navy
+      : Colors.white;
+  Color get accessibleAccent =>
+      _contrast(accent, background) >= 4.5 ? accent : contentColor;
 
   static Color _colorFromHex(String value, Color fallback) {
     final normalized = value.trim().replaceFirst('#', '');
     final hex = normalized.length == 6 ? 'FF$normalized' : normalized;
     final colorValue = int.tryParse(hex, radix: 16);
     return colorValue == null ? fallback : Color(colorValue);
+  }
+
+  static double _contrast(Color foreground, Color background) {
+    final foregroundLuminance = foreground.computeLuminance();
+    final backgroundLuminance = background.computeLuminance();
+    final lightest = math.max(foregroundLuminance, backgroundLuminance);
+    final darkest = math.min(foregroundLuminance, backgroundLuminance);
+    return (lightest + .05) / (darkest + .05);
   }
 }
 
@@ -1986,9 +1911,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
+  final Set<int> _visitedTabs = {0};
   List<AppNotification> _notifications = const [];
   StreamSubscription<List<AppNotification>>? _notificationSubscription;
   Timer? _notificationClock;
+  late final List<ScrollController> _tabScrollControllers = List.generate(
+    _GlassNavigationBar.destinations.length,
+    (_) => ScrollController(),
+  );
 
   bool get _usesFirebaseNotifications =>
       widget.notificationStream == null && Firebase.apps.isNotEmpty;
@@ -2047,6 +1977,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _notificationClock?.cancel();
     unawaited(_notificationSubscription?.cancel());
+    for (final controller in _tabScrollControllers) {
+      controller.dispose();
+    }
     if (_usesFirebaseNotifications) {
       unawaited(FirebaseNotificationService.instance.stopSync());
     }
@@ -2070,11 +2003,46 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           onAppointmentTap: () {
             Navigator.of(context).pop();
-            if (mounted) setState(() => _selectedTab = 2);
+            if (mounted) _selectTab(2);
           },
         ),
       ),
     );
+  }
+
+  void _selectTab(int index) {
+    if (index < 0 || index >= _tabScrollControllers.length) return;
+    if (_selectedTab != index) {
+      setState(() {
+        _visitedTabs.add(index);
+        _selectedTab = index;
+      });
+      return;
+    }
+    final controller = _tabScrollControllers[index];
+    if (!controller.hasClients || controller.offset <= 0) return;
+    controller.animateTo(
+      0,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Future<void> _openServiceSearch() async {
+    final service = await showSearch<HealthService?>(
+      context: context,
+      delegate: _HealthServiceSearchDelegate(services: _homeServices),
+    );
+    if (service != null && mounted) await _openService(service);
+  }
+
+  Future<void> _openServicesCatalog() async {
+    final service = await Navigator.of(context).push<HealthService>(
+      MaterialPageRoute(
+        builder: (_) => const _ServicesCatalogPage(services: _homeServices),
+      ),
+    );
+    if (service != null && mounted) await _openService(service);
   }
 
   Future<void> _openAiAssistant() async {
@@ -2190,106 +2158,194 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _pageForIndex(int index, {required bool wide}) {
+    if (index == 1) {
+      return _HealthDirectoryPage(
+        patientId: widget.user.uid,
+        patientName: _patientName,
+      );
+    }
+    if (index == 2) {
+      return PatientAppointmentsPage(
+        patientId: widget.user.uid,
+        repository: Firebase.apps.isEmpty
+            ? null
+            : FirestorePatientAppointmentRepository(),
+      );
+    }
+    if (index == 3) {
+      return HealthTrackingPage(patientId: widget.user.uid);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SearchField(
+          onTap: _openServiceSearch,
+          onFilterTap: _openServicesCatalog,
+        ),
+        const SizedBox(height: 28),
+        _SectionHeading(
+          title: 'Services',
+          action: 'Voir tout',
+          onAction: _openServicesCatalog,
+        ),
+        const SizedBox(height: 14),
+        _ServiceCarousel(
+          wide: wide,
+          services: _homeServices,
+          onServiceTap: _openService,
+        ),
+        const SizedBox(height: 28),
+        if (wide)
+          SizedBox(
+            height:
+                320 +
+                math.max(0, MediaQuery.textScalerOf(context).scale(1) - 1) *
+                    180,
+            child: _AssistantCard(onComposeTap: _openAiAssistant),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final textScale = MediaQuery.textScalerOf(
+                context,
+              ).scale(1).clamp(1.0, 2.0);
+              final ratioHeight = constraints.maxWidth * (10 / 18);
+              final accessibleHeight = 190 + (textScale - 1) * 400;
+              return SizedBox(
+                height: math.max(ratioHeight, accessibleHeight),
+                child: _AssistantCard(onComposeTap: _openAiAssistant),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHomeHeader() => _Header(
+    user: widget.user,
+    profileName: _patientName,
+    unreadNotificationCount: _unreadNotificationCount,
+    onNotificationsTap: _openNotifications,
+    onProfileTap: () => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PatientProfileScreen(
+          user: widget.user,
+          accountProfile: widget.account,
+          initialProfile: widget.patientProfile,
+        ),
+      ),
+    ),
+  );
+
+  Widget _scrollablePage(int index, {required bool wide}) => SafeArea(
+    top: index != 0,
+    bottom: wide,
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1120),
+        child: SingleChildScrollView(
+          key: PageStorageKey('home-tab-$index'),
+          controller: _tabScrollControllers[index],
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            wide ? 34 : 20,
+            wide ? 24 : 18,
+            wide ? 34 : 20,
+            wide ? 36 : 106,
+          ),
+          child: _pageForIndex(index, wide: wide),
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 900;
+    final content = Stack(
+      fit: StackFit.expand,
+      children: [
+        for (final index in _visitedTabs)
+          Offstage(
+            key: ValueKey('home-tab-pane-$index'),
+            offstage: index != _selectedTab,
+            child: TickerMode(
+              enabled: index == _selectedTab,
+              child: _scrollablePage(index, wide: wide),
+            ),
+          ),
+      ],
+    );
+    final contentWithHeader = Column(
+      children: [
+        Offstage(
+          offstage: _selectedTab != 0,
+          child: ColoredBox(
+            color: Colors.white,
+            child: SafeArea(
+              left: false,
+              right: false,
+              bottom: false,
+              child: _buildHomeHeader(),
+            ),
+          ),
+        ),
+        Expanded(child: content),
+      ],
+    );
+
+    if (wide) {
+      return Scaffold(
+        backgroundColor: AppColors.canvas,
+        body: Row(
+          children: [
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+                child: _DesktopNavigationRail(
+                  selectedIndex: _selectedTab,
+                  extended: width >= 1180,
+                  onDestinationSelected: _selectTab,
+                ),
+              ),
+            ),
+            Expanded(child: contentWithHeader),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.canvas,
       extendBody: true,
       body: Stack(
         children: [
-          SafeArea(
-            bottom: false,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    wide ? 42 : 20,
-                    wide ? 28 : 18,
-                    wide ? 42 : 20,
-                    104,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_selectedTab == 0) ...[
-                        _Header(
-                          unreadNotificationCount: _unreadNotificationCount,
-                          onNotificationsTap: _openNotifications,
-                          onProfileTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => PatientProfileScreen(
-                                user: widget.user,
-                                accountProfile: widget.account,
-                                initialProfile: widget.patientProfile,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (_selectedTab == 0) ...[
-                        const _SearchField(),
-                        const SizedBox(height: 26),
-                        const _SectionHeading(
-                          title: 'Services',
-                          action: 'Voir tout',
-                        ),
-                        const SizedBox(height: 14),
-                        _ServiceCarousel(
-                          wide: wide,
-                          services: _homeServices,
-                          onServiceTap: _openService,
-                        ),
-                        const SizedBox(height: 26),
-                        AspectRatio(
-                          aspectRatio: 18 / 10,
-                          child: _AssistantCard(onComposeTap: _openAiAssistant),
-                        ),
-                      ] else if (_selectedTab == 1)
-                        _HealthDirectoryPage(
-                          patientId: widget.user.uid,
-                          patientName: _patientName,
-                        )
-                      else if (_selectedTab == 2)
-                        PatientAppointmentsPage(
-                          patientId: widget.user.uid,
-                          repository: Firebase.apps.isEmpty
-                              ? null
-                              : FirestorePatientAppointmentRepository(),
-                        )
-                      else if (_selectedTab == 3)
-                        HealthTrackingPage(patientId: widget.user.uid),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          contentWithHeader,
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: SafeArea(
-              minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: Center(
                 heightFactor: 1,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 820),
                   child: SizedBox(
-                    height: 78,
+                    key: const ValueKey('home-tab-bar-shell'),
+                    height: 70,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
                           child: _GlassNavigationBar(
                             selectedIndex: _selectedTab,
-                            onDestinationSelected: (index) =>
-                                setState(() => _selectedTab = index),
+                            onDestinationSelected: _selectTab,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         const _EmergencyButton(),
                       ],
                     ),
@@ -2304,6 +2360,67 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _DesktopNavigationRail extends StatelessWidget {
+  const _DesktopNavigationRail({
+    required this.selectedIndex,
+    required this.extended,
+    required this.onDestinationSelected,
+  });
+
+  final int selectedIndex;
+  final bool extended;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('desktop-navigation'),
+    width: extended ? 208 : 94,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(28),
+      border: Border.all(color: AppColors.border),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x12102A56),
+          blurRadius: 28,
+          offset: Offset(0, 12),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: NavigationRail(
+        selectedIndex: selectedIndex,
+        extended: extended,
+        minWidth: 92,
+        minExtendedWidth: 206,
+        labelType: extended
+            ? NavigationRailLabelType.none
+            : NavigationRailLabelType.all,
+        groupAlignment: -.45,
+        onDestinationSelected: onDestinationSelected,
+        leading: const Padding(
+          padding: EdgeInsets.only(top: 18, bottom: 18),
+          child: SizedBox(width: 48, height: 48, child: _BrandMark()),
+        ),
+        trailing: const Padding(
+          padding: EdgeInsets.only(top: 18),
+          child: _EmergencyButton(compact: true),
+        ),
+        destinations: [
+          for (final destination in _GlassNavigationBar.destinations)
+            NavigationRailDestination(
+              icon: Icon(destination.$1),
+              selectedIcon: Icon(destination.$2),
+              label: Text(destination.$3),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _GlassNavigationBar extends StatelessWidget {
   const _GlassNavigationBar({
     required this.selectedIndex,
@@ -2313,7 +2430,7 @@ class _GlassNavigationBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
 
-  static const _destinations = [
+  static const destinations = [
     (Icons.home_outlined, Icons.home_rounded, 'Accueil'),
     (Icons.people_alt_outlined, Icons.people_alt_rounded, 'Annuaire'),
     (
@@ -2326,10 +2443,11 @@ class _GlassNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassSurface(
-    borderRadius: 39,
+    key: const ValueKey('home-tab-bar-surface'),
+    borderRadius: 35,
     child: Row(
-      children: List.generate(_destinations.length, (index) {
-        final destination = _destinations[index];
+      children: List.generate(destinations.length, (index) {
+        final destination = destinations[index];
         return Expanded(
           child: _GlassNavigationDestination(
             icon: destination.$1,
@@ -2364,30 +2482,31 @@ class _GlassNavigationDestination extends StatelessWidget {
     button: true,
     selected: selected,
     label: label,
+    excludeSemantics: true,
     child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(36),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                width: selected ? 42 : 34,
-                height: 32,
+                width: selected ? 40 : 32,
+                height: 30,
                 decoration: BoxDecoration(
                   color: selected
                       ? const Color(0x241778D4)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   selected ? selectedIcon : icon,
-                  size: 23,
+                  size: 22,
                   color: selected ? AppColors.primary : AppColors.navy,
                 ),
               ),
@@ -2399,7 +2518,7 @@ class _GlassNavigationDestination extends StatelessWidget {
                   maxLines: 1,
                   style: TextStyle(
                     color: selected ? AppColors.primary : AppColors.navy,
-                    fontSize: 10,
+                    fontSize: 10.5,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                     height: 1,
                   ),
@@ -2414,7 +2533,11 @@ class _GlassNavigationDestination extends StatelessWidget {
 }
 
 class _GlassSurface extends StatelessWidget {
-  const _GlassSurface({required this.child, required this.borderRadius});
+  const _GlassSurface({
+    super.key,
+    required this.child,
+    required this.borderRadius,
+  });
 
   final Widget child;
   final double borderRadius;
@@ -2461,30 +2584,48 @@ class _GlassSurface extends StatelessWidget {
 class _SectionHeading extends StatelessWidget {
   final String title;
   final String? action;
-  const _SectionHeading({required this.title, this.action});
+  final VoidCallback? onAction;
+  const _SectionHeading({required this.title, this.action, this.onAction});
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: AppColors.navy,
-          ),
-        ),
-      ),
-      if (action != null)
-        TextButton(
-          onPressed: () {},
-          child: Text(
-            action!,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-          ),
-        ),
-    ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const titleWidgetStyle = TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        color: AppColors.navy,
+      );
+      final actionWidget = action == null
+          ? null
+          : TextButton(
+              onPressed: onAction,
+              child: Text(
+                action!,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+            );
+      final stackControls =
+          constraints.maxWidth < 320 &&
+          MediaQuery.textScalerOf(context).scale(1) > 1.4;
+      if (stackControls) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: titleWidgetStyle),
+            ?actionWidget,
+          ],
+        );
+      }
+      return Row(
+        children: [
+          Expanded(child: Text(title, style: titleWidgetStyle)),
+          ?actionWidget,
+        ],
+      );
+    },
   );
 }
 
@@ -2515,21 +2656,20 @@ class _HealthDirectoryPageState extends State<_HealthDirectoryPage> {
         onSelected: (type) => setState(() => _selectedType = type),
       ),
       const SizedBox(height: 24),
-      AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        child: _selectedType == _DirectoryType.personnel
-            ? _PersonnelDirectory(
-                key: const ValueKey('personnel-directory'),
-                patientId: widget.patientId,
-                patientName: widget.patientName,
-              )
-            : _InstitutionsDirectory(
-                key: ValueKey('institutions-directory'),
-                patientId: widget.patientId,
-                patientName: widget.patientName,
-              ),
+      IndexedStack(
+        index: _selectedType.index,
+        children: [
+          _PersonnelDirectory(
+            key: const ValueKey('personnel-directory'),
+            patientId: widget.patientId,
+            patientName: widget.patientName,
+          ),
+          _InstitutionsDirectory(
+            key: const ValueKey('institutions-directory'),
+            patientId: widget.patientId,
+            patientName: widget.patientName,
+          ),
+        ],
       ),
     ],
   );
@@ -2646,7 +2786,9 @@ class _DirectoryTypeOption extends StatelessWidget {
   );
 }
 
-class _PersonnelDirectory extends StatelessWidget {
+enum _PersonnelFilter { all, doctors, nurses, available }
+
+class _PersonnelDirectory extends StatefulWidget {
   final String patientId;
   final String patientName;
 
@@ -2655,6 +2797,48 @@ class _PersonnelDirectory extends StatelessWidget {
     required this.patientId,
     required this.patientName,
   });
+
+  @override
+  State<_PersonnelDirectory> createState() => _PersonnelDirectoryState();
+}
+
+class _PersonnelDirectoryState extends State<_PersonnelDirectory> {
+  String _query = '';
+  _PersonnelFilter _filter = _PersonnelFilter.all;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _personnelStream;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Firebase.apps.isNotEmpty) {
+      _personnelStream = FirebaseFirestore.instance
+          .collection('personnelMedical')
+          .limit(50)
+          .snapshots();
+    }
+  }
+
+  List<_Professional> _filterRecords(List<_Professional> records) {
+    final query = _normalizedSearch(_query);
+    return records.where((record) {
+      final searchText = _normalizedSearch(
+        '${record.name} ${record.role} ${record.workplace} '
+        '${record.address} ${record.services}',
+      );
+      if (query.isNotEmpty && !searchText.contains(query)) return false;
+      final role = _normalizedSearch(record.role);
+      return switch (_filter) {
+        _PersonnelFilter.all => true,
+        _PersonnelFilter.doctors =>
+          role.contains('medecin') ||
+              role.contains('docteur') ||
+              role.contains('doctor'),
+        _PersonnelFilter.nurses =>
+          role.contains('infirmier') || role.contains('infirmiere'),
+        _PersonnelFilter.available => record.available,
+      };
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -2674,19 +2858,41 @@ class _PersonnelDirectory extends StatelessWidget {
         style: TextStyle(color: AppColors.muted),
       ),
       const SizedBox(height: 20),
-      const _SearchField(hint: 'Médecin, spécialité ou établissement...'),
+      _SearchField(
+        hint: 'Médecin, spécialité ou établissement...',
+        onChanged: (value) => setState(() => _query = value),
+      ),
       const SizedBox(height: 16),
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: const [
-            _FilterChip('Tous'),
-            SizedBox(width: 8),
-            _FilterChip('Médecins'),
-            SizedBox(width: 8),
-            _FilterChip('Infirmiers'),
-            SizedBox(width: 8),
-            _FilterChip('Disponibles'),
+          children: [
+            _FilterChip(
+              label: 'Tous',
+              selected: _filter == _PersonnelFilter.all,
+              onSelected: () => setState(() => _filter = _PersonnelFilter.all),
+            ),
+            const SizedBox(width: 8),
+            _FilterChip(
+              label: 'Médecins',
+              selected: _filter == _PersonnelFilter.doctors,
+              onSelected: () =>
+                  setState(() => _filter = _PersonnelFilter.doctors),
+            ),
+            const SizedBox(width: 8),
+            _FilterChip(
+              label: 'Infirmiers',
+              selected: _filter == _PersonnelFilter.nurses,
+              onSelected: () =>
+                  setState(() => _filter = _PersonnelFilter.nurses),
+            ),
+            const SizedBox(width: 8),
+            _FilterChip(
+              label: 'Disponibles',
+              selected: _filter == _PersonnelFilter.available,
+              onSelected: () =>
+                  setState(() => _filter = _PersonnelFilter.available),
+            ),
           ],
         ),
       ),
@@ -2698,33 +2904,34 @@ class _PersonnelDirectory extends StatelessWidget {
           icon: Icons.cloud_off_outlined,
           title: 'Annuaire en mode aperçu',
           message:
-              'Firebase sera utilisé lorsque l’application sera initialisée.',
+              'Les profils publiés apparaîtront ici dès que le service sera connecté.',
         )
       else
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('personnelMedical')
-              .limit(50)
-              .snapshots(),
+          stream: _personnelStream,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return const _DirectoryFeedback(
-                icon: Icons.lock_outline,
+                icon: Icons.cloud_off_outlined,
                 title: 'Personnel indisponible',
                 message:
-                    'Vérifiez les règles Firestore de la collection personnelMedical.',
+                    'Nous n’arrivons pas à charger l’annuaire. Vérifiez votre connexion et réessayez.',
               );
             }
             if (!snapshot.hasData) return const _DirectoryLoading();
-            final records = snapshot.data!.docs
-                .map((doc) => _Professional.fromFirestore(doc))
+            final allRecords = snapshot.data!.docs
+                .map(_Professional.fromFirestore)
                 .toList();
+            final records = _filterRecords(allRecords);
             if (records.isEmpty) {
-              return const _DirectoryFeedback(
+              return _DirectoryFeedback(
                 icon: Icons.person_search_outlined,
-                title: 'Aucun professionnel pour le moment',
-                message:
-                    'Ajoutez des documents dans personnelMedical depuis Firebase.',
+                title: allRecords.isEmpty
+                    ? 'Aucun professionnel pour le moment'
+                    : 'Aucun résultat',
+                message: allRecords.isEmpty
+                    ? 'Les profils publiés apparaîtront ici.'
+                    : 'Modifiez votre recherche ou choisissez un autre filtre.',
               );
             }
             return _DirectoryGrid(
@@ -2732,8 +2939,8 @@ class _PersonnelDirectory extends StatelessWidget {
                 for (final record in records)
                   _ProfessionalCard(
                     professional: record,
-                    patientId: patientId,
-                    patientName: patientName,
+                    patientId: widget.patientId,
+                    patientName: widget.patientName,
                   ),
               ],
             );
@@ -2743,7 +2950,7 @@ class _PersonnelDirectory extends StatelessWidget {
   );
 }
 
-class _InstitutionsDirectory extends StatelessWidget {
+class _InstitutionsDirectory extends StatefulWidget {
   final String patientId;
   final String patientName;
 
@@ -2752,6 +2959,25 @@ class _InstitutionsDirectory extends StatelessWidget {
     required this.patientId,
     required this.patientName,
   });
+
+  @override
+  State<_InstitutionsDirectory> createState() => _InstitutionsDirectoryState();
+}
+
+class _InstitutionsDirectoryState extends State<_InstitutionsDirectory> {
+  String _query = '';
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _institutionStream;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Firebase.apps.isNotEmpty) {
+      _institutionStream = FirebaseFirestore.instance
+          .collection('institution')
+          .limit(50)
+          .snapshots();
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -2771,7 +2997,10 @@ class _InstitutionsDirectory extends StatelessWidget {
         style: TextStyle(color: AppColors.muted),
       ),
       const SizedBox(height: 20),
-      const _SearchField(hint: 'Rechercher un hôpital, une clinique...'),
+      _SearchField(
+        hint: 'Rechercher un hôpital, une clinique...',
+        onChanged: (value) => setState(() => _query = value),
+      ),
       const SizedBox(height: 22),
       const _SectionHeading(title: 'À proximité'),
       const SizedBox(height: 6),
@@ -2780,33 +3009,43 @@ class _InstitutionsDirectory extends StatelessWidget {
           icon: Icons.cloud_off_outlined,
           title: 'Annuaire en mode aperçu',
           message:
-              'Firebase sera utilisé lorsque l’application sera initialisée.',
+              'Les établissements publiés apparaîtront ici dès que le service sera connecté.',
         )
       else
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('institution')
-              .limit(50)
-              .snapshots(),
+          stream: _institutionStream,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return const _DirectoryFeedback(
-                icon: Icons.lock_outline,
+                icon: Icons.cloud_off_outlined,
                 title: 'Institutions indisponibles',
                 message:
-                    'Vérifiez les règles Firestore de la collection institution.',
+                    'Nous n’arrivons pas à charger les institutions. Vérifiez votre connexion et réessayez.',
               );
             }
             if (!snapshot.hasData) return const _DirectoryLoading();
-            final records = snapshot.data!.docs
+            final allRecords = snapshot.data!.docs
                 .map((doc) => _Institution.fromFirestore(doc))
                 .toList();
+            final query = _normalizedSearch(_query);
+            final records = query.isEmpty
+                ? allRecords
+                : allRecords.where((record) {
+                    final searchText = _normalizedSearch(
+                      '${record.name} ${record.type} ${record.address} '
+                      '${record.services}',
+                    );
+                    return searchText.contains(query);
+                  }).toList();
             if (records.isEmpty) {
-              return const _DirectoryFeedback(
+              return _DirectoryFeedback(
                 icon: Icons.location_city_outlined,
-                title: 'Aucune institution pour le moment',
-                message:
-                    'Ajoutez des documents dans institution depuis Firebase.',
+                title: allRecords.isEmpty
+                    ? 'Aucune institution pour le moment'
+                    : 'Aucun résultat',
+                message: allRecords.isEmpty
+                    ? 'Les établissements publiés apparaîtront ici.'
+                    : 'Modifiez votre recherche pour afficher plus de résultats.',
               );
             }
             return _DirectoryGrid(
@@ -2814,8 +3053,8 @@ class _InstitutionsDirectory extends StatelessWidget {
                 for (final record in records)
                   _InstitutionCard(
                     institution: record,
-                    patientId: patientId,
-                    patientName: patientName,
+                    patientId: widget.patientId,
+                    patientName: widget.patientName,
                   ),
               ],
             );
@@ -2827,20 +3066,27 @@ class _InstitutionsDirectory extends StatelessWidget {
 
 class _FilterChip extends StatelessWidget {
   final String label;
-  const _FilterChip(this.label);
+  final bool selected;
+  final VoidCallback onSelected;
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF4F7FC),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(
-      label,
-      style: const TextStyle(
-        fontWeight: FontWeight.w600,
-        color: AppColors.navy,
-      ),
+  Widget build(BuildContext context) => ChoiceChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: (_) => onSelected(),
+    showCheckmark: false,
+    avatar: selected
+        ? const Icon(Icons.check_rounded, size: 18, color: AppColors.primary)
+        : null,
+    tooltip: 'Filtrer par $label',
+    labelStyle: TextStyle(
+      fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+      color: selected ? AppColors.primaryDark : AppColors.navy,
     ),
   );
 }
@@ -2861,9 +3107,9 @@ class _DirectoryCardTapTarget extends StatelessWidget {
     label: label,
     child: MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
         child: child,
       ),
     ),
@@ -3199,6 +3445,11 @@ class _Professional {
   final String experience;
   final String qualification;
   final String schedule;
+  final Map<AppointmentMode, String> appointmentSchedules;
+  final Set<AppointmentMode> enabledAppointmentModes;
+  final bool hasAppointmentModeConfiguration;
+  final Map<AppointmentMode, DateTimeRange> availabilityPeriods;
+  final String defaultPrice;
   final String services;
   final String address;
   final String distance;
@@ -3217,6 +3468,11 @@ class _Professional {
     required this.experience,
     required this.qualification,
     required this.schedule,
+    required this.appointmentSchedules,
+    required this.enabledAppointmentModes,
+    required this.hasAppointmentModeConfiguration,
+    required this.availabilityPeriods,
+    required this.defaultPrice,
     required this.services,
     required this.address,
     required this.distance,
@@ -3252,6 +3508,53 @@ class _Professional {
       'titre',
       'title',
     ]);
+    final schedule = _field(data, [
+      'horaires',
+      'horaire',
+      'disponibilites',
+      'disponibilités',
+      'schedule',
+      'availability',
+    ]);
+    final rawSchedules = data['horairesParMode'];
+    final rawModes = data['modesDeRendezVous'];
+    final rawAvailability = data['disponibilitesParMode'];
+    String scheduleFor(AppointmentMode mode) => rawSchedules is Map
+        ? rawSchedules[mode.storageValue]?.toString().trim() ?? ''
+        : '';
+    bool isModeEnabled(AppointmentMode mode) {
+      final value = rawModes is Map ? rawModes[mode.storageValue] : null;
+      return value == true ||
+          value is String &&
+              (value.toLowerCase() == 'true' || value.toLowerCase() == 'oui');
+    }
+
+    DateTimeRange? periodFor(AppointmentMode mode) {
+      final configuration = rawAvailability is Map
+          ? rawAvailability[mode.storageValue]
+          : null;
+      if (configuration is! Map) return null;
+      final start = DateTime.tryParse(
+        configuration['validFrom']?.toString() ?? '',
+      );
+      final end = DateTime.tryParse(
+        configuration['validUntil']?.toString() ?? '',
+      );
+      if (start == null || end == null || end.isBefore(start)) return null;
+      return DateTimeRange(start: start, end: end);
+    }
+
+    final appointmentSchedules = <AppointmentMode, String>{
+      for (final mode in AppointmentMode.values) mode: scheduleFor(mode),
+    };
+    final enabledAppointmentModes = <AppointmentMode>{
+      for (final mode in AppointmentMode.values)
+        if (isModeEnabled(mode)) mode,
+    };
+    final availabilityPeriods = <AppointmentMode, DateTimeRange>{
+      for (final mode in AppointmentMode.values)
+        if (periodFor(mode) != null) mode: periodFor(mode)!,
+    };
     return _Professional(
       id: _field(data, ['ownerUid']).isEmpty
           ? doc.id
@@ -3290,14 +3593,12 @@ class _Professional {
         'degree',
         'formation',
       ]),
-      schedule: _field(data, [
-        'horaires',
-        'horaire',
-        'disponibilites',
-        'disponibilités',
-        'schedule',
-        'availability',
-      ]),
+      schedule: schedule,
+      appointmentSchedules: appointmentSchedules,
+      enabledAppointmentModes: enabledAppointmentModes,
+      hasAppointmentModeConfiguration: rawModes is Map,
+      availabilityPeriods: availabilityPeriods,
+      defaultPrice: _field(data, ['prixParDefaut', 'defaultPrice']),
       services: _field(data, [
         'services',
         'prestations',
@@ -3697,6 +3998,11 @@ class _ProfessionalDetailPage extends StatelessWidget {
           schedule: professional.schedule,
           address: professional.address,
           available: professional.available,
+          schedulesByMode: professional.appointmentSchedules,
+          enabledModes: professional.enabledAppointmentModes,
+          hasModeConfiguration: professional.hasAppointmentModeConfiguration,
+          availabilityPeriods: professional.availabilityPeriods,
+          defaultPrice: professional.defaultPrice,
         ),
       ),
       if (professional.biography.isNotEmpty) ...[
@@ -3739,11 +4045,26 @@ class _ProfessionalDetailPage extends StatelessWidget {
               label: 'Formation et qualifications',
               value: professional.qualification,
             ),
-          if (professional.schedule.isNotEmpty)
+          if (professional.hasAppointmentModeConfiguration) ...[
+            for (final mode in AppointmentMode.values)
+              if (professional.enabledAppointmentModes.contains(mode) &&
+                  professional.appointmentSchedules[mode]!.isNotEmpty)
+                _DetailEntry(
+                  icon: mode.icon,
+                  label: mode.label,
+                  value: professional.appointmentSchedules[mode]!,
+                ),
+          ] else if (professional.schedule.isNotEmpty)
             _DetailEntry(
               icon: Icons.schedule_outlined,
               label: 'Horaires',
               value: professional.schedule,
+            ),
+          if (professional.defaultPrice.isNotEmpty)
+            _DetailEntry(
+              icon: Icons.payments_outlined,
+              label: 'Prix indicatif',
+              value: '${professional.defaultPrice} HTG',
             ),
           if (professional.services.isNotEmpty)
             _DetailEntry(
@@ -4171,10 +4492,14 @@ class _DetailEntry extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
+  final User user;
+  final String profileName;
   final int unreadNotificationCount;
   final VoidCallback onNotificationsTap;
   final VoidCallback onProfileTap;
   const _Header({
+    required this.user,
+    required this.profileName,
     required this.unreadNotificationCount,
     required this.onNotificationsTap,
     required this.onProfileTap,
@@ -4185,12 +4510,22 @@ class _Header extends StatelessWidget {
     return Container(
       key: const ValueKey('home-header'),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: const Color(0xFFEDF8F5),
+      padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0A102A56),
+            blurRadius: 12,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
       child: Row(
         children: [
-          const SizedBox(width: 44, height: 44, child: _BrandMark()),
-          const SizedBox(width: 11),
+          const SizedBox(width: 40, height: 40, child: _BrandMark()),
+          const SizedBox(width: 12),
           const Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -4232,25 +4567,27 @@ class _Header extends StatelessWidget {
             onTap: onNotificationsTap,
           ),
           const SizedBox(width: 8),
-          Semantics(
-            button: true,
-            label: 'Ouvrir le profil LL',
-            child: Material(
-              color: const Color(0xFFE8E2F8),
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: onProfileTap,
-                customBorder: const CircleBorder(),
-                child: const SizedBox(
-                  width: 42,
-                  height: 42,
-                  child: Center(
-                    child: Text(
-                      'LL',
-                      style: TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
+          Tooltip(
+            message: 'Profil de $profileName',
+            child: Semantics(
+              button: true,
+              label: 'Ouvrir le profil de $profileName',
+              excludeSemantics: true,
+              child: Material(
+                color: const Color(0xFFE8E2F8),
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onProfileTap,
+                  customBorder: const CircleBorder(),
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(
+                      child: _GoogleAvatar(
+                        user: user,
+                        displayName: profileName,
+                        radius: 24,
                       ),
                     ),
                   ),
@@ -4266,13 +4603,18 @@ class _Header extends StatelessWidget {
 
 class _GoogleAvatar extends StatelessWidget {
   final User user;
+  final String? displayName;
   final double radius;
-  const _GoogleAvatar({required this.user, required this.radius});
+  const _GoogleAvatar({
+    required this.user,
+    this.displayName,
+    required this.radius,
+  });
 
   @override
   Widget build(BuildContext context) {
     final photoUrl = user.photoURL;
-    final initials = (user.displayName ?? user.email ?? 'P')
+    final initials = (displayName ?? user.displayName ?? user.email ?? 'P')
         .split(RegExp(r'\s+'))
         .where((part) => part.isNotEmpty)
         .take(2)
@@ -4315,8 +4657,8 @@ class _RoundIcon extends StatelessWidget {
             onTap: onTap,
             customBorder: const CircleBorder(),
             child: SizedBox(
-              width: 42,
-              height: 42,
+              width: 48,
+              height: 48,
               child: Icon(icon, color: AppColors.navy, size: 21),
             ),
           ),
@@ -4350,58 +4692,312 @@ class _RoundIcon extends StatelessWidget {
 
 class _SearchField extends StatelessWidget {
   final String hint;
+  final VoidCallback? onTap;
+  final VoidCallback? onFilterTap;
+  final ValueChanged<String>? onChanged;
   const _SearchField({
     this.hint = 'Rechercher un service, un professionnel...',
+    this.onTap,
+    this.onFilterTap,
+    this.onChanged,
   });
+
   @override
-  Widget build(BuildContext context) => Container(
-    key: const ValueKey('home-search-bar'),
-    height: 56,
-    padding: const EdgeInsets.fromLTRB(16, 6, 7, 6),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF0EDFA),
-      borderRadius: BorderRadius.circular(28),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.search_rounded, color: AppColors.navy, size: 23),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            hint,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.muted,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+  Widget build(BuildContext context) {
+    if (onChanged != null) {
+      return TextField(
+        key: const ValueKey('home-search-bar'),
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: AppColors.navy,
+            size: 23,
+          ),
+          suffixIcon: onFilterTap == null
+              ? null
+              : IconButton(
+                  tooltip: 'Filtrer',
+                  onPressed: onFilterTap,
+                  icon: const Icon(Icons.tune_rounded),
+                ),
+          filled: true,
+          fillColor: const Color(0xFFF0F3FA),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
           ),
         ),
-        const SizedBox(width: 6),
-        Tooltip(
-          message: 'Filtrer',
-          child: Material(
-            color: const Color(0xFFDDECF7),
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: () {},
-              customBorder: const CircleBorder(),
-              child: const SizedBox(
-                width: 44,
-                height: 44,
-                child: Icon(
-                  Icons.tune_rounded,
-                  color: AppColors.navy,
-                  size: 21,
-                ),
+      );
+    }
+
+    return Semantics(
+      button: true,
+      label: hint,
+      child: Material(
+        key: const ValueKey('home-search-bar'),
+        color: const Color(0xFFF0F3FA),
+        borderRadius: BorderRadius.circular(28),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: SizedBox(
+            height: 58,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 5, 5, 5),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.search_rounded,
+                    color: AppColors.navy,
+                    size: 23,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      hint,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (onFilterTap != null) ...[
+                    const SizedBox(width: 6),
+                    Material(
+                      color: const Color(0xFFDDECF7),
+                      shape: const CircleBorder(),
+                      child: IconButton(
+                        tooltip: 'Filtrer',
+                        onPressed: onFilterTap,
+                        icon: const Icon(
+                          Icons.tune_rounded,
+                          color: AppColors.navy,
+                          size: 21,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
+
+class _ServicesCatalogPage extends StatefulWidget {
+  const _ServicesCatalogPage({required this.services});
+
+  final List<HealthService> services;
+
+  @override
+  State<_ServicesCatalogPage> createState() => _ServicesCatalogPageState();
+}
+
+class _ServicesCatalogPageState extends State<_ServicesCatalogPage> {
+  String _query = '';
+
+  List<HealthService> get _visibleServices {
+    final query = _normalizedSearch(_query);
+    if (query.isEmpty) return widget.services;
+    return widget.services.where((service) {
+      final searchText = _normalizedSearch(
+        '${service.title} ${service.summary} ${service.actionLabel}',
+      );
+      return searchText.contains(query);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final services = _visibleServices;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Tous les services')),
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SearchField(
+                    hint: 'Rechercher un service...',
+                    onChanged: (value) => setState(() => _query = value),
+                  ),
+                  const SizedBox(height: 18),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      '${services.length} service${services.length > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: services.isEmpty
+                        ? const _DirectoryFeedback(
+                            icon: Icons.search_off_rounded,
+                            title: 'Aucun service trouvé',
+                            message:
+                                'Essayez un terme plus général, comme pharmacie ou prévention.',
+                          )
+                        : GridView.builder(
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 270,
+                                  mainAxisExtent: 350,
+                                  crossAxisSpacing: 14,
+                                  mainAxisSpacing: 14,
+                                ),
+                            itemCount: services.length,
+                            itemBuilder: (context, index) {
+                              final service = services[index];
+                              return _ServiceCard(
+                                service: service,
+                                onTap: () => Navigator.of(context).pop(service),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthServiceSearchDelegate extends SearchDelegate<HealthService?> {
+  _HealthServiceSearchDelegate({required this.services})
+    : super(searchFieldLabel: 'Service de santé');
+
+  final List<HealthService> services;
+
+  List<HealthService> get _results {
+    final normalizedQuery = _normalizedSearch(query);
+    if (normalizedQuery.isEmpty) return services;
+    return services.where((service) {
+      final searchText = _normalizedSearch(
+        '${service.title} ${service.summary} ${service.actionLabel}',
+      );
+      return searchText.contains(normalizedQuery);
+    }).toList();
+  }
+
+  @override
+  List<Widget>? buildActions(BuildContext context) => [
+    if (query.isNotEmpty)
+      IconButton(
+        tooltip: 'Effacer',
+        onPressed: () => query = '',
+        icon: const Icon(Icons.close_rounded),
+      ),
+  ];
+
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(
+    tooltip: 'Retour',
+    onPressed: () => close(context, null),
+    icon: const Icon(Icons.arrow_back_rounded),
+  );
+
+  @override
+  Widget buildResults(BuildContext context) => _buildResults(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildResults(context);
+
+  Widget _buildResults(BuildContext context) {
+    final results = _results;
+    if (results.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: _DirectoryFeedback(
+            icon: Icons.search_off_rounded,
+            title: 'Aucun service trouvé',
+            message: 'Vérifiez l’orthographe ou essayez un autre terme.',
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      itemCount: results.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final service = results[index];
+        return Material(
+          color: service.background,
+          borderRadius: BorderRadius.circular(18),
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            onTap: () => close(context, service),
+            leading: SizedBox.square(
+              dimension: 48,
+              child: _ServiceImage(service: service, size: 48),
+            ),
+            title: Text(
+              service.title,
+              style: TextStyle(
+                color: service.contentColor,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Text(
+              service.summary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: service.contentColor),
+            ),
+            trailing: Icon(
+              Icons.arrow_forward_rounded,
+              color: service.accessibleAccent,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+String _normalizedSearch(String value) => value
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp('[àâä]'), 'a')
+    .replaceAll(RegExp('[éèêë]'), 'e')
+    .replaceAll(RegExp('[îï]'), 'i')
+    .replaceAll(RegExp('[ôö]'), 'o')
+    .replaceAll(RegExp('[ùûü]'), 'u')
+    .replaceAll('ç', 'c')
+    .replaceAll(RegExp(r'\s+'), ' ');
 
 class _ServiceCarousel extends StatelessWidget {
   final bool wide;
@@ -4417,9 +5013,17 @@ class _ServiceCarousel extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       const gap = 12.0;
-      // Au moins 2,5 cartes restent visibles, sans déformer leur ratio 266 x 365.
-      final cardWidth = (constraints.maxWidth - (gap * 2)) / 2.5;
-      final cardHeight = cardWidth * (365 / 266);
+      final visibleCards = wide
+          ? (constraints.maxWidth >= 1000 ? 4.2 : 3.35)
+          : (constraints.maxWidth < 340 ? 1.85 : 2.3);
+      final gapCount = visibleCards.ceil() - 1;
+      final availableWidth = constraints.maxWidth - gap * gapCount;
+      final cardWidth = (availableWidth / visibleCards).clamp(136.0, 260.0);
+      final textScale = MediaQuery.textScalerOf(
+        context,
+      ).scale(1).clamp(1.0, 2.0);
+      final cardHeight =
+          cardWidth * (365 / 266) + math.max(0, textScale - 1) * 72;
       return SizedBox(
         height: cardHeight,
         child: ListView.separated(
@@ -4482,7 +5086,7 @@ class _ServiceCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: compact ? 14 : 19,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF172033),
+                    color: service.contentColor,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -4493,7 +5097,7 @@ class _ServiceCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: compact ? 10.5 : 14,
                     height: 1.2,
-                    color: const Color(0xFF283648),
+                    color: service.contentColor,
                   ),
                 ),
                 SizedBox(height: compact ? 7 : 13),
@@ -4502,7 +5106,7 @@ class _ServiceCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: compact ? 12 : 16,
                     fontWeight: FontWeight.bold,
-                    color: service.accent,
+                    color: service.accessibleAccent,
                   ),
                 ),
               ],
@@ -4647,7 +5251,7 @@ class _AssistantCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Assistant santé • En ligne',
+                    'Assistant santé • Aperçu',
                     style: TextStyle(color: Color(0xFFCFE3FF), fontSize: 12),
                   ),
                 ],
@@ -5018,7 +5622,7 @@ class _AiSheetHeader extends StatelessWidget {
                 SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Assistant santé • En ligne',
+                    'Assistant santé • Aperçu',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Color(0xFFC6DDF5), fontSize: 12),
@@ -5464,7 +6068,9 @@ class _MagicBackdropPainter extends CustomPainter {
 }
 
 class _EmergencyButton extends StatefulWidget {
-  const _EmergencyButton();
+  const _EmergencyButton({this.compact = false});
+
+  final bool compact;
 
   @override
   State<_EmergencyButton> createState() => _EmergencyButtonState();
@@ -5548,24 +6154,25 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 78,
+    width: widget.compact ? 58 : 70,
+    height: widget.compact ? 58 : null,
     child: Semantics(
       button: true,
       label: 'Urgences',
       child: Tooltip(
         message: 'Urgences',
         child: _GlassSurface(
-          borderRadius: 39,
+          borderRadius: widget.compact ? 20 : 22,
           child: Material(
             color: Colors.transparent,
             child: InkWell(
               key: const ValueKey('emergency-bottom-button'),
               onTap: _openEmergencySheet,
-              customBorder: const CircleBorder(),
-              child: const Icon(
+              borderRadius: BorderRadius.circular(widget.compact ? 20 : 22),
+              child: Icon(
                 Icons.emergency_rounded,
-                size: 33,
-                color: Color(0xFFFF3029),
+                size: widget.compact ? 29 : 30,
+                color: const Color(0xFFFF3029),
               ),
             ),
           ),

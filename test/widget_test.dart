@@ -61,6 +61,78 @@ void main() {
     expect(finished, isTrue);
   });
 
+  testWidgets(
+    'rend les contrôles d’onboarding accessibles sans agrandir les points',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final semantics = tester.ensureSemantics();
+
+      await tester.pumpWidget(
+        MaterialApp(home: OnboardingScreen(onFinished: () {})),
+      );
+      await tester.pump();
+
+      for (var index = 0; index < 4; index++) {
+        final target = find.byKey(ValueKey('onboarding-dot-$index'));
+        final targetSize = tester.getSize(target);
+        expect(targetSize.width, greaterThanOrEqualTo(48));
+        expect(targetSize.height, greaterThanOrEqualTo(48));
+        expect(tester.getSemantics(target).label, 'Étape ${index + 1} sur 4');
+
+        final visual = find.descendant(
+          of: target,
+          matching: find.byType(AnimatedContainer),
+        );
+        expect(visual, findsOneWidget);
+        expect(tester.getSize(visual).height, 8);
+      }
+
+      expect(
+        tester
+            .getSemantics(find.byKey(const ValueKey('onboarding-next')))
+            .label,
+        'Continuer vers l’étape 2 sur 4',
+      );
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('réduit les animations de l’onboarding sur demande', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: OnboardingScreen(onFinished: () {}),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.binding.transientCallbackCount, 0);
+    await tester.pump(const Duration(seconds: 9));
+    expect(tester.binding.transientCallbackCount, 0);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-next')));
+    await tester.pump();
+    expect(find.text('Les bons soins,\nau bon moment.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-dot-3')));
+    await tester.pump();
+    expect(find.text('Vous gardez le\ncontrôle.'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('onboarding-next'))).label,
+      'Se connecter',
+    );
+    semantics.dispose();
+  });
+
   testWidgets('affiche le portail de connexion', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SignInScreen()));
 
@@ -123,7 +195,7 @@ void main() {
     expect(find.byKey(const ValueKey('home-header')), findsOneWidget);
     expect(find.text('I-ENTIER'), findsOneWidget);
     expect(find.text('Votre espace santé'), findsOneWidget);
-    expect(find.text('LL'), findsOneWidget);
+    expect(find.text('PT'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(
       find.text('Rechercher un service, un professionnel...'),

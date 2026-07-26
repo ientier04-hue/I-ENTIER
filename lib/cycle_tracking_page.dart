@@ -349,11 +349,18 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
   }
 
   void _changeMonth(int offset) {
+    final nextMonth = DateTime(
+      _visibleMonth.year,
+      _visibleMonth.month + offset,
+    );
+    final lastDayOfMonth = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+    final selectedDay = _selectedDate.day > lastDayOfMonth
+        ? lastDayOfMonth
+        : _selectedDate.day;
+
     setState(() {
-      _visibleMonth = DateTime(
-        _visibleMonth.year,
-        _visibleMonth.month + offset,
-      );
+      _visibleMonth = nextMonth;
+      _selectedDate = DateTime(nextMonth.year, nextMonth.month, selectedDay);
     });
   }
 
@@ -1142,35 +1149,54 @@ class _CycleCalendar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 7),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisSpacing: 5,
-              crossAxisSpacing: 5,
-            ),
-            itemCount: 42,
-            itemBuilder: (context, index) {
-              final number = index - leadingDays + 1;
-              if (number < 1 || number > daysInMonth) {
-                return const SizedBox.shrink();
-              }
-              final date = DateTime(
-                visibleMonth.year,
-                visibleMonth.month,
-                number,
-              );
-              final entry = entriesByDay[cycleDateKey(date)];
-              return _CalendarDay(
-                date: date,
-                entry: entry,
-                selected: _sameDay(date, selectedDate),
-                today: _sameDay(date, today),
-                future: date.isAfter(today),
-                predictedPeriod: insights.isPredictedPeriod(date),
-                fertile: insights.isFertile(date),
-                onTap: () => onSelectDate(date),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const minimumTouchExtent = 48.0;
+              const preferredSpacing = 5.0;
+              final availableSpacing =
+                  (constraints.maxWidth - minimumTouchExtent * 7) / 6;
+              final spacing = availableSpacing <= 0
+                  ? 0.0
+                  : availableSpacing < preferredSpacing
+                  ? availableSpacing
+                  : preferredSpacing;
+              final cellWidth = (constraints.maxWidth - spacing * 6) / 7;
+              final rowExtent = cellWidth < minimumTouchExtent
+                  ? minimumTouchExtent
+                  : cellWidth;
+
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: spacing,
+                  crossAxisSpacing: spacing,
+                  mainAxisExtent: rowExtent,
+                ),
+                itemCount: 42,
+                itemBuilder: (context, index) {
+                  final number = index - leadingDays + 1;
+                  if (number < 1 || number > daysInMonth) {
+                    return const SizedBox.shrink();
+                  }
+                  final date = DateTime(
+                    visibleMonth.year,
+                    visibleMonth.month,
+                    number,
+                  );
+                  final entry = entriesByDay[cycleDateKey(date)];
+                  return _CalendarDay(
+                    date: date,
+                    entry: entry,
+                    selected: _sameDay(date, selectedDate),
+                    today: _sameDay(date, today),
+                    future: date.isAfter(today),
+                    predictedPeriod: insights.isPredictedPeriod(date),
+                    fertile: insights.isFertile(date),
+                    onTap: () => onSelectDate(date),
+                  );
+                },
               );
             },
           ),
@@ -1216,6 +1242,16 @@ class _CalendarDay extends StatelessWidget {
   Widget build(BuildContext context) {
     final period = entry?.isPeriod ?? false;
     final hasDetails = entry?.hasDetails ?? false;
+    final semanticsLabel = <String>[
+      _longDate(date),
+      if (today) 'aujourd’hui',
+      if (selected) 'sélectionné',
+      if (future) 'date future',
+      if (period) 'règles enregistrées',
+      if (predictedPeriod && !period) 'règles prévues',
+      if (fertile) 'fertilité estimée',
+      if (hasDetails) 'informations enregistrées',
+    ].join(', ');
     final background = period
         ? _rose
         : fertile
@@ -1228,10 +1264,18 @@ class _CalendarDay extends StatelessWidget {
         : _ink;
 
     return Semantics(
-      label: '${_longDate(date)}${period ? ', règles' : ''}',
+      key: Key('cycle-day-${cycleDateKey(date)}'),
+      label: semanticsLabel,
+      hint: future
+          ? 'La saisie n’est pas encore disponible pour cette date'
+          : hasDetails
+          ? 'Modifier les informations de cette journée'
+          : 'Ajouter des informations pour cette journée',
       button: true,
+      selected: selected,
+      onTap: onTap,
+      excludeSemantics: true,
       child: InkWell(
-        key: Key('cycle-day-${cycleDateKey(date)}'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(13),
         child: Container(

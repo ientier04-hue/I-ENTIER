@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:i_entier/cycle_tracking_page.dart';
@@ -63,6 +65,112 @@ void main() {
     expect(find.byKey(const Key('cycle-calendar')), findsOneWidget);
     expect(find.text('Mars 2026'), findsOneWidget);
     expect(find.textContaining('Fenêtre fertile estimée'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('garde la date sélectionnée visible au changement de mois', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CycleTrackingPage(
+          patientId: 'patient-test',
+          now: DateTime(2026, 3, 31),
+          initialEntries: const [],
+        ),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('cycle-calendar')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('cycle-previous-month')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Février 2026'), findsOneWidget);
+    expect(find.text('28 février 2026'), findsOneWidget);
+    final selectedDay = find.byKey(const Key('cycle-day-2026-02-28'));
+    final selectedDaySemantics = tester.getSemantics(selectedDay);
+    expect(selectedDaySemantics.label, contains('sélectionné'));
+    expect(selectedDaySemantics.flagsCollection.isSelected, ui.Tristate.isTrue);
+
+    await tester.ensureVisible(
+      find.byKey(const Key('cycle-selected-day-card')),
+    );
+    await tester.tap(find.byKey(const Key('cycle-selected-day-card')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Comment vous sentez-vous ?'), findsOneWidget);
+    semantics.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('annonce les états utiles des journées du calendrier', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final semantics = tester.ensureSemantics();
+    final entries = [
+      ..._period(DateTime(2026, 1, 1), 5),
+      ..._period(DateTime(2026, 1, 29), 4),
+      ..._period(DateTime(2026, 2, 26), 5),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CycleTrackingPage(
+          patientId: 'patient-test',
+          now: DateTime(2026, 3, 5),
+          initialEntries: entries,
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('cycle-calendar')),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    final today = tester.getSemantics(
+      find.byKey(const Key('cycle-day-2026-03-05')),
+    );
+    expect(today.label, contains('aujourd’hui'));
+    expect(today.label, contains('sélectionné'));
+    expect(today.flagsCollection.isSelected, ui.Tristate.isTrue);
+
+    final period = tester.getSemantics(
+      find.byKey(const Key('cycle-day-2026-03-01')),
+    );
+    expect(period.label, contains('règles enregistrées'));
+
+    final future = tester.getSemantics(
+      find.byKey(const Key('cycle-day-2026-03-06')),
+    );
+    expect(future.label, contains('date future'));
+
+    final fertile = tester.getSemantics(
+      find.byKey(const Key('cycle-day-2026-03-10')),
+    );
+    expect(fertile.label, contains('fertilité estimée'));
+
+    final predictedPeriod = tester.getSemantics(
+      find.byKey(const Key('cycle-day-2026-03-28')),
+    );
+    expect(predictedPeriod.label, contains('règles prévues'));
+
+    final daySize = tester.getSize(
+      find.byKey(const Key('cycle-day-2026-03-05')),
+    );
+    expect(daySize.width, greaterThanOrEqualTo(48));
+    expect(daySize.height, greaterThanOrEqualTo(48));
+    semantics.dispose();
     expect(tester.takeException(), isNull);
   });
 
@@ -232,6 +340,10 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.byKey(const Key('cycle-calendar')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('cycle-day-2026-03-05'))).height,
+      greaterThanOrEqualTo(48),
+    );
     expect(tester.takeException(), isNull);
   });
 }

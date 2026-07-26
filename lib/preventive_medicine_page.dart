@@ -720,14 +720,23 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
       ),
       body: StreamBuilder<List<PreventiveCareRecord>>(
         stream: _recordStream,
-        initialData: const <PreventiveCareRecord>[],
         builder: (context, snapshot) {
           final records = [...?snapshot.data]
             ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
           return StreamBuilder<List<PreventiveCareReminder>>(
             stream: _reminderStream,
-            initialData: const <PreventiveCareReminder>[],
             builder: (context, reminderSnapshot) {
+              final recordsAreLoading =
+                  !snapshot.hasData &&
+                  !snapshot.hasError &&
+                  snapshot.connectionState != ConnectionState.done;
+              final remindersAreLoading =
+                  !reminderSnapshot.hasData &&
+                  !reminderSnapshot.hasError &&
+                  reminderSnapshot.connectionState != ConnectionState.done;
+              if (recordsAreLoading || remindersAreLoading) {
+                return const _PreventiveLoadingState();
+              }
               final reminders = [...?reminderSnapshot.data]
                 ..sort((a, b) => a.dueAt.compareTo(b.dueAt));
               return _PreventiveDashboard(
@@ -752,6 +761,73 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
       ),
     );
   }
+}
+
+class _PreventiveLoadingState extends StatelessWidget {
+  const _PreventiveLoadingState();
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Semantics(
+      key: const Key('preventive-loading'),
+      container: true,
+      liveRegion: true,
+      label: 'Chargement de votre espace prévention',
+      child: ExcludeSemantics(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 430),
+          margin: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: _border),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x14102A56),
+                blurRadius: 24,
+                offset: Offset(0, 10),
+              ),
+            ],
+          ),
+          child: const Row(
+            children: [
+              SizedBox(
+                width: 42,
+                height: 42,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: _primary,
+                ),
+              ),
+              SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Chargement de votre espace prévention…',
+                      style: TextStyle(
+                        color: _navy,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 5),
+                    Text(
+                      'Nous récupérons votre plan, votre carnet et vos rappels.',
+                      style: TextStyle(color: _muted, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 enum _PreventiveView { overview, plan, screenings, habits, records }

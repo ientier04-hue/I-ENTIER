@@ -148,6 +148,11 @@ class ProviderBookingTarget {
   final String schedule;
   final String address;
   final bool available;
+  final Map<AppointmentMode, String> schedulesByMode;
+  final Set<AppointmentMode> enabledModes;
+  final bool hasModeConfiguration;
+  final String defaultPrice;
+  final Map<AppointmentMode, DateTimeRange> availabilityPeriods;
 
   const ProviderBookingTarget({
     required this.id,
@@ -157,7 +162,22 @@ class ProviderBookingTarget {
     required this.schedule,
     this.address = '',
     required this.available,
+    this.schedulesByMode = const <AppointmentMode, String>{},
+    this.enabledModes = const <AppointmentMode>{},
+    this.hasModeConfiguration = false,
+    this.defaultPrice = '',
+    this.availabilityPeriods = const <AppointmentMode, DateTimeRange>{},
   });
+
+  bool supportsMode(AppointmentMode mode) =>
+      !hasModeConfiguration || enabledModes.contains(mode);
+
+  String scheduleFor(AppointmentMode mode) {
+    final modeSchedule = schedulesByMode[mode]?.trim() ?? '';
+    return modeSchedule.isNotEmpty ? modeSchedule : schedule;
+  }
+
+  DateTimeRange? periodFor(AppointmentMode mode) => availabilityPeriods[mode];
 }
 
 abstract class PatientAppointmentRepository {
@@ -218,7 +238,7 @@ class FirestorePatientAppointmentRepository
       'appointmentMode': mode.storageValue,
       'location': location.trim(),
       'scheduledAt': Timestamp.fromDate(scheduledAt),
-      'scheduleLabel': provider.schedule.trim(),
+      'scheduleLabel': provider.scheduleFor(mode),
       'status': AppointmentStatus.pending.storageValue,
       'patientNote': patientNote.trim(),
       'responseNote': '',
@@ -230,33 +250,47 @@ class FirestorePatientAppointmentRepository
 
 class AppointmentAvailability {
   final Set<int> weekdays;
-  final TimeOfDay openingTime;
-  final TimeOfDay closingTime;
+  final TimeOfDay? openingTime;
+  final TimeOfDay? closingTime;
+  final DateTime? validFrom;
+  final DateTime? validUntil;
   final Duration interval;
 
   const AppointmentAvailability({
     required this.weekdays,
     required this.openingTime,
     required this.closingTime,
+    this.validFrom,
+    this.validUntil,
     this.interval = const Duration(minutes: 30),
   });
 
-  factory AppointmentAvailability.fromSchedule(String schedule) {
+  factory AppointmentAvailability.fromSchedule(
+    String schedule, {
+    DateTime? validFrom,
+    DateTime? validUntil,
+  }) {
     final normalized = _normalizeSchedule(schedule);
     final weekdays = _parseWeekdays(normalized);
     final timeRange = _parseTimeRange(normalized);
     return AppointmentAvailability(
-      weekdays: weekdays.isEmpty ? {1, 2, 3, 4, 5} : weekdays,
-      openingTime: timeRange.$1,
-      closingTime: timeRange.$2,
+      weekdays: weekdays,
+      openingTime: timeRange?.$1,
+      closingTime: timeRange?.$2,
+      validFrom: validFrom,
+      validUntil: validUntil,
     );
   }
+
+  bool get hasValidSchedule =>
+      weekdays.isNotEmpty && openingTime != null && closingTime != null;
 
   List<DateTime> availableDates({
     DateTime? now,
     int dayCount = 45,
     int maximum = 14,
   }) {
+    if (!hasValidSchedule) return const [];
     final reference = now ?? DateTime.now();
     final firstDay = DateTime(reference.year, reference.month, reference.day);
     final result = <DateTime>[];
@@ -272,7 +306,14 @@ class AppointmentAvailability {
   }
 
   List<DateTime> slotsForDate(DateTime date, {DateTime? now}) {
-    if (!weekdays.contains(date.weekday)) return const [];
+    final openingTime = this.openingTime;
+    final closingTime = this.closingTime;
+    if (!_isWithinValidityPeriod(date) ||
+        !weekdays.contains(date.weekday) ||
+        openingTime == null ||
+        closingTime == null) {
+      return const [];
+    }
     final reference = now ?? DateTime.now();
     final opening = DateTime(
       date.year,
@@ -301,6 +342,18 @@ class AppointmentAvailability {
       }
     }
     return result;
+  }
+
+  bool _isWithinValidityPeriod(DateTime date) {
+    final target = DateTime(date.year, date.month, date.day);
+    final start = validFrom == null
+        ? null
+        : DateTime(validFrom!.year, validFrom!.month, validFrom!.day);
+    final end = validUntil == null
+        ? null
+        : DateTime(validUntil!.year, validUntil!.month, validUntil!.day);
+    return (start == null || !target.isBefore(start)) &&
+        (end == null || !target.isAfter(end));
   }
 }
 
@@ -360,27 +413,27 @@ Set<int> _parseWeekdays(String value) {
   return result;
 }
 
-(TimeOfDay, TimeOfDay) _parseTimeRange(String value) {
+(TimeOfDay, TimeOfDay)? _parseTimeRange(String value) {
   final match = RegExp(
     r'(\d{1,2})(?:\s*(?:h|:)\s*(\d{1,2})?)?\s*(?:-|a|au)\s*(\d{1,2})(?:\s*(?:h|:)\s*(\d{1,2})?)?',
   ).firstMatch(value);
-  if (match == null) {
-    return (
-      const TimeOfDay(hour: 8, minute: 0),
-      const TimeOfDay(hour: 17, minute: 0),
-    );
+  if (match == null) return null;
+  final startHour = int.tryParse(match.group(1) ?? '');
+  final startMinute = int.tryParse(match.group(2) ?? '0');
+  final endHour = int.tryParse(match.group(3) ?? '');
+  final endMinute = int.tryParse(match.group(4) ?? '0');
+  if (startHour == null ||
+      startHour > 23 ||
+      startMinute == null ||
+      startMinute > 59 ||
+      endHour == null ||
+      endHour > 23 ||
+      endMinute == null ||
+      endMinute > 59) {
+    return null;
   }
-  int number(int group, [int fallback = 0]) =>
-      int.tryParse(match.group(group) ?? '') ?? fallback;
-  final startHour = number(1).clamp(0, 23);
-  final startMinute = number(2).clamp(0, 59);
-  final endHour = number(3).clamp(0, 23);
-  final endMinute = number(4).clamp(0, 59);
   if (endHour * 60 + endMinute <= startHour * 60 + startMinute) {
-    return (
-      const TimeOfDay(hour: 8, minute: 0),
-      const TimeOfDay(hour: 17, minute: 0),
-    );
+    return null;
   }
   return (
     TimeOfDay(hour: startHour, minute: startMinute),
@@ -411,23 +464,50 @@ class AppointmentBookingPage extends StatefulWidget {
 class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
   final _noteController = TextEditingController();
   final _addressController = TextEditingController();
-  late final AppointmentAvailability _availability;
-  late final List<DateTime> _dates;
-  AppointmentMode _selectedMode = AppointmentMode.atProvider;
+  late AppointmentAvailability _availability;
+  late List<DateTime> _dates;
+  late AppointmentMode _selectedMode;
   DateTime? _selectedDate;
   DateTime? _selectedSlot;
   bool _saving = false;
 
+  List<AppointmentMode> get _availableModes => AppointmentMode.values
+      .where(widget.provider.supportsMode)
+      .toList(growable: false);
+
   @override
   void initState() {
     super.initState();
+    _selectedMode = _availableModes.isEmpty
+        ? AppointmentMode.atProvider
+        : _availableModes.first;
     _availability = AppointmentAvailability.fromSchedule(
-      widget.provider.schedule,
+      widget.provider.scheduleFor(_selectedMode),
+      validFrom: widget.provider.periodFor(_selectedMode)?.start,
+      validUntil: widget.provider.periodFor(_selectedMode)?.end,
     );
     _dates = widget.provider.available
         ? _availability.availableDates(now: widget.now)
         : const [];
     if (_dates.isNotEmpty) _selectedDate = _dates.first;
+  }
+
+  void _selectMode(AppointmentMode mode) {
+    final availability = AppointmentAvailability.fromSchedule(
+      widget.provider.scheduleFor(mode),
+      validFrom: widget.provider.periodFor(mode)?.start,
+      validUntil: widget.provider.periodFor(mode)?.end,
+    );
+    final dates = widget.provider.available
+        ? availability.availableDates(now: widget.now)
+        : const <DateTime>[];
+    setState(() {
+      _selectedMode = mode;
+      _availability = availability;
+      _dates = dates;
+      _selectedDate = dates.isEmpty ? null : dates.first;
+      _selectedSlot = null;
+    });
   }
 
   @override
@@ -502,7 +582,10 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _BookingProviderCard(provider: widget.provider),
+                  _BookingProviderCard(
+                    provider: widget.provider,
+                    selectedMode: _selectedMode,
+                  ),
                   const SizedBox(height: 20),
                   if (!widget.provider.available)
                     const _AppointmentMessage(
@@ -510,6 +593,20 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
                       title: 'Réservations indisponibles',
                       message:
                           'Ce profil n’accepte pas de nouvelles demandes pour le moment.',
+                    )
+                  else if (_availableModes.isEmpty)
+                    const _AppointmentMessage(
+                      icon: Icons.event_busy_outlined,
+                      title: 'Aucun type de rendez-vous disponible',
+                      message:
+                          'Ce professionnel n’a activé aucune modalité de rendez-vous pour le moment.',
+                    )
+                  else if (!_availability.hasValidSchedule)
+                    const _AppointmentMessage(
+                      icon: Icons.contact_phone_outlined,
+                      title: 'Aucun créneau disponible',
+                      message:
+                          'Aucun horaire de réservation valide n’est publié. Contactez directement le prestataire pour connaître ses disponibilités.',
                     )
                   else if (_dates.isEmpty)
                     const _AppointmentMessage(
@@ -526,8 +623,8 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
                     const SizedBox(height: 12),
                     _AppointmentModeSelector(
                       selectedMode: _selectedMode,
-                      onSelected: (mode) =>
-                          setState(() => _selectedMode = mode),
+                      modes: _availableModes,
+                      onSelected: _selectMode,
                     ),
                     if (_selectedMode == AppointmentMode.homeVisit) ...[
                       const SizedBox(height: 12),
@@ -698,8 +795,12 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
 
 class _BookingProviderCard extends StatelessWidget {
   final ProviderBookingTarget provider;
+  final AppointmentMode selectedMode;
 
-  const _BookingProviderCard({required this.provider});
+  const _BookingProviderCard({
+    required this.provider,
+    required this.selectedMode,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -755,7 +856,7 @@ class _BookingProviderCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      provider.schedule,
+                      provider.scheduleFor(selectedMode),
                       style: const TextStyle(
                         color: _appointmentNavy,
                         fontSize: 12,
@@ -765,6 +866,27 @@ class _BookingProviderCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (provider.defaultPrice.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.payments_outlined,
+                      size: 16,
+                      color: _appointmentPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'À partir de ${provider.defaultPrice} HTG',
+                      style: const TextStyle(
+                        color: _appointmentNavy,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -775,23 +897,25 @@ class _BookingProviderCard extends StatelessWidget {
 
 class _AppointmentModeSelector extends StatelessWidget {
   final AppointmentMode selectedMode;
+  final List<AppointmentMode> modes;
   final ValueChanged<AppointmentMode> onSelected;
 
   const _AppointmentModeSelector({
     required this.selectedMode,
+    required this.modes,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      for (final mode in AppointmentMode.values) ...[
+      for (final mode in modes) ...[
         _AppointmentModeOption(
           mode: mode,
           selected: selectedMode == mode,
           onTap: () => onSelected(mode),
         ),
-        if (mode != AppointmentMode.values.last) const SizedBox(height: 9),
+        if (mode != modes.last) const SizedBox(height: 9),
       ],
     ],
   );

@@ -45,6 +45,7 @@ void main() {
     final dates = availability.availableDates(now: now);
     final slots = availability.slotsForDate(dates.first, now: now);
 
+    expect(availability.hasValidSchedule, isTrue);
     expect(dates.first.weekday, DateTime.monday);
     expect(slots.map((slot) => '${slot.hour}:${slot.minute}'), [
       '8:0',
@@ -54,6 +55,83 @@ void main() {
     ]);
     expect(availability.slotsForDate(DateTime(2026, 7, 25), now: now), isEmpty);
   });
+
+  test('ne fabrique aucun créneau pour un horaire absent ou illisible', () {
+    final now = DateTime(2026, 7, 20, 7);
+    const invalidSchedules = [
+      '',
+      'Sur rendez-vous',
+      'Lun–Ven',
+      '8 h–17 h',
+      'Lun–Ven, 18 h–8 h',
+      'Lun–Ven, 25 h–27 h',
+    ];
+
+    for (final schedule in invalidSchedules) {
+      final availability = AppointmentAvailability.fromSchedule(schedule);
+
+      expect(availability.hasValidSchedule, isFalse, reason: schedule);
+      expect(availability.availableDates(now: now), isEmpty, reason: schedule);
+      expect(
+        availability.slotsForDate(DateTime(2026, 7, 20), now: now),
+        isEmpty,
+        reason: schedule,
+      );
+    }
+  });
+
+  test('respecte la période de disponibilité configurée', () {
+    final availability = AppointmentAvailability.fromSchedule(
+      'Lun–Ven, 8 h–10 h',
+      validFrom: DateTime(2026, 7, 22),
+      validUntil: DateTime(2026, 7, 23),
+    );
+
+    expect(availability.availableDates(now: DateTime(2026, 7, 20, 7)), [
+      DateTime(2026, 7, 22),
+      DateTime(2026, 7, 23),
+    ]);
+  });
+
+  testWidgets(
+    'invite à contacter le prestataire quand son horaire est illisible',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _FakePatientAppointmentRepository();
+      const provider = ProviderBookingTarget(
+        id: 'provider-1',
+        type: 'professional',
+        name: 'Dre Marie Jean',
+        service: 'Pédiatrie',
+        schedule: 'Sur rendez-vous',
+        available: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppointmentBookingPage(
+            patientId: 'patient-1',
+            patientName: 'Jean Baptiste',
+            provider: provider,
+            repository: repository,
+            now: DateTime(2026, 7, 20, 7),
+          ),
+        ),
+      );
+
+      expect(find.text('Aucun créneau disponible'), findsOneWidget);
+      expect(
+        find.text(
+          'Aucun horaire de réservation valide n’est publié. Contactez directement le prestataire pour connaître ses disponibilités.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('appointment-time-8-0')), findsNothing);
+      expect(find.byKey(const ValueKey('submit-appointment')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('envoie la date, l’heure et la note choisies', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));

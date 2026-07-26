@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.onFinished});
@@ -17,6 +18,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   late final AnimationController _ambientController;
   int _currentPage = 0;
   double _page = 0;
+  bool _reduceMotion = false;
+  bool _hasMotionPreference = false;
 
   static const _pages = <_OnboardingData>[
     _OnboardingData(
@@ -77,7 +80,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _ambientController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (_hasMotionPreference && _reduceMotion == reduceMotion) return;
+
+    _hasMotionPreference = true;
+    _reduceMotion = reduceMotion;
+    if (reduceMotion) {
+      _ambientController
+        ..stop()
+        ..value = 0;
+    } else {
+      _ambientController.repeat();
+    }
   }
 
   void _handlePageScroll() {
@@ -102,6 +122,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       widget.onFinished();
       return;
     }
+    if (_reduceMotion) {
+      _pageController.jumpToPage(_currentPage + 1);
+      return;
+    }
     _pageController.nextPage(
       duration: const Duration(milliseconds: 620),
       curve: Curves.easeOutCubic,
@@ -109,6 +133,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _goToPage(int index) {
+    if (_reduceMotion) {
+      _pageController.jumpToPage(index);
+      return;
+    }
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 520),
@@ -180,48 +208,53 @@ class _OnboardingHeader extends StatelessWidget {
   final bool showSkip;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(22, 12, 18, 8),
-    child: Row(
-      children: [
-        const _IntroBrand(),
-        const Spacer(),
-        AnimatedOpacity(
-          opacity: showSkip ? 1 : 0,
-          duration: const Duration(milliseconds: 250),
-          child: ExcludeSemantics(
-            excluding: !showSkip,
-            child: IgnorePointer(
-              key: const ValueKey('skip-onboarding-guard'),
-              ignoring: !showSkip,
-              child: TextButton(
-                key: const ValueKey('skip-onboarding'),
-                onPressed: onSkip,
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Passer',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+  Widget build(BuildContext context) {
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 250);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 12, 18, 8),
+      child: Row(
+        children: [
+          const _IntroBrand(),
+          const Spacer(),
+          AnimatedOpacity(
+            opacity: showSkip ? 1 : 0,
+            duration: duration,
+            child: ExcludeSemantics(
+              excluding: !showSkip,
+              child: IgnorePointer(
+                key: const ValueKey('skip-onboarding-guard'),
+                ignoring: !showSkip,
+                child: TextButton(
+                  key: const ValueKey('skip-onboarding'),
+                  onPressed: onSkip,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
                     ),
-                    SizedBox(width: 5),
-                    Icon(Icons.arrow_forward_rounded, size: 18),
-                  ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Passer',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      SizedBox(width: 5),
+                      Icon(Icons.arrow_forward_rounded, size: 18),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _IntroBrand extends StatelessWidget {
@@ -275,20 +308,30 @@ class _OnboardingPage extends StatelessWidget {
     builder: (context, constraints) {
       final desktop = constraints.maxWidth >= 820;
       final compactHeight = constraints.maxHeight < 610;
-      final visual = Transform.translate(
-        offset: Offset(progress * -34, progress.abs() * 7),
-        child: Opacity(
-          opacity: (1 - progress.abs() * .36).clamp(0.0, 1.0),
-          child: _OnboardingIllustration(data: data, animation: animation),
-        ),
+      final reduceMotion = MediaQuery.disableAnimationsOf(context);
+      final visualContent = _OnboardingIllustration(
+        data: data,
+        animation: animation,
       );
-      final copy = Transform.translate(
-        offset: Offset(progress * -18, 0),
-        child: Opacity(
-          opacity: (1 - progress.abs() * .42).clamp(0.0, 1.0),
-          child: _OnboardingCopy(data: data, centered: !desktop),
-        ),
-      );
+      final copyContent = _OnboardingCopy(data: data, centered: !desktop);
+      final visual = reduceMotion
+          ? visualContent
+          : Transform.translate(
+              offset: Offset(progress * -34, progress.abs() * 7),
+              child: Opacity(
+                opacity: (1 - progress.abs() * .36).clamp(0.0, 1.0),
+                child: visualContent,
+              ),
+            );
+      final copy = reduceMotion
+          ? copyContent
+          : Transform.translate(
+              offset: Offset(progress * -18, 0),
+              child: Opacity(
+                opacity: (1 - progress.abs() * .42).clamp(0.0, 1.0),
+                child: copyContent,
+              ),
+            );
 
       if (desktop) {
         return Padding(
@@ -646,102 +689,164 @@ class _OnboardingControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lastPage = currentPage == pageCount - 1;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final dotAnimationDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 360);
+    final buttonAnimationDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 380);
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 10, 22, 18),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: Row(
-            children: [
-              Semantics(
-                label: 'Étape ${currentPage + 1} sur $pageCount',
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const hitTargetSize = 48.0;
+              final indicatorsWidth = pageCount * hitTargetSize;
+              final desiredButtonWidth = lastPage ? 174.0 : 58.0;
+              final availableButtonWidth =
+                  constraints.maxWidth - indicatorsWidth;
+              final buttonWidth = math
+                  .min(desiredButtonWidth, math.max(58.0, availableButtonWidth))
+                  .toDouble();
+
+              final indicators = SizedBox(
+                width: indicatorsWidth,
+                height: hitTargetSize,
                 child: Row(
                   children: List.generate(pageCount, (index) {
                     final selected = index == currentPage;
-                    return GestureDetector(
+                    return Semantics(
                       key: ValueKey('onboarding-dot-$index'),
+                      container: true,
+                      button: true,
+                      selected: selected,
+                      label: 'Étape ${index + 1} sur $pageCount',
+                      hint: selected
+                          ? 'Étape actuelle'
+                          : 'Afficher cette étape',
                       onTap: () => onDotTap(index),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 360),
-                        curve: Curves.easeOutCubic,
-                        width: selected ? 28 : 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? accent
-                              : Colors.white.withValues(alpha: .27),
-                          borderRadius: BorderRadius.circular(99),
+                      sortKey: OrdinalSortKey(index.toDouble()),
+                      excludeSemantics: true,
+                      child: SizedBox.square(
+                        dimension: hitTargetSize,
+                        child: InkResponse(
+                          onTap: () => onDotTap(index),
+                          containedInkWell: true,
+                          highlightShape: BoxShape.circle,
+                          radius: hitTargetSize / 2,
+                          child: Center(
+                            child: AnimatedContainer(
+                              duration: dotAnimationDuration,
+                              curve: Curves.easeOutCubic,
+                              width: selected ? 28 : 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? accent
+                                    : Colors.white.withValues(alpha: .27),
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     );
                   }),
                 ),
-              ),
-              const Spacer(),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 380),
-                width: lastPage ? 174 : 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accent.withValues(alpha: .3),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    key: const ValueKey('onboarding-next'),
-                    onTap: onNext,
+              );
+
+              final nextButton = Semantics(
+                key: const ValueKey('onboarding-next'),
+                container: true,
+                button: true,
+                label: lastPage
+                    ? 'Se connecter'
+                    : 'Continuer vers l’étape ${currentPage + 2} sur $pageCount',
+                hint: lastPage
+                    ? 'Terminer la présentation et ouvrir la connexion'
+                    : 'Afficher l’étape suivante',
+                onTap: onNext,
+                sortKey: OrdinalSortKey(pageCount.toDouble()),
+                excludeSemantics: true,
+                child: AnimatedContainer(
+                  duration: buttonAnimationDuration,
+                  width: buttonWidth,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: accent,
                     borderRadius: BorderRadius.circular(20),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (!lastPage || constraints.maxWidth < 150) {
-                          return const Icon(
-                            Icons.arrow_forward_rounded,
-                            color: _IntroColors.navy,
-                            size: 23,
-                          );
-                        }
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Se connecter',
-                                  maxLines: 1,
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.fade,
-                                  softWrap: false,
-                                  style: TextStyle(
-                                    color: _IntroColors.navy,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: .3),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: onNext,
+                      borderRadius: BorderRadius.circular(20),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (!lastPage || constraints.maxWidth < 150) {
+                            return const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: _IntroColors.navy,
+                              size: 23,
+                            );
+                          }
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Se connecter',
+                                    maxLines: 1,
+                                    textAlign: TextAlign.center,
+                                    overflow: TextOverflow.fade,
+                                    softWrap: false,
+                                    style: TextStyle(
+                                      color: _IntroColors.navy,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              SizedBox(width: 7),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                color: _IntroColors.navy,
-                                size: 23,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                                SizedBox(width: 7),
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  color: _IntroColors.navy,
+                                  size: 23,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              );
+
+              if (constraints.maxWidth < indicatorsWidth + 58) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(child: indicators),
+                    const SizedBox(height: 8),
+                    Align(alignment: Alignment.centerRight, child: nextButton),
+                  ],
+                );
+              }
+
+              return Row(children: [indicators, const Spacer(), nextButton]);
+            },
           ),
         ),
       ),

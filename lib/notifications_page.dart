@@ -155,6 +155,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             isRead: !isRead,
           );
         });
+        _notifyParent();
       }
       _showSyncError();
     }
@@ -185,6 +186,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       } catch (_) {
         if (!mounted) return;
         setState(() => _notifications = before);
+        _notifyParent();
         _showSyncError();
         return;
       }
@@ -218,6 +220,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             notification,
           );
         });
+        _notifyParent();
         _showSyncError();
         return;
       }
@@ -262,17 +265,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   void _openNotification(AppNotification notification) {
     unawaited(_setRead(notification, true));
-    if (notification.source == 'appointment' &&
-        widget.onAppointmentTap != null) {
+    if (_hasDestination(notification)) {
       widget.onAppointmentTap!();
-      return;
     }
-    final action = notification.actionLabel;
-    if (action == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$action : contenu bientôt disponible.')),
-    );
   }
+
+  bool _hasDestination(AppNotification notification) =>
+      notification.source == 'appointment' && widget.onAppointmentTap != null;
 
   void _showSyncError() {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -367,10 +366,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       separatorBuilder: (_, _) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
                         final notification = visibleNotifications[index];
+                        final hasDestination = _hasDestination(notification);
                         return _NotificationTile(
                           key: ValueKey(notification.id),
                           notification: notification,
-                          onTap: () => _openNotification(notification),
+                          hasDestination: hasDestination,
+                          onTap: notification.isRead && !hasDestination
+                              ? null
+                              : () => _openNotification(notification),
                           onReadChanged: (isRead) =>
                               _setRead(notification, isRead),
                           onDelete: () => _delete(notification),
@@ -529,13 +532,15 @@ enum _NotificationMenuAction { toggleRead, delete }
 
 class _NotificationTile extends StatelessWidget {
   final AppNotification notification;
-  final VoidCallback onTap;
+  final bool hasDestination;
+  final VoidCallback? onTap;
   final ValueChanged<bool> onReadChanged;
   final VoidCallback onDelete;
 
   const _NotificationTile({
     super.key,
     required this.notification,
+    required this.hasDestination,
     required this.onTap,
     required this.onReadChanged,
     required this.onDelete,
@@ -555,152 +560,158 @@ class _NotificationTile extends StatelessWidget {
       ),
       child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
     ),
-    child: Material(
-      color: notification.isRead ? Colors.white : const Color(0xFFF7FAFF),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: notification.isRead ? _border : const Color(0xFFBCD2FF),
+    child: Semantics(
+      key: ValueKey('notification-semantics-${notification.id}'),
+      container: true,
+      label: notification.isRead ? 'Notification lue' : 'Notification non lue',
+      child: Material(
+        color: notification.isRead ? Colors.white : const Color(0xFFF7FAFF),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: notification.isRead ? _border : const Color(0xFFBCD2FF),
+          ),
         ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: notification.type.color.withValues(alpha: .11),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      notification.type.icon,
-                      color: notification.type.color,
-                      size: 24,
-                    ),
-                  ),
-                  if (!notification.isRead)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: Container(
-                        width: 11,
-                        height: 11,
-                        decoration: BoxDecoration(
-                          color: _primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    Text(
-                      notification.title,
-                      style: TextStyle(
-                        color: _navy,
-                        fontSize: 15.5,
-                        fontWeight: notification.isRead
-                            ? FontWeight.w700
-                            : FontWeight.w800,
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: notification.type.color.withValues(alpha: .11),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        notification.type.icon,
+                        color: notification.type.color,
+                        size: 24,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      notification.message,
-                      style: const TextStyle(
-                        color: _ink,
-                        fontSize: 13.5,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 9),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.schedule_rounded,
-                          size: 15,
-                          color: _muted,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          _relativeTime(notification.createdAt),
-                          style: const TextStyle(
-                            color: _muted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                    if (!notification.isRead)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: _primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
                         ),
-                        if (notification.actionLabel != null) ...[
-                          const SizedBox(width: 12),
-                          Flexible(
-                            child: Text(
-                              notification.actionLabel!,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: _primary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                              ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        notification.title,
+                        style: TextStyle(
+                          color: _navy,
+                          fontSize: 15.5,
+                          fontWeight: notification.isRead
+                              ? FontWeight.w700
+                              : FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        notification.message,
+                        style: const TextStyle(
+                          color: _ink,
+                          fontSize: 13.5,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 15,
+                            color: _muted,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _relativeTime(notification.createdAt),
+                            style: const TextStyle(
+                              color: _muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                          if (hasDestination &&
+                              notification.actionLabel != null) ...[
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                notification.actionLabel!,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<_NotificationMenuAction>(
+                  tooltip: 'Options de la notification',
+                  onSelected: (action) {
+                    switch (action) {
+                      case _NotificationMenuAction.toggleRead:
+                        onReadChanged(!notification.isRead);
+                      case _NotificationMenuAction.delete:
+                        onDelete();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: _NotificationMenuAction.toggleRead,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          notification.isRead
+                              ? Icons.mark_email_unread_outlined
+                              : Icons.mark_email_read_outlined,
+                        ),
+                        title: Text(
+                          notification.isRead
+                              ? 'Marquer comme non lue'
+                              : 'Marquer comme lue',
+                        ),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: _NotificationMenuAction.delete,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.delete_outline_rounded),
+                        title: Text('Supprimer'),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              PopupMenuButton<_NotificationMenuAction>(
-                tooltip: 'Options de la notification',
-                onSelected: (action) {
-                  switch (action) {
-                    case _NotificationMenuAction.toggleRead:
-                      onReadChanged(!notification.isRead);
-                    case _NotificationMenuAction.delete:
-                      onDelete();
-                  }
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: _NotificationMenuAction.toggleRead,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        notification.isRead
-                            ? Icons.mark_email_unread_outlined
-                            : Icons.mark_email_read_outlined,
-                      ),
-                      title: Text(
-                        notification.isRead
-                            ? 'Marquer comme non lue'
-                            : 'Marquer comme lue',
-                      ),
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: _NotificationMenuAction.delete,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.delete_outline_rounded),
-                      title: Text('Supprimer'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
