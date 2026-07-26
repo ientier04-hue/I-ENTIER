@@ -1843,11 +1843,10 @@ const _homeServices = <HealthService>[
     id: 'diagnostic-assiste',
     title: 'Diagnostic assisté',
     summary: 'Évaluez vos symptômes et sachez quelle suite donner',
-    imagePath: '',
+    imagePath: 'diagnostic_assiste.png',
     backgroundColor: '#E5F1FF',
     accentColor: '#176BFF',
     actionLabel: 'Commencer',
-    icon: Icons.health_and_safety_outlined,
   ),
   HealthService(
     id: 'pharmacie',

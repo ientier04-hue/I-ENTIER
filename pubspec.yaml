@@ -68,6 +68,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - diagnostic_assiste.png
     - pharma.png
     - sang.png
     - laboratoire.png
