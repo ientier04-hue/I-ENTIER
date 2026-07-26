@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -78,6 +77,7 @@ class _AuthGateState extends State<AuthGate> {
     stream: SupabaseConfig.client.auth.onAuthStateChange.map(
       (state) => state.session?.user,
     ),
+    initialData: SupabaseConfig.client.auth.currentUser,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
         return const _LoadingScreen();
@@ -245,7 +245,7 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       await SupabaseConfig.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: kIsWeb ? null : SupabaseConfig.oauthRedirectUrl,
+        redirectTo: SupabaseConfig.authRedirectUrl,
         queryParams: const {'prompt': 'select_account'},
       );
     } on AuthException catch (error) {

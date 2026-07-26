@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
@@ -15,6 +16,24 @@ class SupabaseConfig {
     'SUPABASE_REDIRECT_URL',
     defaultValue: 'com.ientier.i_entier://login-callback',
   );
+  static const webOAuthRedirectUrl = String.fromEnvironment(
+    'SUPABASE_WEB_REDIRECT_URL',
+    defaultValue: 'https://ientier04-hue.github.io/I-ENTIER/',
+  );
+
+  static String get authRedirectUrl {
+    if (!kIsWeb) return oauthRedirectUrl;
+    final current = Uri.base;
+    if (current.host == 'localhost' || current.host == '127.0.0.1') {
+      return Uri(
+        scheme: current.scheme,
+        host: current.host,
+        port: current.hasPort ? current.port : null,
+        path: current.path,
+      ).toString();
+    }
+    return webOAuthRedirectUrl;
+  }
 
   static Future<void> initialize() async {
     await Supabase.initialize(url: url, publishableKey: publishableKey);
