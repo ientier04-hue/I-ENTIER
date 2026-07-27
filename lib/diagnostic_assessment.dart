@@ -103,6 +103,7 @@ class AssessmentPossibility {
 
 class AssessmentPathway {
   final String id;
+  final int version;
   final String title;
   final String subtitle;
   final IconData icon;
@@ -114,6 +115,7 @@ class AssessmentPathway {
 
   const AssessmentPathway({
     required this.id,
+    this.version = 1,
     required this.title,
     required this.subtitle,
     required this.icon,
@@ -1837,4 +1839,225 @@ AssessmentPathway? assessmentPathwayById(String id) {
     if (pathway.id == id) return pathway;
   }
   return null;
+}
+
+Map<String, dynamic> assessmentPathwayToMap(AssessmentPathway pathway) => {
+  'schemaVersion': 1,
+  'id': pathway.id,
+  'title': pathway.title,
+  'subtitle': pathway.subtitle,
+  'iconKey': _assessmentIconKey(pathway.icon),
+  'colorHex': _colorHex(pathway.color),
+  'questions': [
+    for (final question in pathway.questions)
+      {
+        'id': question.id,
+        'title': question.title,
+        'prompt': question.prompt,
+        'iconKey': _assessmentIconKey(question.icon),
+        'requiredTags': question.requiredTags.toList()..sort(),
+        'excludedTags': question.excludedTags.toList()..sort(),
+        'options': [
+          for (final option in question.options)
+            {
+              'id': option.id,
+              'label': option.label,
+              'iconKey': _assessmentIconKey(option.icon),
+              'tags': option.tags.toList()..sort(),
+              'urgency': option.urgency.name,
+              'nextQuestionId': option.nextQuestionId,
+            },
+        ],
+      },
+  ],
+  'possibilities': [
+    for (final possibility in pathway.possibilities)
+      {
+        'title': possibility.title,
+        'explanation': possibility.explanation,
+        'tagWeights': possibility.tagWeights,
+        'baseScore': possibility.baseScore,
+      },
+  ],
+  'selfCare': pathway.selfCare,
+  'pharmacyAdvice': pathway.pharmacyAdvice,
+};
+
+AssessmentPathway assessmentPathwayFromMap(
+  Map<String, dynamic> map, {
+  int version = 1,
+}) {
+  List<Map<String, dynamic>> maps(String key) => (map[key] as List? ?? const [])
+      .whereType<Map>()
+      .map((value) => Map<String, dynamic>.from(value))
+      .toList(growable: false);
+
+  List<String> strings(Object? value) => (value as List? ?? const [])
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+
+  final id = map['id']?.toString().trim() ?? '';
+  final title = map['title']?.toString().trim() ?? '';
+  if (id.isEmpty || title.isEmpty) {
+    throw const FormatException(
+      'Parcours diagnostique sans identifiant ou titre.',
+    );
+  }
+  final questions = maps('questions')
+      .map((question) {
+        final questionId = question['id']?.toString().trim() ?? '';
+        final prompt = question['prompt']?.toString().trim() ?? '';
+        if (questionId.isEmpty || prompt.isEmpty) {
+          throw const FormatException('Question diagnostique incomplète.');
+        }
+        final options = (question['options'] as List? ?? const [])
+            .whereType<Map>()
+            .map((raw) {
+              final option = Map<String, dynamic>.from(raw);
+              final urgencyName = option['urgency']?.toString();
+              return AssessmentOption(
+                id: option['id']?.toString().trim() ?? '',
+                label: option['label']?.toString().trim() ?? '',
+                icon: assessmentIconFromKey(option['iconKey']?.toString()),
+                tags: strings(option['tags']).toSet(),
+                urgency: AssessmentUrgency.values.firstWhere(
+                  (value) => value.name == urgencyName,
+                  orElse: () => AssessmentUrgency.selfCare,
+                ),
+                nextQuestionId:
+                    option['nextQuestionId']?.toString().trim().isEmpty ?? true
+                    ? null
+                    : option['nextQuestionId']?.toString().trim(),
+              );
+            })
+            .where((option) => option.id.isNotEmpty && option.label.isNotEmpty)
+            .toList(growable: false);
+        if (options.length < 2) {
+          throw FormatException(
+            'La question $questionId a moins de deux choix.',
+          );
+        }
+        return AssessmentQuestion(
+          id: questionId,
+          title: question['title']?.toString().trim() ?? '',
+          prompt: prompt,
+          icon: assessmentIconFromKey(question['iconKey']?.toString()),
+          options: options,
+          requiredTags: strings(question['requiredTags']).toSet(),
+          excludedTags: strings(question['excludedTags']).toSet(),
+        );
+      })
+      .toList(growable: false);
+  if (questions.isEmpty) {
+    throw const FormatException(
+      'Un parcours publié doit contenir une question.',
+    );
+  }
+
+  final possibilities = maps('possibilities')
+      .map((possibility) {
+        final rawWeights = possibility['tagWeights'];
+        final weights = <String, int>{};
+        if (rawWeights is Map) {
+          for (final entry in rawWeights.entries) {
+            final tag = entry.key.toString().trim();
+            final weight = entry.value is num
+                ? (entry.value as num).round()
+                : int.tryParse(entry.value.toString());
+            if (tag.isNotEmpty && weight != null) weights[tag] = weight;
+          }
+        }
+        return AssessmentPossibility(
+          title: possibility['title']?.toString().trim() ?? '',
+          explanation: possibility['explanation']?.toString().trim() ?? '',
+          tagWeights: weights,
+          baseScore: (possibility['baseScore'] as num?)?.round() ?? 8,
+        );
+      })
+      .where((item) => item.title.isNotEmpty)
+      .toList(growable: false);
+
+  return AssessmentPathway(
+    id: id,
+    version: version,
+    title: title,
+    subtitle: map['subtitle']?.toString().trim() ?? '',
+    icon: assessmentIconFromKey(map['iconKey']?.toString()),
+    color: _colorFromHex(map['colorHex']?.toString()),
+    questions: questions,
+    possibilities: possibilities,
+    selfCare: strings(map['selfCare']),
+    pharmacyAdvice: strings(map['pharmacyAdvice']),
+  );
+}
+
+IconData assessmentIconFromKey(String? key) => switch (key) {
+  'air' => Icons.air_outlined,
+  'alert' => Icons.warning_amber_rounded,
+  'blood' => Icons.water_drop_outlined,
+  'calendar' => Icons.calendar_month_outlined,
+  'check' => Icons.check_circle_outline,
+  'clock' => Icons.schedule_outlined,
+  'emergency' => Icons.emergency_outlined,
+  'face' => Icons.face_outlined,
+  'head' => Icons.psychology_alt_outlined,
+  'heart' => Icons.favorite_border_outlined,
+  'info' => Icons.info_outline,
+  'medicine' => Icons.medication_outlined,
+  'person' => Icons.accessibility_new_outlined,
+  'pregnancy' => Icons.pregnant_woman_outlined,
+  'skin' => Icons.texture_outlined,
+  'stomach' => Icons.sick_outlined,
+  'temperature' => Icons.thermostat_outlined,
+  'water' => Icons.local_drink_outlined,
+  _ => Icons.radio_button_checked_outlined,
+};
+
+String _assessmentIconKey(IconData icon) {
+  if (icon == Icons.air_outlined) return 'air';
+  if (icon == Icons.warning_amber_rounded) return 'alert';
+  if (icon == Icons.water_drop_outlined) return 'blood';
+  if (icon == Icons.calendar_month_outlined ||
+      icon == Icons.calendar_today_outlined ||
+      icon == Icons.date_range_outlined) {
+    return 'calendar';
+  }
+  if (icon == Icons.check_circle_outline || icon == Icons.check_outlined) {
+    return 'check';
+  }
+  if (icon == Icons.schedule_outlined || icon == Icons.timelapse_outlined) {
+    return 'clock';
+  }
+  if (icon == Icons.emergency_outlined) return 'emergency';
+  if (icon == Icons.face_outlined) return 'face';
+  if (icon == Icons.psychology_alt_outlined ||
+      icon == Icons.psychology_outlined) {
+    return 'head';
+  }
+  if (icon == Icons.favorite_border_outlined) return 'heart';
+  if (icon == Icons.info_outline ||
+      icon == Icons.medical_information_outlined) {
+    return 'info';
+  }
+  if (icon == Icons.medication_outlined) return 'medicine';
+  if (icon == Icons.accessibility_new_outlined) return 'person';
+  if (icon == Icons.pregnant_woman_outlined) return 'pregnancy';
+  if (icon == Icons.texture_outlined) return 'skin';
+  if (icon == Icons.sick_outlined) return 'stomach';
+  if (icon == Icons.thermostat_outlined) return 'temperature';
+  if (icon == Icons.local_drink_outlined) return 'water';
+  return 'choice';
+}
+
+String _colorHex(Color color) =>
+    '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
+
+Color _colorFromHex(String? value) {
+  final normalized = value?.trim().replaceFirst('#', '') ?? '';
+  final parsed = int.tryParse(
+    normalized.length == 6 ? 'FF$normalized' : normalized,
+    radix: 16,
+  );
+  return parsed == null ? const Color(0xFF176BFF) : Color(parsed);
 }

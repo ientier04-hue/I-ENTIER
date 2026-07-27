@@ -60,6 +60,29 @@ void main() {
     expect(result.matches.first.compatibility, greaterThan(70));
   });
 
+  test('recharge sans perte un parcours publié par l’administration', () {
+    final original = assessmentPathwayById('respiratory')!;
+    final restored = assessmentPathwayFromMap(
+      assessmentPathwayToMap(original),
+      version: 4,
+    );
+
+    expect(restored.id, original.id);
+    expect(restored.version, 4);
+    expect(restored.title, original.title);
+    expect(restored.color, original.color);
+    expect(restored.questions, hasLength(original.questions.length));
+    expect(
+      restored.questions.first.options.map((option) => option.id),
+      original.questions.first.options.map((option) => option.id),
+    );
+    expect(
+      restored.possibilities.map((item) => item.title),
+      original.possibilities.map((item) => item.title),
+    );
+    expect(restored.pharmacyAdvice, original.pharmacyAdvice);
+  });
+
   test('retire les suggestions médicamenteuses pendant la grossesse', () {
     final pathway = assessmentPathwayById('headache')!;
     final result = engine.evaluate(
@@ -153,6 +176,8 @@ void main() {
       expect(find.text('Appendicite possible'), findsOneWidget);
       expect(repository.saved.last.status, 'completed');
       expect(repository.saved.last.answers, hasLength(3));
+      expect(repository.saved.last.pathwayVersion, 1);
+      expect(repository.saved.last.pathwaySnapshot['id'], 'abdominal');
       expect(tester.takeException(), isNull);
     },
   );

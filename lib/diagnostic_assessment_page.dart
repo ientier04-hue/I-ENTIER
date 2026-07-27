@@ -15,6 +15,8 @@ class SymptomAssessmentRecord {
   final String patientId;
   final String pathwayId;
   final String pathwayTitle;
+  final int pathwayVersion;
+  final Map<String, dynamic> pathwaySnapshot;
   final String status;
   final String? currentQuestionId;
   final Map<String, String> answers;
@@ -30,6 +32,8 @@ class SymptomAssessmentRecord {
     required this.patientId,
     required this.pathwayId,
     required this.pathwayTitle,
+    this.pathwayVersion = 1,
+    this.pathwaySnapshot = const {},
     required this.status,
     required this.currentQuestionId,
     required this.answers,
@@ -59,6 +63,8 @@ class SymptomAssessmentRecord {
     patientId: patientId,
     pathwayId: pathwayId,
     pathwayTitle: pathwayTitle,
+    pathwayVersion: pathwayVersion,
+    pathwaySnapshot: pathwaySnapshot,
     status: status ?? this.status,
     currentQuestionId: clearCurrentQuestion
         ? null
@@ -77,13 +83,14 @@ class SymptomAssessmentRecord {
     'patient_id': patientId,
     'category_id': pathwayId,
     'category_title': pathwayTitle,
+    'pathway_version': pathwayVersion,
+    'pathway_snapshot': pathwaySnapshot,
     'status': status,
     'current_question_id': currentQuestionId,
     'answers': answers,
     'consents': consents,
     'context_snapshot': contextSnapshot,
     'result': result?.toMap() ?? const <String, dynamic>{},
-    'pathway_version': 1,
     'started_at': startedAt.toUtc().toIso8601String(),
     'updated_at': updatedAt.toUtc().toIso8601String(),
     'completed_at': completedAt?.toUtc().toIso8601String(),
@@ -103,6 +110,8 @@ class SymptomAssessmentRecord {
       patientId: row['patient_id']?.toString() ?? '',
       pathwayId: row['category_id']?.toString() ?? '',
       pathwayTitle: row['category_title']?.toString() ?? '',
+      pathwayVersion: (row['pathway_version'] as num?)?.round() ?? 1,
+      pathwaySnapshot: map('pathway_snapshot'),
       status: row['status']?.toString() ?? 'draft',
       currentQuestionId: row['current_question_id']?.toString(),
       answers: rawAnswers.map((key, value) => MapEntry(key, value.toString())),
@@ -295,9 +304,70 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
       (SupabaseConfig.isInitialized
           ? SupabaseSymptomAssessmentRepository()
           : _MemorySymptomAssessmentRepository());
+  List<AssessmentPathway> _pathways = assessmentPathways;
 
   Stream<List<SymptomAssessmentRecord>> get _stream =>
       widget.assessmentStream ?? _repository.watch(widget.patientId);
+
+  @override
+  void initState() {
+    super.initState();
+    if (SupabaseConfig.isInitialized) unawaited(_loadPublishedPathways());
+  }
+
+  Future<void> _loadPublishedPathways() async {
+    try {
+      final rows = List<Map<String, dynamic>>.from(
+        await SupabaseConfig.client
+            .schema('ientier')
+            .from('diagnostic_pathway_versions')
+            .select('version_number,definition')
+            .eq('status', 'published')
+            .order('pathway_id'),
+      );
+      final loaded = <AssessmentPathway>[];
+      for (final row in rows) {
+        final raw = row['definition'];
+        if (raw is! Map) continue;
+        try {
+          loaded.add(
+            assessmentPathwayFromMap(
+              Map<String, dynamic>.from(raw),
+              version: (row['version_number'] as num?)?.round() ?? 1,
+            ),
+          );
+        } on FormatException {
+          // Un parcours publié invalide est ignoré.
+        }
+      }
+      if (loaded.isNotEmpty && mounted) {
+        setState(() => _pathways = loaded);
+      }
+    } catch (_) {
+      // Le catalogue intégré garantit un repli sûr hors connexion.
+    }
+  }
+
+  AssessmentPathway? _pathwayById(String id) {
+    for (final pathway in _pathways) {
+      if (pathway.id == id) return pathway;
+    }
+    return assessmentPathwayById(id);
+  }
+
+  AssessmentPathway? _pathwayForAssessment(SymptomAssessmentRecord assessment) {
+    if (assessment.pathwaySnapshot.isNotEmpty) {
+      try {
+        return assessmentPathwayFromMap(
+          assessment.pathwaySnapshot,
+          version: assessment.pathwayVersion,
+        );
+      } on FormatException {
+        // Les anciennes évaluations utilisent le catalogue disponible.
+      }
+    }
+    return _pathwayById(assessment.pathwayId);
+  }
 
   Future<void> _startAssessment() async {
     final consents = await Navigator.of(context).push<Map<String, bool>>(
@@ -306,7 +376,9 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
     if (!mounted || consents == null) return;
 
     final pathway = await Navigator.of(context).push<AssessmentPathway>(
-      MaterialPageRoute(builder: (_) => const _PathwayPickerPage()),
+      MaterialPageRoute(
+        builder: (_) => _PathwayPickerPage(pathways: _pathways),
+      ),
     );
     if (!mounted || pathway == null) return;
 
@@ -335,6 +407,8 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
       patientId: widget.patientId,
       pathwayId: pathway.id,
       pathwayTitle: pathway.title,
+      pathwayVersion: pathway.version,
+      pathwaySnapshot: assessmentPathwayToMap(pathway),
       status: 'draft',
       currentQuestionId: pathway.questions.first.id,
       answers: const {},
@@ -362,7 +436,7 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
   }
 
   Future<void> _openQuestionnaire(SymptomAssessmentRecord assessment) async {
-    final pathway = assessmentPathwayById(assessment.pathwayId);
+    final pathway = _pathwayForAssessment(assessment);
     if (pathway == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ce parcours n’est plus disponible.')),
@@ -445,6 +519,7 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
                 for (final assessment in records) ...[
                   _AssessmentHistoryCard(
                     assessment: assessment,
+                    pathway: _pathwayForAssessment(assessment),
                     onTap: () => _openRecord(assessment),
                   ),
                   const SizedBox(height: 12),
@@ -609,16 +684,21 @@ class _FeedbackCard extends StatelessWidget {
 
 class _AssessmentHistoryCard extends StatelessWidget {
   final SymptomAssessmentRecord assessment;
+  final AssessmentPathway? pathway;
   final VoidCallback onTap;
-  const _AssessmentHistoryCard({required this.assessment, required this.onTap});
+  const _AssessmentHistoryCard({
+    required this.assessment,
+    required this.pathway,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final pathway = assessmentPathwayById(assessment.pathwayId);
-    final color = pathway?.color ?? AppColors.primary;
-    final progress = pathway == null
+    final currentPathway = pathway;
+    final color = currentPathway?.color ?? AppColors.primary;
+    final progress = currentPathway == null
         ? 0
-        : const AssessmentEngine().progress(pathway, assessment.answers);
+        : const AssessmentEngine().progress(currentPathway, assessment.answers);
     final urgency = assessment.result?.urgency;
     return Card(
       child: InkWell(
@@ -826,7 +906,8 @@ class _ConsentTile extends StatelessWidget {
 }
 
 class _PathwayPickerPage extends StatelessWidget {
-  const _PathwayPickerPage();
+  final List<AssessmentPathway> pathways;
+  const _PathwayPickerPage({required this.pathways});
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -839,9 +920,9 @@ class _PathwayPickerPage extends StatelessWidget {
         mainAxisSpacing: 12,
         childAspectRatio: MediaQuery.sizeOf(context).width < 360 ? .76 : .84,
       ),
-      itemCount: assessmentPathways.length,
+      itemCount: pathways.length,
       itemBuilder: (context, index) {
-        final pathway = assessmentPathways[index];
+        final pathway = pathways[index];
         return Card(
           clipBehavior: Clip.antiAlias,
           child: InkWell(
