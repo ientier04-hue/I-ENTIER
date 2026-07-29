@@ -1017,7 +1017,7 @@ enum _EmergencyDecision { stop, continueAssessment }
 class _QuestionnairePageState extends State<_QuestionnairePage> {
   static const _engine = AssessmentEngine();
   late SymptomAssessmentRecord _assessment = widget.initialAssessment;
-  String? _selectedOptionId;
+  Set<String> _selectedOptionIds = {};
   bool _saving = false;
   final FlutterTts _tts = FlutterTts();
 
@@ -1029,8 +1029,44 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   @override
   void initState() {
     super.initState();
-    _selectedOptionId = _assessment.answers[_question.id];
+    _selectedOptionIds = _decodeSelected(_assessment.answers[_question.id]);
     unawaited(_configureTts());
+  }
+
+  Set<String> _decodeSelected(String? encoded) => encoded == null
+      ? <String>{}
+      : encoded
+            .split('|')
+            .map((id) => id.trim())
+            .where((id) => id.isNotEmpty)
+            .toSet();
+
+  String _encodeSelected(AssessmentQuestion question) {
+    final ids = _selectedOptionIds.toList()..sort();
+    return question.allowMultiple ? ids.join('|') : ids.first;
+  }
+
+  void _toggleOption(AssessmentOption option) {
+    setState(() {
+      if (!_question.allowMultiple) {
+        _selectedOptionIds = {option.id};
+        return;
+      }
+      final updated = Set<String>.of(_selectedOptionIds);
+      if (option.tags.isEmpty) {
+        updated
+          ..clear()
+          ..add(option.id);
+      } else {
+        for (final neutral in _question.options.where(
+          (item) => item.tags.isEmpty,
+        )) {
+          updated.remove(neutral.id);
+        }
+        if (!updated.remove(option.id)) updated.add(option.id);
+      }
+      _selectedOptionIds = updated;
+    });
   }
 
   Future<void> _configureTts() async {
@@ -1053,13 +1089,15 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
 
   Future<void> _speakQuestion() async {
     final selected = _question.options
-        .where((option) => option.id == _selectedOptionId)
-        .firstOrNull;
+        .where((option) => _selectedOptionIds.contains(option.id))
+        .toList(growable: false);
     final text = [
       _question.prompt,
+      if (_question.allowMultiple) 'Plusieurs réponses sont possibles.',
       'Choix proposés.',
       for (final option in _question.options) option.label,
-      if (selected != null) 'Choix sélectionné : ${selected.label}',
+      if (selected.isNotEmpty)
+        'Choix sélectionnés : ${selected.map((item) => item.label).join(', ')}',
     ].join('. ');
     try {
       if (widget.onSpeak != null) {
@@ -1081,12 +1119,9 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   }
 
   Future<void> _confirm() async {
-    if (_selectedOptionId == null || _saving) return;
-    final selected = _question.options.firstWhere(
-      (option) => option.id == _selectedOptionId,
-    );
+    if (_selectedOptionIds.isEmpty || _saving) return;
     final answers = Map<String, String>.of(_assessment.answers)
-      ..[_question.id] = selected.id;
+      ..[_question.id] = _encodeSelected(_question);
     final now = DateTime.now();
     final next = _engine.nextQuestion(
       widget.pathway,
@@ -1140,7 +1175,9 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
       setState(() {
         _assessment = updated;
         _saving = false;
-        _selectedOptionId = next == null ? null : answers[next.id];
+        _selectedOptionIds = next == null
+            ? <String>{}
+            : _decodeSelected(answers[next.id]);
       });
       if (completed && result != null) {
         await Navigator.of(context).pushReplacement<void, void>(
@@ -1159,7 +1196,9 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
       setState(() {
         _assessment = updated;
         _saving = false;
-        _selectedOptionId = next == null ? null : answers[next.id];
+        _selectedOptionIds = next == null
+            ? <String>{}
+            : _decodeSelected(answers[next.id]);
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1274,7 +1313,7 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
       setState(() {
         _assessment = updated;
         _saving = false;
-        _selectedOptionId = null;
+        _selectedOptionIds = {};
       });
       await Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute(
@@ -1291,7 +1330,7 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
       setState(() {
         _assessment = updated;
         _saving = false;
-        _selectedOptionId = null;
+        _selectedOptionIds = {};
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1354,7 +1393,7 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
       if (!mounted) return;
       setState(() {
         _assessment = updated;
-        _selectedOptionId = null;
+        _selectedOptionIds = {};
         _saving = false;
       });
     } catch (_) {
@@ -1493,6 +1532,17 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                                     context,
                                   ).textTheme.headlineSmall,
                                 ),
+                                if (question.allowMultiple) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Plusieurs réponses possibles',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: widget.pathway.color,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1510,9 +1560,9 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                           key: Key('answer-${question.id}-${option.id}'),
                           option: option,
                           color: widget.pathway.color,
-                          selected: _selectedOptionId == option.id,
-                          onTap: () =>
-                              setState(() => _selectedOptionId = option.id),
+                          selected: _selectedOptionIds.contains(option.id),
+                          multiSelect: question.allowMultiple,
+                          onTap: () => _toggleOption(option),
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -1528,12 +1578,12 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                 ),
                 child: FilledButton.icon(
                   key: const Key('assessment-confirm-answer'),
-                  onPressed: _selectedOptionId == null || _saving
+                  onPressed: _selectedOptionIds.isEmpty || _saving
                       ? null
                       : _confirm,
                   icon: const Icon(Icons.check_rounded),
                   label: Text(
-                    _selectedOptionId == null
+                    _selectedOptionIds.isEmpty
                         ? 'Choisissez une réponse'
                         : 'Confirmer et continuer',
                   ),
@@ -1590,12 +1640,14 @@ class _AnswerOptionCard extends StatelessWidget {
   final AssessmentOption option;
   final Color color;
   final bool selected;
+  final bool multiSelect;
   final VoidCallback onTap;
   const _AnswerOptionCard({
     super.key,
     required this.option,
     required this.color,
     required this.selected,
+    required this.multiSelect,
     required this.onTap,
   });
 
@@ -1642,6 +1694,8 @@ class _AnswerOptionCard extends StatelessWidget {
               Icon(
                 selected
                     ? Icons.check_circle_rounded
+                    : multiSelect
+                    ? Icons.check_box_outline_blank_rounded
                     : Icons.radio_button_unchecked_rounded,
                 color: selected ? color : AppColors.muted,
               ),
@@ -1714,6 +1768,22 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
     callback();
   }
 
+  Future<void> _callEmergencyNumber() async {
+    try {
+      final opened = await launchUrl(Uri(scheme: 'tel', path: '116'));
+      if (opened || !mounted) return;
+    } catch (_) {
+      if (!mounted) return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Impossible d’ouvrir le téléphone. Composez manuellement le 116.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final result = widget.result;
@@ -1767,7 +1837,7 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
                   const SizedBox(height: 16),
                   FilledButton.icon(
                     key: const Key('assessment-call-116'),
-                    onPressed: _call116,
+                    onPressed: _callEmergencyNumber,
                     style: FilledButton.styleFrom(
                       backgroundColor: urgencyColor,
                     ),
@@ -1945,10 +2015,6 @@ class _ResultSection extends StatelessWidget {
       ],
     ),
   );
-}
-
-Future<void> _call116() async {
-  await launchUrl(Uri(scheme: 'tel', path: '116'));
 }
 
 String _newAssessmentId(String patientId, DateTime now) {

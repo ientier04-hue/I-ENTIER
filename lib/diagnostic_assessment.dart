@@ -57,6 +57,7 @@ class AssessmentQuestion {
   final List<AssessmentOption> options;
   final Set<String> requiredTags;
   final Set<String> excludedTags;
+  final bool allowMultiple;
 
   const AssessmentQuestion({
     required this.id,
@@ -66,6 +67,7 @@ class AssessmentQuestion {
     required this.options,
     this.requiredTags = const {},
     this.excludedTags = const {},
+    this.allowMultiple = false,
   });
 
   bool appliesTo(Set<String> tags) =>
@@ -250,6 +252,14 @@ class AssessmentResult {
 class AssessmentEngine {
   const AssessmentEngine();
 
+  Iterable<String> _selectedOptionIds(String? encoded) sync* {
+    if (encoded == null) return;
+    for (final id in encoded.split('|')) {
+      final normalized = id.trim();
+      if (normalized.isNotEmpty) yield normalized;
+    }
+  }
+
   Set<String> answerTags(
     AssessmentPathway pathway,
     Map<String, String> answers,
@@ -258,8 +268,9 @@ class AssessmentEngine {
     for (final entry in answers.entries) {
       final question = pathway.questionById(entry.key);
       if (question == null) continue;
+      final selectedIds = _selectedOptionIds(entry.value).toSet();
       for (final option in question.options) {
-        if (option.id == entry.value) tags.addAll(option.tags);
+        if (selectedIds.contains(option.id)) tags.addAll(option.tags);
       }
     }
     return tags;
@@ -279,12 +290,15 @@ class AssessmentEngine {
       start = math.max(0, index + 1);
       final current = pathway.questionById(afterQuestionId);
       if (current != null) {
-        final selectedId = answers[afterQuestionId];
-        final selected = current.options
-            .where((option) => option.id == selectedId)
-            .firstOrNull;
-        final explicit = pathway.questionById(selected?.nextQuestionId);
-        if (explicit != null && explicit.appliesTo(tags)) return explicit;
+        final selectedIds = _selectedOptionIds(
+          answers[afterQuestionId],
+        ).toSet();
+        for (final selected in current.options.where(
+          (option) => selectedIds.contains(option.id),
+        )) {
+          final explicit = pathway.questionById(selected.nextQuestionId);
+          if (explicit != null && explicit.appliesTo(tags)) return explicit;
+        }
       }
     }
     for (var index = start; index < pathway.questions.length; index++) {
@@ -355,15 +369,17 @@ class AssessmentEngine {
     for (final entry in answers.entries) {
       final question = pathway.questionById(entry.key);
       if (question == null) continue;
-      final option = question.options
-          .where((item) => item.id == entry.value)
-          .firstOrNull;
-      if (option != null && option.urgency.priority > urgency.priority) {
-        urgency = option.urgency;
-      }
-      if (option?.urgency == AssessmentUrgency.emergency &&
-          !redFlags.contains(option!.label)) {
-        redFlags.add(option.label);
+      final selectedIds = _selectedOptionIds(entry.value).toSet();
+      for (final option in question.options.where(
+        (item) => selectedIds.contains(item.id),
+      )) {
+        if (option.urgency.priority > urgency.priority) {
+          urgency = option.urgency;
+        }
+        if (option.urgency == AssessmentUrgency.emergency &&
+            !redFlags.contains(option.label)) {
+          redFlags.add(option.label);
+        }
       }
     }
 
@@ -411,6 +427,37 @@ class AssessmentEngine {
         (tags.contains('urinary_frequency') &&
             (tags.contains('small_frequent_voids') ||
                 tags.contains('cloudy_urine')));
+    if (pathway.id == 'urinary' && lowerUrinaryInfectionPattern) {
+      raiseUrgency(AssessmentUrgency.consultationSoon);
+      final recordedSex = context['sex']?.toString().trim().toLowerCase() ?? '';
+      final maleUrinaryContext =
+          tags.contains('male_urinary_context') ||
+          recordedSex == 'homme' ||
+          recordedSex == 'male' ||
+          recordedSex == 'masculin';
+      final urinaryChild =
+          tags.contains('person_under_16') ||
+          (age != null && age >= 0 && age < 16);
+      final urinaryYoungInfant =
+          tags.contains('person_under_3_months') ||
+          (ageMonths != null && ageMonths >= 0 && ageMonths < 3);
+      if (urinaryYoungInfant) {
+        tags.add('young_infant_urinary_infection');
+        raiseUrgency(
+          AssessmentUrgency.emergency,
+          reason:
+              'Suspicion d’infection urinaire chez un nourrisson de moins de 3 mois',
+        );
+      } else if (pregnancyRelevant ||
+          maleUrinaryContext ||
+          urinaryChild ||
+          tags.contains('complicated_urinary_context')) {
+        raiseUrgency(AssessmentUrgency.consultationToday);
+        contextNotes.add(
+          'Dans ce contexte, une infection urinaire possible doit être évaluée aujourd’hui.',
+        );
+      }
+    }
     if (pregnancyRelevant &&
         pathway.id == 'urinary' &&
         (lowerUrinaryInfectionPattern ||
@@ -736,6 +783,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Autres signes',
         prompt: 'Quel autre signe accompagne le mieux la douleur ?',
         icon: Icons.playlist_add_check_circle_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'none',
@@ -804,6 +852,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Contexte important',
         prompt: 'L’une de ces situations vous concerne-t-elle ?',
         icon: Icons.info_outline,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'urinary',
@@ -1326,6 +1375,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signes associés',
         prompt: 'Qu’est-ce qui accompagne surtout la douleur ?',
         icon: Icons.light_mode_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'light_nausea',
@@ -1372,6 +1422,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signes neurologiques',
         prompt: 'Avez-vous remarqué l’un de ces signes ?',
         icon: Icons.psychology_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'weakness',
@@ -1406,6 +1457,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Contexte',
         prompt: 'Quelle situation s’applique ?',
         icon: Icons.health_and_safety_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'injury',
@@ -1457,10 +1509,7 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'vision_change',
             label: 'Vision trouble, éclairs ou taches devant les yeux',
             icon: Icons.emergency_outlined,
-            tags: {
-              'vision_change',
-              'obstetric_headache_red_flag',
-            },
+            tags: {'vision_change', 'obstetric_headache_red_flag'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -1810,6 +1859,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Malaise principal',
         prompt: 'Qu’est-ce qui vous préoccupe le plus ?',
         icon: Icons.favorite_border_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'pain',
@@ -1893,6 +1943,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Autres signes',
         prompt: 'Avez-vous l’un de ces signes ?',
         icon: Icons.playlist_add_check_circle_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'dizzy',
@@ -1953,10 +2004,7 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'yes_bleeding',
             label: 'Oui, avec saignement',
             icon: Icons.emergency_outlined,
-            tags: {
-              'pregnancy_possible',
-              'bleeding',
-            },
+            tags: {'pregnancy_possible', 'bleeding'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
@@ -2429,6 +2477,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signe principal',
         prompt: 'Quel signe correspond le mieux ?',
         icon: Icons.medical_information_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'dry_cough',
@@ -2483,6 +2532,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signes d’alerte',
         prompt: 'Avez-vous l’un de ces signes ?',
         icon: Icons.warning_amber_rounded,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'chest_pain',
@@ -2588,6 +2638,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Contexte respiratoire',
         prompt: 'Quelle situation vous concerne ?',
         icon: Icons.health_and_safety_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'asthma',
@@ -3073,6 +3124,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Réaction générale',
         prompt: 'L’éruption est-elle accompagnée d’un de ces signes ?',
         icon: Icons.health_and_safety_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'breathing_swelling',
@@ -3108,6 +3160,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Aspect',
         prompt: 'À quoi ressemble surtout le problème ?',
         icon: Icons.visibility_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'dry',
@@ -3134,6 +3187,14 @@ const assessmentPathways = <AssessmentPathway>[
             tags: {'pimples', 'pustules', 'branch_skin_pustules'},
           ),
           AssessmentOption(
+            id: 'changing_lesion',
+            label:
+                'Grain de beauté qui change, plaie qui ne guérit pas ou lésion qui saigne',
+            icon: Icons.search_outlined,
+            tags: {'branch_skin_changing_lesion'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
             id: 'other',
             label: 'Autre aspect ou je ne sais pas',
             icon: Icons.help_outline,
@@ -3145,6 +3206,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Sensation',
         prompt: 'Que ressentez-vous principalement ?',
         icon: Icons.touch_app_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'itch',
@@ -3212,6 +3274,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Déclencheur possible',
         prompt: 'Y a-t-il eu un changement récent ?',
         icon: Icons.search_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'product',
@@ -3405,8 +3468,60 @@ const assessmentPathways = <AssessmentPathway>[
           ),
         ],
       ),
+      AssessmentQuestion(
+        id: 'skin_changing_lesion_detail',
+        title: 'Lésion qui change',
+        prompt: 'Quel changement avez-vous remarqué ?',
+        icon: Icons.search_outlined,
+        requiredTags: {'branch_skin_changing_lesion'},
+        options: [
+          AssessmentOption(
+            id: 'mole_change',
+            label:
+                'Forme asymétrique, bords irréguliers, plusieurs couleurs ou croissance',
+            icon: Icons.warning_amber_rounded,
+            tags: {'changing_mole_pattern'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'non_healing',
+            label:
+                'Plaie ou croûte qui ne guérit pas depuis plusieurs semaines',
+            icon: Icons.warning_amber_rounded,
+            tags: {'non_healing_skin_lesion'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'recurrent_bleeding',
+            label: 'Lésion qui saigne ou s’ulcère à répétition',
+            icon: Icons.warning_amber_rounded,
+            tags: {'recurrent_skin_bleeding'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucun de ces changements précis',
+            icon: Icons.remove_circle_outline,
+          ),
+        ],
+      ),
     ],
     possibilities: [
+      AssessmentPossibility(
+        title: 'Lésion cutanée à faire examiner',
+        explanation:
+            'Un grain de beauté qui change, une plaie qui ne guérit pas ou une lésion qui saigne doit être examiné sans conclure soi-même à sa cause.',
+        tagWeights: {
+          'changing_mole_pattern': 54,
+          'non_healing_skin_lesion': 52,
+          'recurrent_skin_bleeding': 50,
+        },
+        requiredAnyTags: {
+          'changing_mole_pattern',
+          'non_healing_skin_lesion',
+          'recurrent_skin_bleeding',
+        },
+      ),
       AssessmentPossibility(
         title: 'Dermatite ou eczéma',
         explanation:
@@ -3622,19 +3737,42 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Avez-vous une douleur abdominale ou un saignement ?',
         icon: Icons.favorite_border_outlined,
         excludedTags: {'postpartum'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
-            id: 'heavy',
-            label: 'Saignement important, forte douleur ou malaise',
+            id: 'heavy_bleeding',
+            label:
+                'Saignement important ou qui imbibe rapidement une protection',
             icon: Icons.emergency_outlined,
-            tags: {'bleeding', 'severe_pain', 'collapse'},
+            tags: {'bleeding', 'very_heavy_bleeding'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
-            id: 'light',
-            label: 'Petit saignement ou douleur légère',
+            id: 'severe_pain',
+            label: 'Douleur abdominale forte ou brutale',
+            icon: Icons.emergency_outlined,
+            tags: {'severe_pain'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'collapse',
+            label: 'Malaise avec évanouissement ou perte de connaissance',
+            icon: Icons.emergency_outlined,
+            tags: {'collapse'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'light_bleeding',
+            label: 'Petit saignement sans douleur forte',
             icon: Icons.warning_amber_rounded,
-            tags: {'bleeding', 'mild_pain'},
+            tags: {'bleeding'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'mild_pain',
+            label: 'Douleur légère sans saignement',
+            icon: Icons.warning_amber_rounded,
+            tags: {'mild_pain'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
@@ -3656,6 +3794,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Tête, vision et gonflement',
         prompt: 'Avez-vous l’un de ces signes ?',
         icon: Icons.visibility_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'severe',
@@ -3703,12 +3842,20 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Respiration et poitrine',
         prompt: 'Comment vous sentez-vous ?',
         icon: Icons.air_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
-            id: 'severe',
-            label: 'Essoufflement soudain, douleur poitrine ou convulsion',
+            id: 'sudden_breathing_chest',
+            label: 'Essoufflement soudain ou douleur thoracique',
             icon: Icons.emergency_outlined,
-            tags: {'severe_breathlessness', 'chest_pain', 'seizure'},
+            tags: {'pregnancy_pulmonary_embolism_pattern'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'seizure',
+            label: 'Convulsion ou perte de connaissance avec secousses',
+            icon: Icons.emergency_outlined,
+            tags: {'eclampsia_pattern'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -3763,6 +3910,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Fièvre et vomissements',
         prompt: 'Quelle situation correspond le mieux ?',
         icon: Icons.thermostat_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'cannot_drink',
@@ -3797,6 +3945,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel signe concerne le début de grossesse ?',
         icon: Icons.pregnant_woman_outlined,
         requiredTags: {'branch_pregnancy_early'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'one_side',
@@ -3816,7 +3965,7 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'faint',
             label: 'Étourdissement marqué, faiblesse ou évanouissement',
             icon: Icons.emergency_outlined,
-            tags: {'dizziness', 'collapse'},
+            tags: {'hemodynamic_instability_pattern'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -3845,19 +3994,27 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Avez-vous remarqué l’un de ces signes ?',
         icon: Icons.child_care_outlined,
         requiredTags: {'branch_pregnancy_late'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
-            id: 'fluid_contractions',
-            label: 'Perte de liquide ou contractions régulières avant le terme',
+            id: 'fluid_leak',
+            label: 'Perte de liquide pouvant venir de la poche des eaux',
             icon: Icons.warning_amber_rounded,
-            tags: {'fluid_leak', 'regular_contractions'},
+            tags: {'fluid_leak'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'regular_contractions',
+            label: 'Contractions régulières avant le terme',
+            icon: Icons.warning_amber_rounded,
+            tags: {'regular_contractions'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
             id: 'upper_right',
             label: 'Douleur forte sous les côtes à droite ou à l’épaule',
             icon: Icons.emergency_outlined,
-            tags: {'right_upper_abdomen', 'shoulder_pain', 'severe_pain'},
+            tags: {'preeclampsia_upper_pain'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -3881,6 +4038,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel signe est apparu depuis l’accouchement ?',
         icon: Icons.child_friendly_outlined,
         requiredTags: {'branch_pregnancy_postpartum'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'heavy_bleeding',
@@ -3901,7 +4059,7 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'leg',
             label: 'Une jambe gonflée, rouge ou douloureuse d’un seul côté',
             icon: Icons.emergency_outlined,
-            tags: {'one_sided_leg_swelling', 'leg_pain'},
+            tags: {'pregnancy_dvt_pattern'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -3909,7 +4067,7 @@ const assessmentPathways = <AssessmentPathway>[
             label:
                 'Essoufflement soudain, douleur thoracique ou évanouissement',
             icon: Icons.emergency_outlined,
-            tags: {'severe_breathlessness', 'chest_pain', 'collapse'},
+            tags: {'pregnancy_pulmonary_embolism_pattern'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -3958,6 +4116,8 @@ const assessmentPathways = <AssessmentPathway>[
           'severe_headache': 34,
           'vision_change': 30,
           'sudden_swelling': 28,
+          'preeclampsia_upper_pain': 34,
+          'eclampsia_pattern': 60,
           'late_pregnancy': 10,
           'postpartum': 8,
         },
@@ -3974,9 +4134,15 @@ const assessmentPathways = <AssessmentPathway>[
           'bleeding': 34,
           'severe_pain': 28,
           'collapse': 22,
+          'hemodynamic_instability_pattern': 34,
         },
         requiredAllTags: {'early_pregnancy'},
-        requiredAnyTags: {'bleeding', 'severe_pain', 'collapse'},
+        requiredAnyTags: {
+          'bleeding',
+          'severe_pain',
+          'collapse',
+          'hemodynamic_instability_pattern',
+        },
         minimumMatchedEvidence: 2,
         urgentReason: true,
       ),
@@ -4006,6 +4172,7 @@ const assessmentPathways = <AssessmentPathway>[
           'shoulder_pain': 24,
           'bleeding': 24,
           'dizziness': 20,
+          'hemodynamic_instability_pattern': 38,
         },
         requiredAllTags: {'early_pregnancy'},
         requiredAnyTags: {
@@ -4014,6 +4181,7 @@ const assessmentPathways = <AssessmentPathway>[
           'bleeding',
           'dizziness',
           'collapse',
+          'hemodynamic_instability_pattern',
         },
         minimumMatchedEvidence: 2,
         urgentReason: true,
@@ -4090,16 +4258,21 @@ const assessmentPathways = <AssessmentPathway>[
         explanation:
             'Une jambe gonflée d’un seul côté ou un essoufflement soudain pendant ou après la grossesse est une urgence.',
         tagWeights: {
+          'context_pregnant': 8,
           'one_sided_leg_swelling': 40,
           'leg_pain': 22,
           'severe_breathlessness': 34,
           'postpartum': 14,
+          'pregnancy_dvt_pattern': 54,
+          'pregnancy_pulmonary_embolism_pattern': 64,
         },
-        requiredAllTags: {'postpartum'},
+        requiredAllTags: {'context_pregnant'},
         requiredAnyTags: {
           'one_sided_leg_swelling',
           'severe_breathlessness',
           'chest_pain',
+          'pregnancy_dvt_pattern',
+          'pregnancy_pulmonary_embolism_pattern',
         },
         minimumMatchedEvidence: 2,
         urgentReason: true,
@@ -4261,6 +4434,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signes associés',
         prompt: 'Quel autre signe accompagne la gêne ?',
         icon: Icons.warning_amber_rounded,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'sweat_nausea',
@@ -4316,6 +4490,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Contexte important',
         prompt: 'Quelle situation vous concerne ?',
         icon: Icons.health_and_safety_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'heart_history',
@@ -4577,10 +4752,36 @@ const assessmentPathways = <AssessmentPathway>[
     color: Color(0xFF2878C7),
     questions: [
       AssessmentQuestion(
+        id: 'urinary_age',
+        title: 'Âge',
+        prompt: 'Quel âge a la personne concernée ?',
+        icon: Icons.cake_outlined,
+        options: [
+          AssessmentOption(
+            id: 'under_3_months',
+            label: 'Moins de 3 mois',
+            icon: Icons.child_care_outlined,
+            tags: {'person_under_3_months'},
+          ),
+          AssessmentOption(
+            id: 'under_16',
+            label: 'De 3 mois à moins de 16 ans',
+            icon: Icons.escalator_warning_outlined,
+            tags: {'person_under_16'},
+          ),
+          AssessmentOption(
+            id: 'adult',
+            label: '16 ans ou plus',
+            icon: Icons.person_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'urinary_main',
         title: 'Malaise principal',
         prompt: 'Quel trouble urinaire vous gêne le plus ?',
         icon: Icons.local_drink_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'burning',
@@ -4621,6 +4822,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signes d’alerte',
         prompt: 'Avez-vous l’un de ces signes ?',
         icon: Icons.warning_amber_rounded,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'fever_flank',
@@ -4736,12 +4938,20 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Contexte',
         prompt: 'Quelle situation vous concerne ?',
         icon: Icons.health_and_safety_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'pregnancy',
             label: 'Grossesse possible ou confirmée',
             icon: Icons.pregnant_woman_outlined,
             tags: {'pregnancy_possible'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'male',
+            label: 'Homme ou garçon',
+            icon: Icons.person_outline,
+            tags: {'male_urinary_context'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
@@ -4935,6 +5145,14 @@ const assessmentPathways = <AssessmentPathway>[
         requiredAllTags: {'genital_discharge'},
       ),
       AssessmentPossibility(
+        title: 'Infection urinaire du jeune nourrisson à évaluer immédiatement',
+        explanation:
+            'Une infection urinaire possible avant 3 mois nécessite une évaluation pédiatrique spécialisée immédiate.',
+        tagWeights: {'young_infant_urinary_infection': 80},
+        requiredAllTags: {'young_infant_urinary_infection'},
+        urgentReason: true,
+      ),
+      AssessmentPossibility(
         title: 'Obstruction urinaire infectée à exclure en urgence',
         explanation:
             'Une fièvre associée à un calcul, une obstruction ou une rétention urinaire nécessite une prise en charge hospitalière urgente.',
@@ -5022,6 +5240,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Sensation principale',
         prompt: 'Que ressentez-vous surtout ?',
         icon: Icons.sync_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'spinning',
@@ -5096,6 +5315,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signes associés',
         prompt: 'Quel autre signe accompagne le malaise ?',
         icon: Icons.warning_amber_rounded,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'headache_neuro',
@@ -5145,6 +5365,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Contexte',
         prompt: 'Quelle situation vous concerne ?',
         icon: Icons.health_and_safety_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'diabetes',
@@ -5575,6 +5796,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Signes d’urgence',
         prompt: 'Avez-vous l’un de ces signes ?',
         icon: Icons.emergency_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'altered_consciousness',
@@ -5646,6 +5868,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Un de ces signes est-il présent chez le nourrisson ?',
         icon: Icons.child_care_outlined,
         requiredTags: {'branch_fever_infant'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'poor_feeding_or_drowsy',
@@ -5682,6 +5905,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Zone principale',
         prompt: 'Quel autre symptôme accompagne surtout la fièvre ?',
         icon: Icons.search_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'respiratory',
@@ -5723,6 +5947,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Hydratation et vulnérabilité',
         prompt: 'Quelle situation correspond le mieux ?',
         icon: Icons.local_drink_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'hydrated',
@@ -5766,6 +5991,7 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Exposition récente',
         prompt: 'Y a-t-il eu une exposition particulière ?',
         icon: Icons.public_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'mosquito_travel',
@@ -5806,6 +6032,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel autre signe accompagne cette exposition ?',
         icon: Icons.public_outlined,
         requiredTags: {'branch_fever_vector'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'dengue_pattern',
@@ -5843,6 +6070,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel signe respiratoire est présent ?',
         icon: Icons.air_outlined,
         requiredTags: {'branch_fever_respiratory'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'mild_upper',
@@ -5899,6 +6127,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel signe urinaire est présent ?',
         icon: Icons.local_drink_outlined,
         requiredTags: {'branch_fever_urinary'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'burning',
@@ -5934,6 +6163,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Comment la zone de peau évolue-t-elle ?',
         icon: Icons.texture_outlined,
         requiredTags: {'branch_fever_skin'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'red_spreading',
@@ -5970,6 +6200,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel signe digestif est présent ?',
         icon: Icons.sick_outlined,
         requiredTags: {'branch_fever_digestive'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'diarrhea',
@@ -6050,7 +6281,8 @@ const assessmentPathways = <AssessmentPathway>[
         urgentReason: true,
       ),
       AssessmentPossibility(
-        title: 'Neutropénie fébrile ou infection grave sous traitement possible',
+        title:
+            'Neutropénie fébrile ou infection grave sous traitement possible',
         explanation:
             'Une fièvre ou un malaise sous traitement anticancéreux actif ou récent nécessite une évaluation hospitalière immédiate.',
         tagWeights: {'possible_neutropenic_sepsis': 80},
@@ -6278,7 +6510,7 @@ List<AssessmentPathway> mergeNewestAssessmentPathways(
 }
 
 Map<String, dynamic> assessmentPathwayToMap(AssessmentPathway pathway) => {
-  'schemaVersion': 2,
+  'schemaVersion': 3,
   'id': pathway.id,
   'title': pathway.title,
   'subtitle': pathway.subtitle,
@@ -6293,6 +6525,7 @@ Map<String, dynamic> assessmentPathwayToMap(AssessmentPathway pathway) => {
         'iconKey': _assessmentIconKey(question.icon),
         'requiredTags': question.requiredTags.toList()..sort(),
         'excludedTags': question.excludedTags.toList()..sort(),
+        'allowMultiple': question.allowMultiple,
         'options': [
           for (final option in question.options)
             {
@@ -6392,6 +6625,7 @@ AssessmentPathway assessmentPathwayFromMap(
           options: options,
           requiredTags: strings(question['requiredTags']).toSet(),
           excludedTags: strings(question['excludedTags']).toSet(),
+          allowMultiple: question['allowMultiple'] == true,
         );
       })
       .toList(growable: false);
