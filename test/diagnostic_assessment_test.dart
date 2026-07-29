@@ -391,7 +391,7 @@ void main() {
     final pregnancyUti = engine
         .evaluate(assessmentPathwayById('urinary')!, const {
           'urinary_main': 'burning',
-          'urinary_pattern': 'cloudy_odor',
+          'urinary_pattern': 'cloudy|small_frequent',
           'urinary_context': 'pregnancy',
         });
     final infectedObstruction = engine.evaluate(
@@ -494,6 +494,64 @@ void main() {
       majorBurn.matches.first.title,
       'Brûlure grave à prendre en charge immédiatement',
     );
+  });
+
+  test('couvre les alertes maternelles tardives, rénales et de syncope', () {
+    final latePostpartum = engine
+        .evaluate(assessmentPathwayById('pregnancy')!, const {
+          'pregnancy_stage': 'postpartum_late',
+          'pregnancy_postpartum_detail': 'mental_health',
+        });
+    final caudaEquina = engine.evaluate(
+      assessmentPathwayById('urinary')!,
+      const {'urinary_red_flags': 'saddle_weakness'},
+    );
+    final cardiacSyncope = engine.evaluate(
+      assessmentPathwayById('dizziness')!,
+      const {
+        'dizziness_type': 'faint',
+        'dizziness_faint_detail': 'cardiac_risk',
+      },
+    );
+    final feverPathway = assessmentPathwayById('fever')!;
+    const vectorResidence = {'fever_exposure': 'resident_vector_area'};
+
+    expect(latePostpartum.urgency, AssessmentUrgency.emergency);
+    expect(
+      latePostpartum.matches.map((item) => item.title),
+      contains('Signe maternel urgent dans l’année après l’accouchement'),
+    );
+    expect(caudaEquina.urgency, AssessmentUrgency.emergency);
+    expect(
+      caudaEquina.matches.first.title,
+      'Compression des nerfs lombaires à exclure',
+    );
+    expect(cardiacSyncope.urgency, AssessmentUrgency.consultationToday);
+    expect(
+      cardiacSyncope.matches.first.title,
+      'Cause cardiaque du malaise possible',
+    );
+    expect(
+      engine
+          .nextQuestion(
+            feverPathway,
+            vectorResidence,
+            afterQuestionId: 'fever_exposure',
+          )
+          ?.id,
+      'fever_vector_detail',
+    );
+  });
+
+  test('n’invente plus les signes urinaires non sélectionnés', () {
+    final pathway = assessmentPathwayById('urinary')!;
+    final tags = engine.answerTags(pathway, const {
+      'urinary_pattern': 'cloudy',
+    });
+
+    expect(tags, contains('cloudy_urine'));
+    expect(tags, isNot(contains('urine_odor')));
+    expect(tags, isNot(contains('small_frequent_voids')));
   });
 
   test('rejette un niveau d’urgence publié inconnu', () {

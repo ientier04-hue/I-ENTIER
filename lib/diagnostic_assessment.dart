@@ -4448,6 +4448,33 @@ const assessmentPathways = <AssessmentPathway>[
         requiredAllTags: {'mental_health_emergency'},
         urgentReason: true,
       ),
+      AssessmentPossibility(
+        title: 'Signe maternel urgent dans l’année après l’accouchement',
+        explanation:
+            'Un symptôme grave peut rester lié à la période post-partum jusqu’à un an et nécessite une évaluation urgente.',
+        tagWeights: {
+          'postpartum_within_year': 12,
+          'severe_headache': 38,
+          'vision_change': 34,
+          'pregnancy_pulmonary_embolism_pattern': 52,
+          'pregnancy_dvt_pattern': 44,
+          'mental_health_emergency': 52,
+          'postpartum_heavy_bleeding': 44,
+          'postpartum_infection_pattern': 36,
+        },
+        requiredAllTags: {'postpartum_within_year'},
+        requiredAnyTags: {
+          'severe_headache',
+          'vision_change',
+          'pregnancy_pulmonary_embolism_pattern',
+          'pregnancy_dvt_pattern',
+          'mental_health_emergency',
+          'postpartum_heavy_bleeding',
+          'postpartum_infection_pattern',
+        },
+        minimumMatchedEvidence: 2,
+        urgentReason: true,
+      ),
     ],
     selfCare: [
       'Reposez-vous sur le côté, hydratez-vous par petites gorgées et notez l’évolution des symptômes.',
@@ -5006,6 +5033,22 @@ const assessmentPathways = <AssessmentPathway>[
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
+            id: 'anuria',
+            label:
+                'Presque aucune urine depuis de nombreuses heures, avec gonflement, essoufflement ou malaise',
+            icon: Icons.emergency_outlined,
+            tags: {'acute_kidney_injury_pattern'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'saddle_weakness',
+            label:
+                'Nouvel engourdissement entre les jambes, faiblesse des jambes ou perte de contrôle urinaire/fécal',
+            icon: Icons.emergency_outlined,
+            tags: {'cauda_equina_pattern'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
             id: 'none',
             label: 'Aucun de ces signes',
             icon: Icons.check_circle_outline,
@@ -5017,12 +5060,25 @@ const assessmentPathways = <AssessmentPathway>[
         title: 'Aspect et quantité',
         prompt: 'Comment vos urines ou vos habitudes ont-elles changé ?',
         icon: Icons.water_drop_outlined,
+        allowMultiple: true,
         options: [
           AssessmentOption(
-            id: 'cloudy_odor',
-            label: 'Petites quantités, urine trouble ou forte odeur',
+            id: 'small_frequent',
+            label: 'Petites quantités à chaque fois',
             icon: Icons.info_outline,
-            tags: {'cloudy_urine', 'urine_odor', 'small_frequent_voids'},
+            tags: {'small_frequent_voids'},
+          ),
+          AssessmentOption(
+            id: 'cloudy',
+            label: 'Urine trouble',
+            icon: Icons.info_outline,
+            tags: {'cloudy_urine'},
+          ),
+          AssessmentOption(
+            id: 'odor',
+            label: 'Odeur nettement plus forte ou inhabituelle',
+            icon: Icons.info_outline,
+            tags: {'urine_odor'},
           ),
           AssessmentOption(
             id: 'large_thirst',
@@ -5312,6 +5368,22 @@ const assessmentPathways = <AssessmentPathway>[
         urgentReason: true,
       ),
       AssessmentPossibility(
+        title: 'Atteinte rénale aiguë possible',
+        explanation:
+            'Une chute marquée des urines avec gonflement, essoufflement ou malaise nécessite une évaluation hospitalière immédiate.',
+        tagWeights: {'acute_kidney_injury_pattern': 80},
+        requiredAllTags: {'acute_kidney_injury_pattern'},
+        urgentReason: true,
+      ),
+      AssessmentPossibility(
+        title: 'Compression des nerfs lombaires à exclure',
+        explanation:
+            'Un engourdissement périnéal, une faiblesse des jambes ou une perte récente du contrôle urinaire ou fécal est une urgence neurologique.',
+        tagWeights: {'cauda_equina_pattern': 80},
+        requiredAllTags: {'cauda_equina_pattern'},
+        urgentReason: true,
+      ),
+      AssessmentPossibility(
         title: 'Obstruction urinaire infectée à exclure en urgence',
         explanation:
             'Une fièvre associée à un calcul, une obstruction ou une rétention urinaire nécessite une prise en charge hospitalière urgente.',
@@ -5528,9 +5600,16 @@ const assessmentPathways = <AssessmentPathway>[
         options: [
           AssessmentOption(
             id: 'diabetes',
-            label: 'Diabète, repas sauté, tremblements ou sueurs',
+            label: 'Diabète connu',
             icon: Icons.medical_information_outlined,
-            tags: {'diabetes_context', 'low_glucose_pattern'},
+            tags: {'diabetes_context'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'low_glucose',
+            label: 'Repas sauté avec tremblements, sueurs ou faim inhabituelle',
+            icon: Icons.warning_amber_rounded,
+            tags: {'low_glucose_pattern'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
@@ -5641,6 +5720,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Dans quelle situation le malaise survient-il ?',
         icon: Icons.personal_injury_outlined,
         requiredTags: {'branch_dizziness_faint'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'exercise_lying',
@@ -5656,6 +5736,14 @@ const assessmentPathways = <AssessmentPathway>[
             icon: Icons.emergency_outlined,
             tags: {'prolonged_unconsciousness', 'confusion'},
             urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'cardiac_risk',
+            label:
+                'Vraie perte de connaissance avec maladie cardiaque, nouvel essoufflement ou mort subite familiale avant 40 ans',
+            icon: Icons.warning_amber_rounded,
+            tags: {'true_syncope', 'cardiac_syncope_risk'},
+            urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
             id: 'standing_heat',
@@ -5789,6 +5877,7 @@ const assessmentPathways = <AssessmentPathway>[
           'chest_pain': 24,
           'palpitations': 24,
           'collapse': 18,
+          'cardiac_syncope_risk': 44,
         },
         requiredAllTags: {'true_syncope'},
         requiredAnyTags: {
@@ -5796,6 +5885,7 @@ const assessmentPathways = <AssessmentPathway>[
           'supine_syncope',
           'chest_pain',
           'palpitations',
+          'cardiac_syncope_risk',
         },
         urgentReason: true,
       ),
@@ -6015,6 +6105,14 @@ const assessmentPathways = <AssessmentPathway>[
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
+            id: 'child_serious_illness',
+            label:
+                'Enfant : respiration très rapide ou côtes creusées, peau pâle/marbrée ou réaction inhabituelle',
+            icon: Icons.emergency_outlined,
+            tags: {'pediatric_serious_illness_pattern'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
             id: 'none',
             label: 'Aucun de ces signes',
             icon: Icons.check_circle_outline,
@@ -6164,6 +6262,14 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Voyage ou séjour récent dans une zone de dengue/paludisme',
             icon: Icons.flight_outlined,
             tags: {'travel', 'branch_fever_vector'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'resident_vector_area',
+            label:
+                'Je vis dans une zone où dengue ou paludisme circule, notamment en Haïti',
+            icon: Icons.home_outlined,
+            tags: {'resident_vector_area', 'branch_fever_vector'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
@@ -6437,6 +6543,14 @@ const assessmentPathways = <AssessmentPathway>[
             'Une grande difficulté respiratoire ou une coloration pâle ou bleue nécessite une prise en charge immédiate.',
         tagWeights: {'respiratory_emergency_pattern': 76},
         requiredAllTags: {'respiratory_emergency_pattern'},
+        urgentReason: true,
+      ),
+      AssessmentPossibility(
+        title: 'Maladie fébrile grave possible chez l’enfant',
+        explanation:
+            'Une respiration très rapide ou difficile, une peau pâle ou marbrée ou un comportement inhabituel chez un enfant nécessite une prise en charge immédiate.',
+        tagWeights: {'pediatric_serious_illness_pattern': 80, 'young_child': 8},
+        requiredAllTags: {'pediatric_serious_illness_pattern'},
         urgentReason: true,
       ),
       AssessmentPossibility(

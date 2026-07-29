@@ -68,8 +68,9 @@ des tests avant diffusion :
   être coronarienne même sans irradiation ni facteur de risque connu. Les
   symptômes priment sur le profil de risque.
 - Embolie pulmonaire : un facteur de risque isolé ne suffit pas à créer le
-  diagnostic ni l’urgence. Il doit être distingué d’un symptôme aigu, d’une
-  jambe unilatéralement gonflée et des autres facteurs thromboemboliques.
+  diagnostic ni une alerte ambulance. Dans un parcours ouvert pour douleur ou
+  essoufflement, il peut toutefois imposer un avis le jour même ; l’alerte
+  immédiate exige un symptôme aigu associé.
 - Respiration : l’essoufflement isolé et les signes d’obstruction des voies
   aériennes restent accessibles sans devoir choisir une toux ou un sifflement.
   L’échec du traitement de secours et l’hémoptysie sont gradués selon la gravité
@@ -90,9 +91,10 @@ des tests avant diffusion :
   professionnel.
 - Grossesse et post-partum : céphalée persistante, troubles visuels,
   pré-éclampsie/éclampsie, saignement, grossesse extra-utérine, thrombose et
-  embolie sont séparés. Une diminution des mouvements fœtaux ou une perte de
-  liquide affiche une consigne immédiate de contacter la maternité sans attendre
-  le lendemain.
+  embolie sont séparés ; les signes maternels urgents restent recherchés jusqu’à
+  un an après l’accouchement. Une diminution des mouvements fœtaux ou une perte
+  de liquide affiche une consigne immédiate de contacter la maternité sans
+  attendre le lendemain.
 - Urines et vertiges : infection urinaire du nourrisson, grossesse, enfant,
   homme, obstruction infectée et rétention renforcent le triage ; un vertige
   brutal continu avec nouvelle instabilité suit une filière neurologique
