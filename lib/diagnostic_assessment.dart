@@ -3874,6 +3874,16 @@ const assessmentPathways = <AssessmentPathway>[
             },
           ),
           AssessmentOption(
+            id: 'postpartum_late',
+            label: 'J’ai accouché il y a 6 semaines à 1 an',
+            icon: Icons.child_friendly_outlined,
+            tags: {
+              'postpartum_within_year',
+              'context_pregnant',
+              'branch_pregnancy_postpartum',
+            },
+          ),
+          AssessmentOption(
             id: 'unsure',
             label: 'Je ne sais pas précisément',
             icon: Icons.help_outline,
@@ -4230,8 +4240,7 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'none',
-            label:
-                'Aucun de ces signes; le saignement habituel diminue progressivement',
+            label: 'Aucun de ces signes urgents',
             icon: Icons.check_circle_outline,
           ),
         ],
