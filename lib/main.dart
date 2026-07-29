@@ -10,6 +10,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_theme.dart';
 import 'appointments.dart';
+import 'blood_donation_page.dart';
+import 'community_transport_page.dart';
+import 'crowdfunding_page.dart';
 import 'cycle_tracking_page.dart';
 import 'diagnostic_assessment_page.dart';
 import 'health_tracking_page.dart';
@@ -200,15 +203,6 @@ class PatientProfileGate extends StatelessWidget {
             return const _LoadingScreen();
           }
           final profile = snapshot.data?.data() ?? const <String, dynamic>{};
-          if (snapshot.hasError || profile['profileComplete'] != true) {
-            return PatientProfileScreen(
-              user: user,
-              accountProfile: account,
-              isOnboarding: true,
-              initialProfile: profile,
-              storageError: snapshot.hasError,
-            );
-          }
           return HomeScreen(
             user: user,
             account: account,
@@ -1859,11 +1853,31 @@ const _homeServices = <HealthService>[
   HealthService(
     id: 'don-de-sang',
     title: 'Don de sang',
-    summary: 'Trouvez un centre et sauvez des vies',
+    summary: 'Consultez les besoins et préparez votre don',
     imagePath: 'sang.png',
     backgroundColor: '#FFA2A8',
     accentColor: '#F01924',
-    externalUrl: 'https://www.croixrouge.ht/2-check-up/',
+    actionLabel: 'Voir les besoins',
+  ),
+  HealthService(
+    id: 'mobilite-sante',
+    title: 'Mobilité Santé',
+    summary: 'Un véhicule local avec accompagnateur santé',
+    imagePath: 'assets/services/mobilite_sante_3d.png',
+    backgroundColor: '#DFF3FF',
+    accentColor: '#0C5F9C',
+    actionLabel: 'Demander un trajet',
+    icon: Icons.airport_shuttle_rounded,
+  ),
+  HealthService(
+    id: 'crowdfunding',
+    title: 'Financement solidaire',
+    summary: 'Mobilisez la communauté pour financer des soins',
+    imagePath: 'assets/services/crowdfunding_3d.png',
+    backgroundColor: '#E9F8F3',
+    accentColor: '#087A5B',
+    actionLabel: 'Découvrir',
+    icon: Icons.volunteer_activism_rounded,
   ),
   HealthService(
     id: 'laboratoire',
@@ -2099,6 +2113,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _openPatientProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PatientProfileScreen(
+          user: widget.user,
+          accountProfile: widget.account,
+          initialProfile: widget.patientProfile,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openService(HealthService service) async {
     final externalUrl = service.externalUrl;
     if (externalUrl != null && externalUrl.isNotEmpty) {
@@ -2118,6 +2144,39 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => PharmacyPage(patientId: widget.user.uid),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'don-de-sang') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              BloodDonationPage(patientProfile: widget.patientProfile),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'mobilite-sante') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CommunityTransportPage(
+            patientId: widget.user.uid,
+            patientName: _patientName,
+            patientProfile: widget.patientProfile,
+          ),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'crowdfunding') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CrowdfundingPage(
+            userId: widget.user.uid,
+            userDisplayName: _patientName,
+            patientProfile: widget.patientProfile,
+          ),
         ),
       );
       return;
@@ -2204,6 +2263,10 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: _openServiceSearch,
           onFilterTap: _openServicesCatalog,
         ),
+        if (widget.patientProfile['profileComplete'] != true) ...[
+          const SizedBox(height: 16),
+          _ProfileCompletionCard(onTap: _openPatientProfile),
+        ],
         const SizedBox(height: 28),
         _SectionHeading(
           title: 'Services',
@@ -2248,15 +2311,7 @@ class _HomeScreenState extends State<HomeScreen> {
     profileName: _patientName,
     unreadNotificationCount: _unreadNotificationCount,
     onNotificationsTap: _openNotifications,
-    onProfileTap: () => Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PatientProfileScreen(
-          user: widget.user,
-          accountProfile: widget.account,
-          initialProfile: widget.patientProfile,
-        ),
-      ),
-    ),
+    onProfileTap: _openPatientProfile,
   );
 
   Widget _scrollablePage(int index, {required bool wide}) => SafeArea(
@@ -5588,6 +5643,84 @@ class _SearchField extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ProfileCompletionCard extends StatelessWidget {
+  const _ProfileCompletionCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label:
+        'Complétez votre profil. Quelques informations suffisent pour personnaliser votre expérience.',
+    child: Material(
+      key: const ValueKey('profile-completion-card'),
+      color: const Color(0xFFEAF5FF),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Complétez votre profil',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Quelques informations suffisent pour personnaliser votre expérience.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.primary,
+                size: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _ServicesCatalogPage extends StatefulWidget {

@@ -75,6 +75,8 @@ flutter:
     - regles.png
     - mental_health.png
     - preventive_medicine.png
+    - assets/services/crowdfunding_3d.png
+    - assets/services/mobilite_sante_3d.png
     - assets/onboarding/
 
   # To add assets to your application, add an assets section, like this:

@@ -172,6 +172,9 @@ class SupabaseSymptomAssessmentRepository
       final birthDate = _dateFrom(patientProfile['birthDate']);
       context.addAll({
         'age': birthDate == null ? null : _ageAt(birthDate, DateTime.now()),
+        'ageMonths': birthDate == null
+            ? null
+            : _ageInMonths(birthDate, DateTime.now()),
         'sex': patientProfile['sex']?.toString(),
         'pregnancy': _profileIndicatesPregnancy(patientProfile),
         'conditions': _stringList(patientProfile['medicalConditions']),
@@ -191,15 +194,22 @@ class SupabaseSymptomAssessmentRepository
             .limit(12),
       );
       context['recentMeasurements'] = rows;
-      context['recentHighTemperature'] = rows.any((row) {
-        if (row['kind'] != 'temperature') return false;
-        final measuredAt = _dateFrom(row['measured_at']);
-        final value = (row['value'] as num?)?.toDouble();
-        return measuredAt != null &&
-            DateTime.now().difference(measuredAt.toLocal()).inHours <= 48 &&
-            value != null &&
-            value >= 38;
-      });
+      final recentTemperatures = rows
+          .where((row) {
+            if (row['kind'] != 'temperature') return false;
+            final measuredAt = _dateFrom(row['measured_at']);
+            return measuredAt != null &&
+                DateTime.now().difference(measuredAt.toLocal()).inHours <= 48;
+          })
+          .map((row) => (row['value'] as num?)?.toDouble())
+          .whereType<double>()
+          .toList(growable: false);
+      context['recentMaxTemperature'] = recentTemperatures.isEmpty
+          ? null
+          : recentTemperatures.reduce(math.max);
+      context['recentHighTemperature'] = recentTemperatures.any(
+        (value) => value >= 38,
+      );
     }
 
     if (consents['cycle'] == true) {
@@ -268,7 +278,12 @@ class _MemorySymptomAssessmentRepository
     final birthDate = _dateFrom(patientProfile['birthDate']);
     return {
       'age': birthDate == null ? null : _ageAt(birthDate, DateTime.now()),
+      'ageMonths': birthDate == null
+          ? null
+          : _ageInMonths(birthDate, DateTime.now()),
+      'sex': patientProfile['sex']?.toString(),
       'pregnancy': _profileIndicatesPregnancy(patientProfile),
+      'conditions': _stringList(patientProfile['medicalConditions']),
       'allergies': _stringList(patientProfile['allergies']),
       'medications': _stringList(patientProfile['currentMedications']),
     };
@@ -325,12 +340,12 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
             .eq('status', 'published')
             .order('pathway_id'),
       );
-      final loaded = <AssessmentPathway>[];
+      final published = <AssessmentPathway>[];
       for (final row in rows) {
         final raw = row['definition'];
         if (raw is! Map) continue;
         try {
-          loaded.add(
+          published.add(
             assessmentPathwayFromMap(
               Map<String, dynamic>.from(raw),
               version: (row['version_number'] as num?)?.round() ?? 1,
@@ -340,8 +355,13 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
           // Un parcours publié invalide est ignoré.
         }
       }
-      if (loaded.isNotEmpty && mounted) {
-        setState(() => _pathways = loaded);
+      if (mounted) {
+        setState(
+          () => _pathways = mergeNewestAssessmentPathways(
+            assessmentPathways,
+            published,
+          ),
+        );
       }
     } catch (_) {
       // Le catalogue intégré garantit un repli sûr hors connexion.
@@ -992,6 +1012,8 @@ class _QuestionnairePage extends StatefulWidget {
   State<_QuestionnairePage> createState() => _QuestionnairePageState();
 }
 
+enum _EmergencyDecision { stop, continueAssessment }
+
 class _QuestionnairePageState extends State<_QuestionnairePage> {
   static const _engine = AssessmentEngine();
   late SymptomAssessmentRecord _assessment = widget.initialAssessment;
@@ -1066,32 +1088,52 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
     final answers = Map<String, String>.of(_assessment.answers)
       ..[_question.id] = selected.id;
     final now = DateTime.now();
-    final isEmergency = selected.urgency == AssessmentUrgency.emergency;
-    final next = isEmergency
-        ? null
-        : _engine.nextQuestion(
-            widget.pathway,
-            answers,
-            afterQuestionId: _question.id,
-          );
-    final completed = isEmergency || next == null;
-    final result = completed
-        ? _engine.evaluate(
-            widget.pathway,
-            answers,
-            context: _assessment.contextSnapshot,
-          )
-        : null;
+    final next = _engine.nextQuestion(
+      widget.pathway,
+      answers,
+      afterQuestionId: _question.id,
+    );
+    final evaluated = _engine.evaluate(
+      widget.pathway,
+      answers,
+      context: _assessment.contextSnapshot,
+    );
+    final previousWasEmergency =
+        _assessment.answers.isNotEmpty &&
+        _engine
+                .evaluate(
+                  widget.pathway,
+                  _assessment.answers,
+                  context: _assessment.contextSnapshot,
+                )
+                .urgency ==
+            AssessmentUrgency.emergency;
+    final becameEmergency =
+        evaluated.urgency == AssessmentUrgency.emergency &&
+        !previousWasEmergency;
+
+    var stopNow = false;
+    if (becameEmergency) {
+      final decision = await _showEmergencyDecision(
+        evaluated.redFlags,
+        canContinue: next != null,
+      );
+      if (!mounted) return;
+      stopNow = next == null || decision == _EmergencyDecision.stop;
+    }
+
+    setState(() => _saving = true);
+    final completed = stopNow || next == null;
+    final result = completed ? evaluated : null;
     final updated = _assessment.copyWith(
       status: completed ? 'completed' : 'draft',
-      currentQuestionId: next?.id,
+      currentQuestionId: completed ? null : next.id,
       clearCurrentQuestion: completed,
       answers: answers,
       result: result,
       updatedAt: now,
       completedAt: completed ? now : null,
     );
-    setState(() => _saving = true);
     try {
       await widget.repository.save(updated);
       if (!mounted) return;
@@ -1114,11 +1156,157 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _saving = false);
+      setState(() {
+        _assessment = updated;
+        _saving = false;
+        _selectedOptionId = next == null ? null : answers[next.id];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            completed
+                ? 'Orientation affichée, mais non synchronisée. Réessayez plus tard.'
+                : 'Réponse non synchronisée. Vérifiez la connexion puis confirmez à nouveau.',
+          ),
+        ),
+      );
+      if (completed && result != null) {
+        await Navigator.of(context).pushReplacement<void, void>(
+          MaterialPageRoute(
+            builder: (_) => _AssessmentResultPage(
+              assessment: updated,
+              result: result,
+              onOpenAppointments: widget.onOpenAppointments,
+              onSpeak: widget.onSpeak,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<_EmergencyDecision> _showEmergencyDecision(
+    List<String> redFlags, {
+    required bool canContinue,
+  }) async {
+    final decision = await showDialog<_EmergencyDecision>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          icon: Icon(
+            Icons.emergency_outlined,
+            color: Theme.of(dialogContext).colorScheme.error,
+            size: 42,
+          ),
+          title: const Text('Signe d’urgence détecté'),
+          content: Text(
+            'Une de vos réponses peut correspondre à une urgence médicale. '
+            'N’attendez pas si votre état est grave ou s’aggrave : appelez le '
+            '116 ou allez aux urgences.'
+            '${redFlags.isEmpty ? '' : '\n\nSigne d’alerte : ${redFlags.first}.'}'
+            '\n\nVous pouvez afficher l’orientation maintenant ou continuer '
+            'les questions sous votre responsabilité.',
+          ),
+          actions: [
+            TextButton.icon(
+              key: const Key('assessment-emergency-call'),
+              onPressed: () async {
+                final opened = await launchUrl(Uri(scheme: 'tel', path: '116'));
+                if (!opened && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Impossible d’ouvrir le téléphone. Composez manuellement le 116.',
+                      ),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.call_outlined),
+              label: const Text('Appeler le 116'),
+            ),
+            if (canContinue)
+              TextButton(
+                key: const Key('assessment-emergency-continue'),
+                onPressed: () => Navigator.of(
+                  dialogContext,
+                ).pop(_EmergencyDecision.continueAssessment),
+                child: const Text('Continuer les questions'),
+              ),
+            FilledButton.icon(
+              key: const Key('assessment-emergency-stop'),
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(_EmergencyDecision.stop),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              ),
+              icon: const Icon(Icons.health_and_safety_outlined),
+              label: const Text('Voir l’orientation urgente'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return decision ?? _EmergencyDecision.stop;
+  }
+
+  Future<void> _finishAfterEmergency() async {
+    if (_saving || _assessment.answers.isEmpty) return;
+    final now = DateTime.now();
+    final result = _engine.evaluate(
+      widget.pathway,
+      _assessment.answers,
+      context: _assessment.contextSnapshot,
+    );
+    final updated = _assessment.copyWith(
+      status: 'completed',
+      clearCurrentQuestion: true,
+      result: result,
+      updatedAt: now,
+      completedAt: now,
+    );
+    setState(() => _saving = true);
+    try {
+      await widget.repository.save(updated);
+      if (!mounted) return;
+      setState(() {
+        _assessment = updated;
+        _saving = false;
+        _selectedOptionId = null;
+      });
+      await Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute(
+          builder: (_) => _AssessmentResultPage(
+            assessment: updated,
+            result: result,
+            onOpenAppointments: widget.onOpenAppointments,
+            onSpeak: widget.onSpeak,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _assessment = updated;
+        _saving = false;
+        _selectedOptionId = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Réponse non synchronisée. Vérifiez la connexion puis confirmez à nouveau.',
+            'Orientation affichée, mais non synchronisée. Réessayez plus tard.',
+          ),
+        ),
+      );
+      await Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute(
+          builder: (_) => _AssessmentResultPage(
+            assessment: updated,
+            result: result,
+            onOpenAppointments: widget.onOpenAppointments,
+            onSpeak: widget.onSpeak,
           ),
         ),
       );
@@ -1179,6 +1367,16 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   Widget build(BuildContext context) {
     final question = _question;
     final progress = _engine.progress(widget.pathway, _assessment.answers);
+    final hasEmergencyAnswer =
+        _assessment.answers.isNotEmpty &&
+        _engine
+                .evaluate(
+                  widget.pathway,
+                  _assessment.answers,
+                  context: _assessment.contextSnapshot,
+                )
+                .urgency ==
+            AssessmentUrgency.emergency;
     return PopScope(
       canPop: !_saving,
       child: Scaffold(
@@ -1239,6 +1437,10 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                   ],
                 ),
               ),
+              if (hasEmergencyAnswer)
+                _EmergencyContinuationBanner(
+                  onStop: _saving ? null : _finishAfterEmergency,
+                ),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 280),
@@ -1345,6 +1547,45 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   }
 }
 
+class _EmergencyContinuationBanner extends StatelessWidget {
+  final VoidCallback? onStop;
+
+  const _EmergencyContinuationBanner({required this.onStop});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    return Container(
+      key: const Key('assessment-emergency-banner'),
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        border: Border.all(color: color.withValues(alpha: .35)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.emergency_outlined, color: color),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Alerte urgente active. Vous pouvez arrêter à tout moment.',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          TextButton(
+            key: const Key('assessment-emergency-finish-now'),
+            onPressed: onStop,
+            style: TextButton.styleFrom(foregroundColor: color),
+            child: const Text('Arrêter'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AnswerOptionCard extends StatelessWidget {
   final AssessmentOption option;
   final Color color;
@@ -1442,9 +1683,11 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
     final text = [
       result.urgency.label,
       result.urgency.description,
+      if (result.redFlags.isNotEmpty) 'Signes d’alerte.',
+      ...result.redFlags,
       'Possibilités compatibles.',
       for (final match in result.matches)
-        '${match.title}, indice ${match.compatibility} pour cent. ${match.explanation}',
+        '${match.title}, ${match.compatibilityLabel}. ${match.explanation}',
       'Prochaines étapes.',
       ...result.nextSteps,
     ].join('. ');
@@ -1536,13 +1779,20 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
             ),
           ),
           const SizedBox(height: 24),
+          if (result.redFlags.isNotEmpty) ...[
+            _ResultSection(
+              icon: Icons.report_gmailerrorred_outlined,
+              title: 'Signes d’alerte détectés',
+              items: result.redFlags,
+            ),
+          ],
           Text(
             'Possibilités à vérifier',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 5),
           Text(
-            'L’indice mesure seulement la compatibilité de vos réponses. Ce n’est ni une probabilité de maladie ni un diagnostic.',
+            'La compatibilité est qualitative et non calibrée. Ce n’est ni une probabilité de maladie ni un diagnostic.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -1620,22 +1870,16 @@ class _CompatibilityCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              Text(
-                '${match.compatibility} %',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(color: AppColors.primary),
+              Chip(
+                avatar: Icon(
+                  match.urgentReason
+                      ? Icons.warning_amber_rounded
+                      : Icons.fact_check_outlined,
+                  size: 18,
+                ),
+                label: Text(match.compatibilityLabel),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: match.compatibility / 100,
-              minHeight: 8,
-              backgroundColor: AppColors.primarySoft,
-            ),
           ),
           const SizedBox(height: 10),
           Text(match.explanation),
@@ -1732,6 +1976,12 @@ int _ageAt(DateTime birthDate, DateTime date) {
     age--;
   }
   return age;
+}
+
+int _ageInMonths(DateTime birthDate, DateTime date) {
+  var months = (date.year - birthDate.year) * 12 + date.month - birthDate.month;
+  if (date.day < birthDate.day) months--;
+  return months;
 }
 
 bool _profileIndicatesPregnancy(Map<String, dynamic> profile) {

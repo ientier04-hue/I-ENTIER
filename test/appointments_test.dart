@@ -10,7 +10,12 @@ class _FakePatientAppointmentRepository
   DateTime? scheduledAt;
   String? patientNote;
   AppointmentMode? mode;
+  AppointmentPaymentMethod? paymentMethod;
   String? location;
+  Appointment? updatedAppointment;
+  Appointment? cancelledAppointment;
+  Appointment? deletedAppointment;
+  String? cancellationReason;
 
   @override
   Future<void> create({
@@ -20,6 +25,7 @@ class _FakePatientAppointmentRepository
     required DateTime scheduledAt,
     required String patientNote,
     required AppointmentMode mode,
+    required AppointmentPaymentMethod paymentMethod,
     required String location,
   }) async {
     this.patientId = patientId;
@@ -28,7 +34,37 @@ class _FakePatientAppointmentRepository
     this.scheduledAt = scheduledAt;
     this.patientNote = patientNote;
     this.mode = mode;
+    this.paymentMethod = paymentMethod;
     this.location = location;
+  }
+
+  @override
+  Future<void> update({
+    required Appointment appointment,
+    required DateTime scheduledAt,
+    required String patientNote,
+    required AppointmentPaymentMethod paymentMethod,
+    required String location,
+  }) async {
+    updatedAppointment = appointment;
+    this.scheduledAt = scheduledAt;
+    this.patientNote = patientNote;
+    this.paymentMethod = paymentMethod;
+    this.location = location;
+  }
+
+  @override
+  Future<void> cancel({
+    required Appointment appointment,
+    required String reason,
+  }) async {
+    cancelledAppointment = appointment;
+    cancellationReason = reason;
+  }
+
+  @override
+  Future<void> deleteForPatient(Appointment appointment) async {
+    deletedAppointment = appointment;
   }
 
   @override
@@ -161,6 +197,9 @@ void main() {
     final firstSlot = find.byKey(const ValueKey('appointment-time-8-0'));
     await tester.ensureVisible(firstSlot);
     await tester.tap(firstSlot);
+    final monCash = find.byKey(const ValueKey('payment-method-monCash'));
+    await tester.ensureVisible(monCash);
+    await tester.tap(monCash);
     await tester.enterText(find.byType(TextField), 'Consultation de suivi');
     await tester.ensureVisible(
       find.byKey(const ValueKey('submit-appointment')),
@@ -182,6 +221,7 @@ void main() {
     expect(repository.scheduledAt, DateTime(2026, 7, 20, 8));
     expect(repository.patientNote, 'Consultation de suivi');
     expect(repository.mode, AppointmentMode.atProvider);
+    expect(repository.paymentMethod, AppointmentPaymentMethod.monCash);
     expect(tester.takeException(), isNull);
   });
 
@@ -256,6 +296,7 @@ void main() {
       providerName: 'Dre Marie Jean',
       service: 'Pédiatrie',
       mode: AppointmentMode.video,
+      paymentMethod: AppointmentPaymentMethod.bankTransfer,
       scheduledAt: DateTime(2026, 8, 4, 9, 30),
       scheduleLabel: 'Lun–Ven, 8 h–16 h',
       status: AppointmentStatus.confirmed,
@@ -281,7 +322,159 @@ void main() {
     expect(find.text('Dre Marie Jean'), findsOneWidget);
     expect(find.text('Confirmé'), findsOneWidget);
     expect(find.text('Visioconférence'), findsOneWidget);
+    expect(find.text('Paiement : Virement bancaire'), findsOneWidget);
     expect(find.textContaining('Présentez-vous 15 minutes'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('modifie un rendez-vous en attente', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakePatientAppointmentRepository();
+    final appointment = Appointment(
+      id: 'appointment-edit',
+      patientId: 'patient-1',
+      patientName: 'Jean Baptiste',
+      providerId: 'provider-1',
+      providerType: 'professional',
+      providerName: 'Dre Marie Jean',
+      service: 'Pédiatrie',
+      scheduledAt: DateTime(2026, 7, 20, 8),
+      scheduleLabel: 'Lun–Ven, 8 h–10 h',
+      status: AppointmentStatus.pending,
+      patientNote: 'Première note',
+      responseNote: '',
+      createdAt: DateTime(2026, 7, 19),
+      updatedAt: DateTime(2026, 7, 19),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PatientAppointmentEditPage(
+          appointment: appointment,
+          repository: repository,
+          now: DateTime(2026, 7, 20, 7),
+        ),
+      ),
+    );
+
+    final newTime = find.byKey(const ValueKey('edit-appointment-time-8-30'));
+    await tester.ensureVisible(newTime);
+    await tester.tap(newTime);
+    final natCash = find.byKey(const ValueKey('payment-method-natCash'));
+    await tester.ensureVisible(natCash);
+    await tester.tap(natCash);
+    await tester.enterText(
+      find.byKey(const ValueKey('edit-appointment-note')),
+      'Nouvelle note',
+    );
+    final save = find.byKey(const ValueKey('save-appointment-changes'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(repository.updatedAppointment, appointment);
+    expect(repository.scheduledAt, DateTime(2026, 7, 20, 8, 30));
+    expect(repository.patientNote, 'Nouvelle note');
+    expect(repository.paymentMethod, AppointmentPaymentMethod.natCash);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('annule puis permet de supprimer un rendez-vous', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakePatientAppointmentRepository();
+    final pending = Appointment(
+      id: 'appointment-cancel',
+      patientId: 'patient-1',
+      patientName: 'Jean Baptiste',
+      providerId: 'provider-1',
+      providerType: 'professional',
+      providerName: 'Dre Marie Jean',
+      service: 'Pédiatrie',
+      scheduledAt: DateTime(2026, 8, 4, 9, 30),
+      scheduleLabel: 'Lun–Ven, 8 h–16 h',
+      status: AppointmentStatus.pending,
+      patientNote: '',
+      responseNote: '',
+      createdAt: DateTime(2026, 7, 22),
+      updatedAt: DateTime(2026, 7, 22),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PatientAppointmentsPage(
+              patientId: 'patient-1',
+              appointmentStream: Stream.value([pending]),
+              repository: repository,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('cancel-patient-appointment-appointment-cancel'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('patient-cancellation-reason')),
+      'Empêchement',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-patient-cancellation')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.cancelledAppointment, pending);
+    expect(repository.cancellationReason, 'Empêchement');
+
+    final cancelled = Appointment(
+      id: 'appointment-delete',
+      patientId: pending.patientId,
+      patientName: pending.patientName,
+      providerId: pending.providerId,
+      providerType: pending.providerType,
+      providerName: pending.providerName,
+      service: pending.service,
+      scheduledAt: pending.scheduledAt,
+      scheduleLabel: pending.scheduleLabel,
+      status: AppointmentStatus.cancelled,
+      patientNote: '',
+      responseNote: '',
+      createdAt: pending.createdAt,
+      updatedAt: pending.updatedAt,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PatientAppointmentsPage(
+              patientId: 'patient-1',
+              appointmentStream: Stream.value([cancelled]),
+              repository: repository,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('delete-patient-appointment-appointment-delete'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-patient-deletion')));
+    await tester.pumpAndSettle();
+
+    expect(repository.deletedAppointment, cancelled);
     expect(tester.takeException(), isNull);
   });
 }

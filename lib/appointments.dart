@@ -1,4 +1,5 @@
 import 'supabase_data.dart';
+import 'supabase_config.dart';
 import 'package:flutter/material.dart';
 
 const _appointmentPrimary = Color(0xFF176BFF);
@@ -10,6 +11,42 @@ const _appointmentCanvas = Color(0xFFF5F8FC);
 enum AppointmentStatus { pending, confirmed, cancelled }
 
 enum AppointmentMode { atProvider, homeVisit, video }
+
+enum AppointmentPaymentMethod { cash, monCash, natCash, bankTransfer, card }
+
+extension AppointmentPaymentMethodText on AppointmentPaymentMethod {
+  String get storageValue => switch (this) {
+    AppointmentPaymentMethod.cash => 'cash',
+    AppointmentPaymentMethod.monCash => 'monCash',
+    AppointmentPaymentMethod.natCash => 'natCash',
+    AppointmentPaymentMethod.bankTransfer => 'bankTransfer',
+    AppointmentPaymentMethod.card => 'card',
+  };
+
+  String get label => switch (this) {
+    AppointmentPaymentMethod.cash => 'Espèces',
+    AppointmentPaymentMethod.monCash => 'MonCash',
+    AppointmentPaymentMethod.natCash => 'NatCash',
+    AppointmentPaymentMethod.bankTransfer => 'Virement bancaire',
+    AppointmentPaymentMethod.card => 'Carte bancaire',
+  };
+
+  IconData get icon => switch (this) {
+    AppointmentPaymentMethod.cash => Icons.payments_outlined,
+    AppointmentPaymentMethod.monCash => Icons.phone_android_rounded,
+    AppointmentPaymentMethod.natCash => Icons.account_balance_wallet_outlined,
+    AppointmentPaymentMethod.bankTransfer => Icons.account_balance_outlined,
+    AppointmentPaymentMethod.card => Icons.credit_card_rounded,
+  };
+
+  static AppointmentPaymentMethod fromStorage(Object? value) => switch (value) {
+    'monCash' => AppointmentPaymentMethod.monCash,
+    'natCash' => AppointmentPaymentMethod.natCash,
+    'bankTransfer' => AppointmentPaymentMethod.bankTransfer,
+    'card' => AppointmentPaymentMethod.card,
+    _ => AppointmentPaymentMethod.cash,
+  };
+}
 
 extension AppointmentModeText on AppointmentMode {
   String get storageValue => switch (this) {
@@ -73,6 +110,7 @@ class Appointment {
   final String providerName;
   final String service;
   final AppointmentMode mode;
+  final AppointmentPaymentMethod paymentMethod;
   final String location;
   final DateTime scheduledAt;
   final String scheduleLabel;
@@ -82,6 +120,11 @@ class Appointment {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? respondedAt;
+  final String cancellationNote;
+  final String cancelledBy;
+  final DateTime? cancelledAt;
+  final bool patientHidden;
+  final bool providerHidden;
 
   const Appointment({
     required this.id,
@@ -92,6 +135,7 @@ class Appointment {
     required this.providerName,
     required this.service,
     this.mode = AppointmentMode.atProvider,
+    this.paymentMethod = AppointmentPaymentMethod.cash,
     this.location = '',
     required this.scheduledAt,
     required this.scheduleLabel,
@@ -101,6 +145,11 @@ class Appointment {
     required this.createdAt,
     required this.updatedAt,
     this.respondedAt,
+    this.cancellationNote = '',
+    this.cancelledBy = '',
+    this.cancelledAt,
+    this.patientHidden = false,
+    this.providerHidden = false,
   });
 
   factory Appointment.fromFirestore(
@@ -125,6 +174,9 @@ class Appointment {
       providerName: text('providerName'),
       service: text('service'),
       mode: AppointmentModeText.fromStorage(data['appointmentMode']),
+      paymentMethod: AppointmentPaymentMethodText.fromStorage(
+        data['paymentMethod'],
+      ),
       location: text('location'),
       scheduledAt: date('scheduledAt'),
       scheduleLabel: text('scheduleLabel'),
@@ -136,6 +188,13 @@ class Appointment {
       respondedAt: data['respondedAt'] is Timestamp
           ? (data['respondedAt'] as Timestamp).toDate()
           : null,
+      cancellationNote: text('cancellationNote'),
+      cancelledBy: text('cancelledBy'),
+      cancelledAt: data['cancelledAt'] is Timestamp
+          ? (data['cancelledAt'] as Timestamp).toDate()
+          : null,
+      patientHidden: data['patientHidden'] == true,
+      providerHidden: data['providerHidden'] == true,
     );
   }
 }
@@ -190,8 +249,24 @@ abstract class PatientAppointmentRepository {
     required DateTime scheduledAt,
     required String patientNote,
     required AppointmentMode mode,
+    required AppointmentPaymentMethod paymentMethod,
     required String location,
   });
+
+  Future<void> update({
+    required Appointment appointment,
+    required DateTime scheduledAt,
+    required String patientNote,
+    required AppointmentPaymentMethod paymentMethod,
+    required String location,
+  });
+
+  Future<void> cancel({
+    required Appointment appointment,
+    required String reason,
+  });
+
+  Future<void> deleteForPatient(Appointment appointment);
 }
 
 class SupabasePatientAppointmentRepository
@@ -209,6 +284,7 @@ class SupabasePatientAppointmentRepository
       .map((snapshot) {
         final appointments = snapshot.docs
             .map(Appointment.fromFirestore)
+            .where((appointment) => !appointment.patientHidden)
             .toList(growable: false);
         appointments.sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
         return appointments;
@@ -222,6 +298,7 @@ class SupabasePatientAppointmentRepository
     required DateTime scheduledAt,
     required String patientNote,
     required AppointmentMode mode,
+    required AppointmentPaymentMethod paymentMethod,
     required String location,
   }) {
     final appointmentId =
@@ -236,6 +313,7 @@ class SupabasePatientAppointmentRepository
       'providerName': provider.name.trim(),
       'service': provider.service.trim(),
       'appointmentMode': mode.storageValue,
+      'paymentMethod': paymentMethod.storageValue,
       'location': location.trim(),
       'scheduledAt': Timestamp.fromDate(scheduledAt),
       'scheduleLabel': provider.scheduleFor(mode),
@@ -245,6 +323,57 @@ class SupabasePatientAppointmentRepository
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  @override
+  Future<void> update({
+    required Appointment appointment,
+    required DateTime scheduledAt,
+    required String patientNote,
+    required AppointmentPaymentMethod paymentMethod,
+    required String location,
+  }) async {
+    await SupabaseConfig.client
+        .schema('ientier')
+        .rpc(
+          'patient_update_appointment',
+          params: {
+            'p_appointment_id': appointment.id,
+            'p_scheduled_at': scheduledAt.toUtc().toIso8601String(),
+            'p_patient_note': patientNote.trim(),
+            'p_payment_method': paymentMethod.storageValue,
+            'p_location': location.trim(),
+          },
+        );
+  }
+
+  @override
+  Future<void> cancel({
+    required Appointment appointment,
+    required String reason,
+  }) async {
+    await SupabaseConfig.client
+        .schema('ientier')
+        .rpc(
+          'patient_cancel_appointment',
+          params: {
+            'p_appointment_id': appointment.id,
+            'p_reason': reason.trim(),
+          },
+        );
+  }
+
+  @override
+  Future<void> deleteForPatient(Appointment appointment) async {
+    await SupabaseConfig.client
+        .schema('ientier')
+        .rpc(
+          'hide_appointment_for_actor',
+          params: {
+            'p_appointment_id': appointment.id,
+            'p_actor_type': 'patient',
+          },
+        );
   }
 }
 
@@ -467,6 +596,8 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
   late AppointmentAvailability _availability;
   late List<DateTime> _dates;
   late AppointmentMode _selectedMode;
+  AppointmentPaymentMethod _selectedPaymentMethod =
+      AppointmentPaymentMethod.cash;
   DateTime? _selectedDate;
   DateTime? _selectedSlot;
   bool _saving = false;
@@ -539,6 +670,7 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
         scheduledAt: slot,
         patientNote: _noteController.text,
         mode: _selectedMode,
+        paymentMethod: _selectedPaymentMethod,
         location: location,
       );
       if (!mounted) return;
@@ -741,6 +873,24 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
                     const SizedBox(height: 22),
                     const _BookingHeading(
                       number: '4',
+                      title: 'Choisissez le moyen de paiement',
+                    ),
+                    const SizedBox(height: 12),
+                    _PaymentMethodSelector(
+                      selectedMethod: _selectedPaymentMethod,
+                      onSelected: (method) {
+                        setState(() => _selectedPaymentMethod = method);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    const _ModeInformation(
+                      icon: Icons.info_outline_rounded,
+                      message:
+                          'Ce choix indique comment vous prévoyez de payer. Aucun montant n’est débité dans l’application.',
+                    ),
+                    const SizedBox(height: 22),
+                    const _BookingHeading(
+                      number: '5',
                       title: 'Précisez votre demande',
                     ),
                     const SizedBox(height: 12),
@@ -1043,6 +1193,46 @@ class _ModeInformation extends StatelessWidget {
   );
 }
 
+class _PaymentMethodSelector extends StatelessWidget {
+  final AppointmentPaymentMethod selectedMethod;
+  final ValueChanged<AppointmentPaymentMethod> onSelected;
+
+  const _PaymentMethodSelector({
+    required this.selectedMethod,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 9,
+    runSpacing: 9,
+    children: [
+      for (final method in AppointmentPaymentMethod.values)
+        ChoiceChip(
+          key: ValueKey('payment-method-${method.storageValue}'),
+          avatar: Icon(
+            method.icon,
+            size: 18,
+            color: selectedMethod == method
+                ? Colors.white
+                : _appointmentPrimary,
+          ),
+          label: Text(method.label),
+          selected: selectedMethod == method,
+          showCheckmark: false,
+          selectedColor: _appointmentPrimary,
+          labelStyle: TextStyle(
+            color: selectedMethod == method ? Colors.white : _appointmentNavy,
+            fontWeight: FontWeight.w800,
+          ),
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: _appointmentBorder),
+          onSelected: (_) => onSelected(method),
+        ),
+    ],
+  );
+}
+
 class _BookingHeading extends StatelessWidget {
   final String number;
   final String title;
@@ -1083,7 +1273,259 @@ class _BookingHeading extends StatelessWidget {
   );
 }
 
-class PatientAppointmentsPage extends StatelessWidget {
+class PatientAppointmentEditPage extends StatefulWidget {
+  final Appointment appointment;
+  final PatientAppointmentRepository repository;
+  final DateTime? now;
+
+  const PatientAppointmentEditPage({
+    super.key,
+    required this.appointment,
+    required this.repository,
+    this.now,
+  });
+
+  @override
+  State<PatientAppointmentEditPage> createState() =>
+      _PatientAppointmentEditPageState();
+}
+
+class _PatientAppointmentEditPageState
+    extends State<PatientAppointmentEditPage> {
+  late final TextEditingController _noteController;
+  late final TextEditingController _addressController;
+  late final AppointmentAvailability _availability;
+  late final List<DateTime> _dates;
+  late AppointmentPaymentMethod _paymentMethod;
+  DateTime? _selectedDate;
+  DateTime? _selectedSlot;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final appointment = widget.appointment;
+    _noteController = TextEditingController(text: appointment.patientNote);
+    _addressController = TextEditingController(text: appointment.location);
+    _paymentMethod = appointment.paymentMethod;
+    _availability = AppointmentAvailability.fromSchedule(
+      appointment.scheduleLabel,
+    );
+    _dates = _availability.availableDates(now: widget.now);
+    for (final date in _dates) {
+      if (_sameDay(date, appointment.scheduledAt)) {
+        _selectedDate = date;
+        final slots = _availability.slotsForDate(date, now: widget.now);
+        if (slots.contains(appointment.scheduledAt)) {
+          _selectedSlot = appointment.scheduledAt;
+        }
+        break;
+      }
+    }
+    _selectedDate ??= _dates.isEmpty ? null : _dates.first;
+  }
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final slot = _selectedSlot;
+    if (slot == null || _saving) return;
+    if (widget.appointment.mode == AppointmentMode.homeVisit &&
+        _addressController.text.trim().length < 4) {
+      _showError('Indiquez l’adresse où le professionnel doit se rendre.');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await widget.repository.update(
+        appointment: widget.appointment,
+        scheduledAt: slot,
+        patientNote: _noteController.text,
+        paymentMethod: _paymentMethod,
+        location: _addressController.text,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (mounted) {
+        _showError('Le rendez-vous n’a pas pu être modifié. Réessayez.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = _selectedDate == null
+        ? const <DateTime>[]
+        : _availability.slotsForDate(_selectedDate!, now: widget.now);
+    return Scaffold(
+      backgroundColor: _appointmentCanvas,
+      appBar: AppBar(title: const Text('Modifier le rendez-vous')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ModeInformation(
+                    icon: widget.appointment.mode.icon,
+                    message:
+                        '${widget.appointment.providerName} • ${widget.appointment.mode.label}. Le type de rendez-vous ne peut pas être changé après l’envoi.',
+                  ),
+                  const SizedBox(height: 20),
+                  if (!_availability.hasValidSchedule || _dates.isEmpty)
+                    const _AppointmentMessage(
+                      icon: Icons.event_busy_outlined,
+                      title: 'Modification indisponible',
+                      message:
+                          'Aucun créneau futur n’est disponible dans l’horaire publié. Annulez cette demande et créez-en une nouvelle.',
+                    )
+                  else ...[
+                    const _BookingHeading(number: '1', title: 'Nouvelle date'),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 78,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _dates.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 9),
+                        itemBuilder: (context, index) {
+                          final date = _dates[index];
+                          final selected = _sameDay(date, _selectedDate);
+                          return ChoiceChip(
+                            key: ValueKey(
+                              'edit-appointment-date-${date.toIso8601String()}',
+                            ),
+                            selected: selected,
+                            showCheckmark: false,
+                            onSelected: (_) => setState(() {
+                              _selectedDate = date;
+                              _selectedSlot = null;
+                            }),
+                            label: Text(
+                              '${_shortWeekday(date)} ${date.day} ${_shortMonth(date)}',
+                            ),
+                            selectedColor: _appointmentPrimary,
+                            labelStyle: TextStyle(
+                              color: selected ? Colors.white : _appointmentNavy,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: _appointmentBorder),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    const _BookingHeading(number: '2', title: 'Nouvelle heure'),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 9,
+                      runSpacing: 9,
+                      children: [
+                        for (final slot in slots)
+                          ChoiceChip(
+                            key: ValueKey(
+                              'edit-appointment-time-${slot.hour}-${slot.minute}',
+                            ),
+                            label: Text(_timeLabel(slot)),
+                            selected: slot == _selectedSlot,
+                            showCheckmark: false,
+                            selectedColor: _appointmentPrimary,
+                            labelStyle: TextStyle(
+                              color: slot == _selectedSlot
+                                  ? Colors.white
+                                  : _appointmentNavy,
+                              fontWeight: FontWeight.w800,
+                            ),
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: _appointmentBorder),
+                            onSelected: (_) =>
+                                setState(() => _selectedSlot = slot),
+                          ),
+                      ],
+                    ),
+                    if (widget.appointment.mode ==
+                        AppointmentMode.homeVisit) ...[
+                      const SizedBox(height: 22),
+                      TextField(
+                        key: const ValueKey('edit-appointment-address'),
+                        controller: _addressController,
+                        maxLength: 300,
+                        decoration: const InputDecoration(
+                          labelText: 'Adresse de la visite',
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    const _BookingHeading(
+                      number: '3',
+                      title: 'Moyen de paiement',
+                    ),
+                    const SizedBox(height: 12),
+                    _PaymentMethodSelector(
+                      selectedMethod: _paymentMethod,
+                      onSelected: (method) =>
+                          setState(() => _paymentMethod = method),
+                    ),
+                    const SizedBox(height: 22),
+                    TextField(
+                      key: const ValueKey('edit-appointment-note'),
+                      controller: _noteController,
+                      minLines: 3,
+                      maxLines: 5,
+                      maxLength: 500,
+                      decoration: const InputDecoration(
+                        labelText: 'Motif ou note',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      key: const ValueKey('save-appointment-changes'),
+                      onPressed: _selectedSlot == null || _saving
+                          ? null
+                          : _submit,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(_saving ? 'Enregistrement…' : 'Enregistrer'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PatientAppointmentsPage extends StatefulWidget {
   final String patientId;
   final Stream<List<Appointment>>? appointmentStream;
   final PatientAppointmentRepository? repository;
@@ -1096,8 +1538,153 @@ class PatientAppointmentsPage extends StatelessWidget {
   });
 
   @override
+  State<PatientAppointmentsPage> createState() =>
+      _PatientAppointmentsPageState();
+}
+
+class _PatientAppointmentsPageState extends State<PatientAppointmentsPage> {
+  String? _processingId;
+
+  Future<void> _edit(Appointment appointment) async {
+    final repository = widget.repository;
+    if (repository == null) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PatientAppointmentEditPage(
+          appointment: appointment,
+          repository: repository,
+        ),
+      ),
+    );
+    if (changed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Rendez-vous modifié. Le professionnel a été informé.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _cancel(Appointment appointment) async {
+    final repository = widget.repository;
+    if (repository == null) return;
+    var cancellationReason = '';
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Annuler le rendez-vous ?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Le professionnel ou l’institution verra immédiatement cette annulation.',
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                key: const ValueKey('patient-cancellation-reason'),
+                onChanged: (value) => cancellationReason = value,
+                maxLength: 500,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Motif (facultatif)',
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Retour'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-patient-cancellation'),
+            onPressed: () => Navigator.of(context).pop(cancellationReason),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB42318),
+            ),
+            child: const Text('Annuler le rendez-vous'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+    await _runAction(
+      appointment,
+      () => repository.cancel(appointment: appointment, reason: reason),
+      success: 'Rendez-vous annulé.',
+      failure: 'Le rendez-vous n’a pas pu être annulé.',
+    );
+  }
+
+  Future<void> _delete(Appointment appointment) async {
+    final repository = widget.repository;
+    if (repository == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer ce rendez-vous ?'),
+        content: const Text(
+          'Il disparaîtra uniquement de votre liste. L’autre partie conservera son historique.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Retour'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-patient-deletion'),
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB42318),
+            ),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _runAction(
+      appointment,
+      () => repository.deleteForPatient(appointment),
+      success: 'Rendez-vous supprimé de votre liste.',
+      failure: 'Le rendez-vous n’a pas pu être supprimé.',
+    );
+  }
+
+  Future<void> _runAction(
+    Appointment appointment,
+    Future<void> Function() action, {
+    required String success,
+    required String failure,
+  }) async {
+    setState(() => _processingId = appointment.id);
+    try {
+      await action();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(success)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(failure)));
+      }
+    } finally {
+      if (mounted) setState(() => _processingId = null);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final stream = appointmentStream ?? repository?.watchForPatient(patientId);
+    final stream =
+        widget.appointmentStream ??
+        widget.repository?.watchForPatient(widget.patientId);
     return Column(
       key: const ValueKey('patient-appointments-page'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1157,7 +1744,25 @@ class PatientAppointmentsPage extends StatelessWidget {
               return Column(
                 children: [
                   for (final appointment in appointments) ...[
-                    _PatientAppointmentCard(appointment: appointment),
+                    _PatientAppointmentCard(
+                      appointment: appointment,
+                      processing: _processingId == appointment.id,
+                      onEdit:
+                          widget.repository != null &&
+                              appointment.status == AppointmentStatus.pending
+                          ? () => _edit(appointment)
+                          : null,
+                      onCancel:
+                          widget.repository != null &&
+                              appointment.status != AppointmentStatus.cancelled
+                          ? () => _cancel(appointment)
+                          : null,
+                      onDelete:
+                          widget.repository != null &&
+                              appointment.status == AppointmentStatus.cancelled
+                          ? () => _delete(appointment)
+                          : null,
+                    ),
                     const SizedBox(height: 12),
                   ],
                 ],
@@ -1171,8 +1776,18 @@ class PatientAppointmentsPage extends StatelessWidget {
 
 class _PatientAppointmentCard extends StatelessWidget {
   final Appointment appointment;
+  final bool processing;
+  final VoidCallback? onEdit;
+  final VoidCallback? onCancel;
+  final VoidCallback? onDelete;
 
-  const _PatientAppointmentCard({required this.appointment});
+  const _PatientAppointmentCard({
+    required this.appointment,
+    required this.processing,
+    this.onEdit,
+    this.onCancel,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1260,6 +1875,11 @@ class _PatientAppointmentCard extends StatelessWidget {
             icon: appointment.mode.icon,
             text: appointment.mode.label,
           ),
+          const SizedBox(height: 9),
+          _AppointmentInfo(
+            icon: appointment.paymentMethod.icon,
+            text: 'Paiement : ${appointment.paymentMethod.label}',
+          ),
           if (appointment.location.isNotEmpty) ...[
             const SizedBox(height: 9),
             _AppointmentInfo(
@@ -1284,6 +1904,62 @@ class _PatientAppointmentCard extends StatelessWidget {
                 height: 1.4,
               ),
             ),
+          ],
+          if (appointment.cancellationNote.isNotEmpty) ...[
+            const Divider(height: 26, color: _appointmentBorder),
+            Text(
+              'Annulation${appointment.cancelledBy == 'provider' ? ' par le professionnel' : ' par le patient'} : ${appointment.cancellationNote}',
+              style: const TextStyle(
+                color: Color(0xFFB42318),
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+          ],
+          if (onEdit != null || onCancel != null || onDelete != null) ...[
+            const Divider(height: 26, color: _appointmentBorder),
+            if (processing)
+              const LinearProgressIndicator(color: _appointmentPrimary)
+            else
+              Wrap(
+                spacing: 9,
+                runSpacing: 9,
+                children: [
+                  if (onEdit != null)
+                    OutlinedButton.icon(
+                      key: ValueKey(
+                        'edit-patient-appointment-${appointment.id}',
+                      ),
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Modifier'),
+                    ),
+                  if (onCancel != null)
+                    OutlinedButton.icon(
+                      key: ValueKey(
+                        'cancel-patient-appointment-${appointment.id}',
+                      ),
+                      onPressed: onCancel,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFB42318),
+                      ),
+                      icon: const Icon(Icons.event_busy_outlined, size: 18),
+                      label: const Text('Annuler'),
+                    ),
+                  if (onDelete != null)
+                    TextButton.icon(
+                      key: ValueKey(
+                        'delete-patient-appointment-${appointment.id}',
+                      ),
+                      onPressed: onDelete,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFB42318),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Supprimer'),
+                    ),
+                ],
+              ),
           ],
         ],
       ),

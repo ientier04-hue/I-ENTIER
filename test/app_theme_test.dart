@@ -67,9 +67,84 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tous les services'), findsOneWidget);
-    expect(find.text('7 services'), findsOneWidget);
+    expect(find.text('9 services'), findsOneWidget);
     expect(find.text('Diagnostic assisté'), findsOneWidget);
     expect(find.text('Pharmacie'), findsOneWidget);
+    expect(find.text('Mobilité Santé'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Financement solidaire'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Financement solidaire'), findsOneWidget);
+  });
+
+  testWidgets(
+    'invite à compléter le profil sous la recherche sans bloquer l’accueil',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_buildHome());
+      await tester.pump();
+
+      final search = find.byKey(const ValueKey('home-search-bar'));
+      final invitation = find.byKey(const ValueKey('profile-completion-card'));
+      expect(invitation, findsOneWidget);
+      expect(find.text('Complétez votre profil'), findsOneWidget);
+      expect(
+        find.text(
+          'Quelques informations suffisent pour personnaliser votre expérience.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getTopLeft(invitation).dy,
+        greaterThan(tester.getBottomLeft(search).dy),
+      );
+
+      await tester.tap(invitation);
+      await tester.pumpAndSettle();
+      expect(find.text('Profil patient'), findsOneWidget);
+    },
+  );
+
+  testWidgets('la carte Mobilité Santé ouvre le transport accompagné', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_buildHome());
+    await tester.pump();
+
+    await tester.tap(find.text('Voir tout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mobilité Santé'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Danger immédiat ? N’attendez pas un conducteur.'),
+      findsOneWidget,
+    );
+    expect(find.text('Devenir partenaire'), findsOneWidget);
+  });
+
+  testWidgets('masque l’invitation quand le profil est complet', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: HomeScreen(
+          user: themeTestUser(),
+          account: const {'displayName': 'Patient Test'},
+          patientProfile: const {'profileComplete': true},
+          notificationStream: Stream.value(defaultAppNotifications()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('profile-completion-card')), findsNothing);
   });
 
   testWidgets('un onglet visité conserve ses filtres', (tester) async {

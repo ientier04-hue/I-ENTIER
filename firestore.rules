@@ -759,9 +759,12 @@ service cloud.firestore {
         && request.auth.uid == request.resource.data.patientId
         && request.resource.data.keys().hasOnly([
           'patientId', 'patientName', 'providerId', 'providerType',
-          'providerName', 'service', 'appointmentMode', 'location',
+          'providerName', 'service', 'appointmentMode', 'paymentMethod',
+          'location',
           'scheduledAt', 'scheduleLabel', 'status', 'patientNote',
-          'responseNote', 'createdAt', 'updatedAt'
+          'responseNote', 'respondedAt', 'cancellationNote', 'cancelledBy',
+          'cancelledAt', 'patientHidden', 'providerHidden', 'createdAt',
+          'updatedAt'
         ])
         && request.resource.data.keys().hasAll([
           'patientId', 'patientName', 'providerId', 'providerType',
@@ -785,6 +788,11 @@ service cloud.firestore {
         && request.resource.data['service'].size() <= 160
         && request.resource.data.appointmentMode
           in ['inPerson', 'homeVisit', 'video']
+        && (
+          !request.resource.data.keys().hasAny(['paymentMethod'])
+          || request.resource.data.paymentMethod
+            in ['cash', 'monCash', 'natCash', 'bankTransfer', 'card']
+        )
         && request.resource.data.location is string
         && request.resource.data.location.size() <= 300
         && (
@@ -803,17 +811,38 @@ service cloud.firestore {
         && request.resource.data.patientNote is string
         && request.resource.data.patientNote.size() <= 500
         && request.resource.data.responseNote == ''
+        && (
+          !request.resource.data.keys().hasAny(['cancellationNote'])
+          || request.resource.data.cancellationNote == ''
+        )
+        && (
+          !request.resource.data.keys().hasAny(['cancelledBy'])
+          || request.resource.data.cancelledBy == ''
+        )
+        && (
+          !request.resource.data.keys().hasAny(['patientHidden'])
+          || request.resource.data.patientHidden == false
+        )
+        && (
+          !request.resource.data.keys().hasAny(['providerHidden'])
+          || request.resource.data.providerHidden == false
+        )
         && appointmentProviderExists(request.resource.data)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
       allow update: if signedIn()
         && resource.data.providerId == request.auth.uid
-        && resource.data.status == 'pending'
+        && resource.data.status in ['pending', 'confirmed']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status', 'responseNote', 'respondedAt', 'updatedAt'
         ])
-        && request.resource.data.status in ['confirmed', 'cancelled']
+        && (
+          (resource.data.status == 'pending'
+            && request.resource.data.status in ['confirmed', 'cancelled'])
+          || (resource.data.status == 'confirmed'
+            && request.resource.data.status == 'cancelled')
+        )
         && request.resource.data.responseNote is string
         && request.resource.data.responseNote.size() <= 500
         && request.resource.data.respondedAt == request.time
@@ -827,6 +856,82 @@ service cloud.firestore {
         && getAfter(
           /databases/$(database)/documents/patients/$(resource.data.patientId)/notifications/$('appointment_' + appointmentId)
         ).data.createdAt == request.time;
+
+      allow update: if signedIn()
+        && resource.data.patientId == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'scheduledAt', 'patientNote', 'paymentMethod', 'location',
+          'updatedAt'
+        ])
+        && request.resource.data.scheduledAt is timestamp
+        && request.resource.data.scheduledAt
+          > request.time + duration.value(30, 'm')
+        && request.resource.data.scheduledAt
+          < request.time + duration.value(366, 'd')
+        && request.resource.data.patientNote is string
+        && request.resource.data.patientNote.size() <= 500
+        && request.resource.data.paymentMethod
+          in ['cash', 'monCash', 'natCash', 'bankTransfer', 'card']
+        && request.resource.data.location is string
+        && request.resource.data.location.size() <= 300
+        && (
+          request.resource.data.appointmentMode != 'homeVisit'
+          || request.resource.data.location.size() > 3
+        )
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && resource.data.patientId == request.auth.uid
+        && resource.data.status in ['pending', 'confirmed']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'respondedAt', 'cancellationNote', 'cancelledBy',
+          'cancelledAt', 'updatedAt'
+        ])
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.cancelledBy == 'patient'
+        && request.resource.data.cancellationNote is string
+        && request.resource.data.cancellationNote.size() <= 500
+        && request.resource.data.cancelledAt == request.time
+        && request.resource.data.respondedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && resource.data.providerId == request.auth.uid
+        && resource.data.status in ['pending', 'confirmed']
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'scheduledAt', 'responseNote', 'updatedAt'
+        ])
+        && request.resource.data.scheduledAt is timestamp
+        && request.resource.data.scheduledAt
+          > request.time + duration.value(30, 'm')
+        && request.resource.data.scheduledAt
+          < request.time + duration.value(366, 'd')
+        && request.resource.data.responseNote is string
+        && request.resource.data.responseNote.size() <= 500
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedIn()
+        && resource.data.status == 'cancelled'
+        && (
+          (
+            resource.data.patientId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'patientHidden', 'updatedAt'
+            ])
+            && request.resource.data.patientHidden == true
+          )
+          || (
+            resource.data.providerId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'providerHidden', 'updatedAt'
+            ])
+            && request.resource.data.providerHidden == true
+          )
+        )
+        && request.resource.data.updatedAt == request.time;
 
       allow delete: if false;
     }
