@@ -356,6 +356,26 @@ void main() {
     );
   });
 
+  test('combine plusieurs réponses sans masquer le signe le plus urgent', () {
+    final pathway = assessmentPathwayById('fever')!;
+    final result = engine.evaluate(pathway, const {
+      'fever_age': '5_to_64_years',
+      'fever_temperature': '39',
+      'fever_emergency': 'meningeal|shock_pattern',
+      'fever_focus': 'respiratory|skin',
+    });
+
+    expect(
+      engine.answerTags(pathway, const {
+        'fever_emergency': 'meningeal|shock_pattern',
+      }),
+      containsAll({'meningeal_pattern', 'shock_pattern', 'sepsis_pattern'}),
+    );
+    expect(result.urgency, AssessmentUrgency.emergency);
+    expect(result.redFlags, hasLength(2));
+    expect(result.matches.first.urgentReason, isTrue);
+  });
+
   test('applique les garde-fous grossesse, urinaire et vertige aigu', () {
     final mildPregnancyHeadache = engine
         .evaluate(assessmentPathwayById('headache')!, const {
@@ -427,14 +447,80 @@ void main() {
     expect(torsion.matches.first.title, 'Torsion testiculaire possible');
   });
 
+  test('couvre les nouveaux garde-fous respiratoires et cutanés', () {
+    final respiratory = assessmentPathwayById('respiratory')!;
+    final infantFever = engine.evaluate(respiratory, const {
+      'respiratory_age': 'under_3_months',
+      'respiratory_red_flags': 'fever',
+    });
+    final clotRisk = engine.evaluate(respiratory, const {
+      'respiratory_age': 'adult',
+      'respiratory_main': 'dry_cough|breathlessness',
+      'respiratory_cough_detail': 'breath_pain',
+      'respiratory_context': 'clot_risk',
+    });
+    final cancerTreatment = engine.evaluate(respiratory, const {
+      'respiratory_age': 'adult',
+      'respiratory_context': 'active_cancer_treatment',
+    });
+    final skinLesion = engine.evaluate(assessmentPathwayById('skin')!, const {
+      'skin_appearance': 'changing_lesion',
+      'skin_changing_lesion_detail': 'mole_change',
+    });
+    final majorBurn = engine.evaluate(assessmentPathwayById('skin')!, const {
+      'skin_sensation': 'blister',
+      'skin_blister_detail': 'major_burn',
+    });
+
+    expect(infantFever.urgency, AssessmentUrgency.emergency);
+    expect(
+      infantFever.matches.first.title,
+      'Fièvre du jeune nourrisson à évaluer immédiatement',
+    );
+    expect(clotRisk.urgency, AssessmentUrgency.emergency);
+    expect(
+      clotRisk.matches.first.title,
+      'Embolie pulmonaire à exclure en urgence',
+    );
+    expect(cancerTreatment.urgency, AssessmentUrgency.emergency);
+    expect(
+      cancerTreatment.matches.first.title,
+      'Neutropénie fébrile ou infection grave sous traitement possible',
+    );
+    expect(skinLesion.urgency, AssessmentUrgency.consultationSoon);
+    expect(skinLesion.matches.first.title, 'Lésion cutanée à faire examiner');
+    expect(majorBurn.urgency, AssessmentUrgency.emergency);
+    expect(
+      majorBurn.matches.first.title,
+      'Brûlure grave à prendre en charge immédiatement',
+    );
+  });
+
   test('rejette un niveau d’urgence publié inconnu', () {
     final raw = assessmentPathwayToMap(assessmentPathwayById('skin')!);
     final firstQuestion = (raw['questions'] as List).first as Map;
     final firstOption = (firstQuestion['options'] as List).first as Map;
     firstOption['urgency'] = 'critical';
+    final missingUrgency = assessmentPathwayToMap(
+      assessmentPathwayById('skin')!,
+    );
+    final missingQuestion = (missingUrgency['questions'] as List).first as Map;
+    final missingOption = (missingQuestion['options'] as List).first as Map
+      ..remove('urgency');
+    expect(missingOption.containsKey('urgency'), isFalse);
+    final futureSchema = assessmentPathwayToMap(assessmentPathwayById('skin')!)
+      ..['schemaVersion'] = 99;
 
     expect(
       () => assessmentPathwayFromMap(raw),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => assessmentPathwayFromMap(missingUrgency),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => assessmentPathwayFromMap(futureSchema),
       throwsA(isA<FormatException>()),
     );
   });
@@ -451,6 +537,7 @@ void main() {
       restored.questionById('skin_blister_detail')!.requiredTags,
       contains('branch_skin_blister'),
     );
+    expect(restored.questionById('skin_emergency')!.allowMultiple, isTrue);
     expect(
       restored.possibilities.map((item) => item.title),
       contains('Zona possible'),
@@ -631,6 +718,7 @@ void main() {
         find.text('Quel autre signe accompagne le mieux la douleur ?'),
         findsOneWidget,
       );
+      expect(find.text('Plusieurs réponses possibles'), findsOneWidget);
       expect(
         find.byKey(const Key('assessment-emergency-banner')),
         findsOneWidget,
@@ -645,11 +733,26 @@ void main() {
       final associatedNone = find.byKey(
         const Key('answer-abdominal_associated-none'),
       );
+      await tester.tap(
+        find.byKey(const Key('answer-abdominal_associated-vomiting')),
+      );
+      await tester.pump();
+      final associatedFever = find.byKey(
+        const Key('answer-abdominal_associated-fever'),
+      );
+      await tester.scrollUntilVisible(
+        associatedFever,
+        140,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(associatedFever);
+      await tester.pump();
       await tester.ensureVisible(associatedNone);
       await tester.tap(associatedNone);
       await tester.pump();
       await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
       await tester.pumpAndSettle();
+      expect(repository.saved.last.answers['abdominal_associated'], 'none');
       final drinkYes = find.byKey(const Key('answer-abdominal_drink-yes'));
       await tester.ensureVisible(drinkYes);
       await tester.tap(drinkYes);

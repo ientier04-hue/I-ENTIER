@@ -23,9 +23,10 @@ possible.
 
 L’audit v3 a recherché en priorité les faux négatifs d’urgence, les faux
 positifs produits par les scores additifs et les formulations ambiguës contenant
-« ou ». Il a porté notamment sur les parcours respiratoire, thoracique et
-fébrile. Cette revue documentaire ne constitue pas, à elle seule, une
-validation clinique de mise sur le marché.
+« ou ». Il a porté sur les dix parcours : abdomen, céphalée, menstruations,
+respiration, peau, grossesse/post-partum, poitrine, urines, vertiges et fièvre.
+Cette revue documentaire ne constitue pas, à elle seule, une validation
+clinique de mise sur le marché.
 
 Les garde-fous suivants sont normatifs pour la v3 et doivent être couverts par
 des tests avant diffusion :
@@ -37,28 +38,32 @@ des tests avant diffusion :
 - la raison précise de chaque urgence doit être conservée et affichée avant les
   hypothèses moins graves ;
 - les scores sont des indices de concordance internes, jamais des probabilités
-  diagnostiques ; une hypothèse grave repose sur des conditions obligatoires
-  et des preuves indépendantes, pas seulement sur une somme de poids ;
+  diagnostiques ; une hypothèse grave repose sur des signes discriminants
+  obligatoires et des exclusions, pas seulement sur une somme de poids ;
 - une option contenant plusieurs symptômes alternatifs ne doit ajouter que les
-  signes réellement confirmés. Les symptômes sont séparés en questions oui/non
-  ou en sélection multiple ;
+  signes réellement confirmés. Les questions où plusieurs signes peuvent
+  coexister utilisent la sélection multiple, avec « aucun » exclusif ;
 - les données facultatives du profil peuvent renforcer la prudence, mais une
   règle vitale ne doit jamais dépendre du consentement à réutiliser ces données.
+- un catalogue distant de même version ne remplace pas le catalogue intégré ;
+  une version de schéma incompatible ou un niveau d’urgence absent/inconnu est
+  rejeté au lieu d’être converti silencieusement en autosoins.
 
 ### Seuils et interactions prioritaires
 
-- Fièvre : température mesurée et tranche d’âge sont demandées si elles ne sont
-  pas disponibles. Une température d’au moins 38 °C avant 3 mois impose une
-  évaluation immédiate ; entre 3 et 6 mois, 39 °C ou plus impose au minimum une
-  évaluation urgente le jour même.
+- Fièvre : le parcours fébrile demande la température maximale et l’âge ; les
+  parcours respiratoire et urinaire redemandent l’âge localement. Une
+  température d’au moins 38 °C avant 3 mois impose une évaluation immédiate ;
+  entre 3 et 6 mois, 39 °C ou plus impose au minimum une évaluation urgente le
+  jour même.
 - Méningite ou infection invasive : raideur de nuque, rash non blanchissant,
   altération de la conscience et céphalée sévère avec fièvre sont recherchés
   séparément et font apparaître une raison urgente explicite.
-- Sepsis : confusion, respiration très rapide ou difficile, peau
-  pâle/marbrée/moite, température basse, absence prolongée d’urines et
-  dégradation générale sont évalués séparément et avec des seuils adaptés à
-  l’âge. Fièvre ou malaise sous traitement anticancéreux actif ou récent impose
-  une évaluation immédiate pour neutropénie.
+- Sepsis : altération de la conscience, détresse respiratoire, peau
+  pâle/marbrée/moite, température basse du nourrisson, absence prolongée
+  d’urines et dégradation générale déclenchent des motifs urgents. Fièvre ou
+  malaise sous traitement anticancéreux actif ou récent impose une évaluation
+  immédiate pour neutropénie.
 - Douleur thoracique : une oppression ou lourdeur nouvelle et persistante peut
   être coronarienne même sans irradiation ni facteur de risque connu. Les
   symptômes priment sur le profil de risque.
@@ -79,9 +84,23 @@ des tests avant diffusion :
   baisse de la fièvre ; aspirine et ibuprofène sont évités tant qu’une dengue
   reste possible. Une fièvre compatible avec le paludisme en zone de
   transmission nécessite un test rapide le jour même.
-- Le contexte épidémiologique haïtien peut activer des règles datées, notamment
-  pour la diphtérie : membrane grise adhérente, gonflement du cou, difficulté à
-  avaler ou à respirer, exposition et vaccination incomplète.
+- La branche diphtérie recherche un dépôt gris adhérent, un gonflement du cou
+  et une voix ou respiration inhabituelle. L’exposition, la vaccination et le
+  contexte épidémiologique daté doivent ensuite être vérifiés par le
+  professionnel.
+- Grossesse et post-partum : céphalée persistante, troubles visuels,
+  pré-éclampsie/éclampsie, saignement, grossesse extra-utérine, thrombose et
+  embolie sont séparés. Une diminution des mouvements fœtaux ou une perte de
+  liquide affiche une consigne immédiate de contacter la maternité sans attendre
+  le lendemain.
+- Urines et vertiges : infection urinaire du nourrisson, grossesse, enfant,
+  homme, obstruction infectée et rétention renforcent le triage ; un vertige
+  brutal continu avec nouvelle instabilité suit une filière neurologique
+  urgente.
+- Abdomen, peau et traumatisme : hémorragie digestive, occlusion, pancréatite,
+  infection biliaire, torsion testiculaire, brûlure grave, lésion cutanée qui
+  change et signes graves après choc crânien disposent désormais de branches
+  dédiées.
 
 ## Limites connues
 
@@ -91,7 +110,10 @@ des tests avant diffusion :
   ni analyse biologique, ni imagerie. Une mesure enregistrée ancienne ne doit
   pas être traitée comme une constante actuelle.
 - Les tableaux pédiatriques, la grossesse, le post-partum, l’immunodépression et
-  les traitements anticancéreux nécessitent des seuils dédiés.
+  les traitements anticancéreux nécessitent encore une validation spécialisée
+  des seuils et formulations.
+- La sélection multiple réduit le risque de masquer un signe concomitant, mais
+  l’outil dépend toujours de ce que le patient comprend et déclare.
 - Les règles géographiques et épidémiques doivent être datées, réévaluées et
   désactivables lorsque la situation change.
 - Les conseils d’autosoins et de pharmacie ne doivent jamais retarder une
@@ -186,6 +208,25 @@ des tests avant diffusion :
 - ACOG, *Headaches and Pregnancy* : céphalée en coup de tonnerre et signes de
   pré-éclampsie pendant la grossesse ou le post-partum.
   <https://www.acog.org/womens-health/faqs/headaches-and-pregnancy>
+- NICE, *Urinary tract infection*, *Pyelonephritis* et *Acute kidney injury* :
+  groupes à risque, infection haute et obstruction urinaire infectée.
+  <https://www.nice.org.uk/guidance/ng109/chapter/Recommendations>
+  <https://www.nice.org.uk/guidance/ng111>
+  <https://www.nice.org.uk/guidance/ng148/chapter/Recommendations>
+- NICE, *Suspected neurological conditions* : vertige brutal continu avec
+  nouvelle instabilité et orientation AVC en l’absence d’un examen spécialisé.
+  <https://www.nice.org.uk/guidance/ng127/chapter/Recommendations-for-adults-aged-over-16>
+- NHS, *Your baby's movements*, et ACOG, *Bleeding During Pregnancy* :
+  contact immédiat de la maternité en cas de mouvements diminués et gradation
+  des saignements et signes d’instabilité.
+  <https://www.nhs.uk/pregnancy/keeping-well/your-babys-movements/>
+  <https://www.acog.org/womens-health/faqs/bleeding-during-pregnancy>
+- NHS, *Testicle pain*, *Acute pancreatitis* et *Melanoma skin cancer* :
+  torsion testiculaire, douleur pancréatique nécessitant l’hôpital et lésions
+  cutanées changeantes ou non cicatrisantes.
+  <https://www.nhs.uk/symptoms/testicle-pain/>
+  <https://www.nhs.uk/conditions/acute-pancreatitis/>
+  <https://www.nhs.uk/conditions/melanoma-skin-cancer/symptoms/>
 
 ## Gouvernance
 

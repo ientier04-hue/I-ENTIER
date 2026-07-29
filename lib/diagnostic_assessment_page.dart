@@ -1046,6 +1046,9 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
     return question.allowMultiple ? ids.join('|') : ids.first;
   }
 
+  bool _isNeutralOption(AssessmentOption option) =>
+      option.id == 'none' || option.tags.isEmpty;
+
   void _toggleOption(AssessmentOption option) {
     setState(() {
       if (!_question.allowMultiple) {
@@ -1053,14 +1056,12 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
         return;
       }
       final updated = Set<String>.of(_selectedOptionIds);
-      if (option.tags.isEmpty) {
+      if (_isNeutralOption(option)) {
         updated
           ..clear()
           ..add(option.id);
       } else {
-        for (final neutral in _question.options.where(
-          (item) => item.tags.isEmpty,
-        )) {
+        for (final neutral in _question.options.where(_isNeutralOption)) {
           updated.remove(neutral.id);
         }
         if (!updated.remove(option.id)) updated.add(option.id);

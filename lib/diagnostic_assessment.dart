@@ -1590,8 +1590,7 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'worsening_neuro',
-            label:
-                'Somnolence croissante, faiblesse, confusion ou convulsion',
+            label: 'Somnolence croissante, faiblesse, confusion ou convulsion',
             icon: Icons.emergency_outlined,
             tags: {'serious_head_injury_pattern'},
             urgency: AssessmentUrgency.emergency,
@@ -3032,7 +3031,8 @@ const assessmentPathways = <AssessmentPathway>[
         urgentReason: true,
       ),
       AssessmentPossibility(
-        title: 'Neutropénie fébrile ou infection grave sous traitement possible',
+        title:
+            'Neutropénie fébrile ou infection grave sous traitement possible',
         explanation:
             'Une fièvre ou un malaise sous traitement anticancéreux actif ou récent nécessite une évaluation hospitalière immédiate.',
         tagWeights: {'possible_neutropenic_sepsis': 80},
