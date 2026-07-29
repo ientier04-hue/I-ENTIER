@@ -519,6 +519,19 @@ class AssessmentEngine {
         reason: 'Douleur respiratoire associée à un risque de caillot sanguin',
       );
     }
+    if (pathway.id == 'respiratory' &&
+        tags.contains('clot_risk') &&
+        (tags.contains('pleuritic_pain') ||
+            tags.contains('breathlessness_primary') ||
+            tags.contains('mild_breathlessness') ||
+            tags.contains('severe_breathlessness'))) {
+      tags.add('pulmonary_embolism_pattern');
+      raiseUrgency(
+        AssessmentUrgency.emergency,
+        reason:
+            'Essoufflement ou douleur respiratoire avec facteur de risque de caillot',
+      );
+    }
     final recentMaxTemperature = (context['recentMaxTemperature'] as num?)
         ?.toDouble();
     final feverAtLeast38 =
@@ -536,7 +549,7 @@ class AssessmentEngine {
     final infantThreeToSix =
         tags.contains('context_infant_3_to_6_months') ||
         tags.contains('person_3_to_6_months');
-    if (pathway.id == 'fever' && youngInfant && feverAtLeast38) {
+    if (youngInfant && feverAtLeast38) {
       tags.add('young_infant_fever');
       raiseUrgency(
         AssessmentUrgency.emergency,
@@ -546,8 +559,7 @@ class AssessmentEngine {
       contextNotes.add(
         'Une fièvre avant 3 mois nécessite une évaluation médicale immédiate.',
       );
-    } else if (pathway.id == 'fever' &&
-        youngInfant &&
+    } else if (youngInfant &&
         feverPresent &&
         tags.contains('temperature_unconfirmed')) {
       raiseUrgency(AssessmentUrgency.consultationToday);
@@ -555,7 +567,7 @@ class AssessmentEngine {
         'Chez un nourrisson de moins de 3 mois, mesurez la température et demandez un avis médical aujourd’hui.',
       );
     }
-    if (pathway.id == 'fever' && infantThreeToSix && feverAtLeast39) {
+    if (infantThreeToSix && feverAtLeast39) {
       raiseUrgency(AssessmentUrgency.consultationToday);
       contextNotes.add(
         'Une température d’au moins 39 °C entre 3 et 6 mois nécessite une évaluation aujourd’hui.',
@@ -1439,8 +1451,15 @@ const assessmentPathways = <AssessmentPathway>[
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
+            id: 'sudden_vision_loss',
+            label: 'Perte brutale de vision ou vision double nouvelle',
+            icon: Icons.emergency_outlined,
+            tags: {'sudden_vision_loss'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
             id: 'vision',
-            label: 'Vision trouble nouvelle ou persistante',
+            label: 'Vision trouble nouvelle ou persistante sans perte brutale',
             icon: Icons.visibility_off_outlined,
             tags: {'vision_change'},
             urgency: AssessmentUrgency.consultationToday,
@@ -1538,6 +1557,50 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Léger ou habituel et il s’améliore',
             icon: Icons.check_circle_outline,
             tags: {'mild_headache'},
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucun de ces signes',
+            icon: Icons.remove_circle_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'headache_injury_detail',
+        title: 'Après un choc à la tête',
+        prompt: 'Quel signe est apparu depuis le choc ?',
+        icon: Icons.sports_martial_arts_outlined,
+        requiredTags: {'head_injury'},
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
+            id: 'loss_memory_vomiting',
+            label:
+                'Perte de connaissance, trou de mémoire ou vomissements répétés',
+            icon: Icons.emergency_outlined,
+            tags: {'serious_head_injury_pattern'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'anticoagulant',
+            label: 'Traitement anticoagulant ou trouble de la coagulation',
+            icon: Icons.emergency_outlined,
+            tags: {'head_injury_anticoagulant'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'worsening_neuro',
+            label:
+                'Somnolence croissante, faiblesse, confusion ou convulsion',
+            icon: Icons.emergency_outlined,
+            tags: {'serious_head_injury_pattern'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'minor_stable',
+            label: 'Petit choc, état normal et douleur qui n’augmente pas',
+            icon: Icons.check_circle_outline,
+            tags: {'minor_head_injury'},
           ),
           AssessmentOption(
             id: 'none',
@@ -1825,6 +1888,9 @@ const assessmentPathways = <AssessmentPathway>[
           'stiff_neck': 36,
           'non_blanching_rash': 42,
           'meningeal_pattern': 46,
+          'sudden_vision_loss': 52,
+          'serious_head_injury_pattern': 56,
+          'head_injury_anticoagulant': 52,
         },
         requiredAnyTags: {
           'thunderclap',
@@ -1833,6 +1899,9 @@ const assessmentPathways = <AssessmentPathway>[
           'stiff_neck',
           'non_blanching_rash',
           'meningeal_pattern',
+          'sudden_vision_loss',
+          'serious_head_injury_pattern',
+          'head_injury_anticoagulant',
         },
         urgentReason: true,
       ),
@@ -2438,6 +2507,37 @@ const assessmentPathways = <AssessmentPathway>[
     color: Color(0xFF149D9A),
     questions: [
       AssessmentQuestion(
+        id: 'respiratory_age',
+        title: 'Âge',
+        prompt: 'Quel âge a la personne concernée ?',
+        icon: Icons.cake_outlined,
+        options: [
+          AssessmentOption(
+            id: 'under_3_months',
+            label: 'Moins de 3 mois',
+            icon: Icons.child_care_outlined,
+            tags: {'person_under_3_months'},
+          ),
+          AssessmentOption(
+            id: '3_to_6_months',
+            label: 'De 3 à moins de 6 mois',
+            icon: Icons.child_care_outlined,
+            tags: {'person_3_to_6_months'},
+          ),
+          AssessmentOption(
+            id: 'child',
+            label: 'De 6 mois à moins de 16 ans',
+            icon: Icons.escalator_warning_outlined,
+            tags: {'person_under_16'},
+          ),
+          AssessmentOption(
+            id: 'adult',
+            label: '16 ans ou plus',
+            icon: Icons.person_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'respiratory_breathing',
         title: 'Respiration maintenant',
         prompt: 'Comment respirez-vous en ce moment ?',
@@ -2558,9 +2658,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'fever',
-            label: 'Forte fièvre ou frissons',
+            label: 'Température mesurée à 39 °C ou plus, ou forts frissons',
             icon: Icons.thermostat_outlined,
-            tags: {'fever'},
+            tags: {'fever', 'temperature_39'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
@@ -2665,6 +2765,22 @@ const assessmentPathways = <AssessmentPathway>[
             icon: Icons.smoke_free_outlined,
             tags: {'smoke_exposure', 'branch_respiratory_chronic'},
             urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'clot_risk',
+            label:
+                'Immobilisation, chirurgie, cancer, caillot antérieur ou post-partum récent',
+            icon: Icons.warning_amber_rounded,
+            tags: {'clot_risk'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'active_cancer_treatment',
+            label:
+                'Chimiothérapie ou traitement anticancéreux actif/récent avec fièvre ou malaise',
+            icon: Icons.emergency_outlined,
+            tags: {'possible_neutropenic_sepsis'},
+            urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'none',
@@ -2908,6 +3024,22 @@ const assessmentPathways = <AssessmentPathway>[
     ],
     possibilities: [
       AssessmentPossibility(
+        title: 'Fièvre du jeune nourrisson à évaluer immédiatement',
+        explanation:
+            'Une température élevée avant 3 mois nécessite une évaluation pédiatrique immédiate, même si le symptôme principal paraît respiratoire.',
+        tagWeights: {'young_infant_fever': 80},
+        requiredAllTags: {'young_infant_fever'},
+        urgentReason: true,
+      ),
+      AssessmentPossibility(
+        title: 'Neutropénie fébrile ou infection grave sous traitement possible',
+        explanation:
+            'Une fièvre ou un malaise sous traitement anticancéreux actif ou récent nécessite une évaluation hospitalière immédiate.',
+        tagWeights: {'possible_neutropenic_sepsis': 80},
+        requiredAllTags: {'possible_neutropenic_sepsis'},
+        urgentReason: true,
+      ),
+      AssessmentPossibility(
         title: 'Infection respiratoire virale',
         explanation:
             'Toux, nez bouché, gorge irritée et contact malade sont compatibles avec une infection virale fréquente.',
@@ -2926,6 +3058,8 @@ const assessmentPathways = <AssessmentPathway>[
           'pulmonary_embolism_pattern',
           'significant_hemoptysis',
           'respiratory_failure_pattern',
+          'young_infant_fever',
+          'possible_neutropenic_sepsis',
         },
       ),
       AssessmentPossibility(
@@ -3368,10 +3502,18 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'burn',
-            label: 'Après chaleur, produit chimique ou soleil intense',
+            label: 'Petite brûlure superficielle par chaleur ou soleil',
             icon: Icons.wb_sunny_outlined,
             tags: {'burn_trigger'},
             urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'major_burn',
+            label:
+                'Brûlure chimique/électrique, profonde, étendue ou du visage, mains ou organes génitaux',
+            icon: Icons.emergency_outlined,
+            tags: {'major_burn_pattern'},
+            urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'grouped_recurrent',
@@ -3632,6 +3774,14 @@ const assessmentPathways = <AssessmentPathway>[
             'Des plaies superficielles avec croûtes couleur miel peuvent correspondre à une infection contagieuse.',
         tagWeights: {'honey_crust': 54, 'pustules': 16},
         requiredAllTags: {'honey_crust'},
+      ),
+      AssessmentPossibility(
+        title: 'Brûlure grave à prendre en charge immédiatement',
+        explanation:
+            'Une brûlure chimique ou électrique, profonde, étendue ou touchant une zone sensible nécessite une prise en charge immédiate.',
+        tagWeights: {'major_burn_pattern': 80},
+        requiredAllTags: {'major_burn_pattern'},
+        urgentReason: true,
       ),
       AssessmentPossibility(
         title: 'Réaction allergique grave ou obstruction respiratoire possible',
@@ -6561,6 +6711,14 @@ AssessmentPathway assessmentPathwayFromMap(
   Map<String, dynamic> map, {
   int version = 1,
 }) {
+  final schemaVersion = (map['schemaVersion'] as num?)?.round();
+  if (schemaVersion == null || schemaVersion < 1 || schemaVersion > 3) {
+    throw FormatException(
+      'Version de schéma clinique absente ou incompatible : '
+      '${map['schemaVersion']}.',
+    );
+  }
+
   List<Map<String, dynamic>> maps(String key) => (map[key] as List? ?? const [])
       .whereType<Map>()
       .map((value) => Map<String, dynamic>.from(value))
@@ -6573,7 +6731,11 @@ AssessmentPathway assessmentPathwayFromMap(
 
   AssessmentUrgency parseUrgency(Object? raw) {
     final name = raw?.toString().trim() ?? '';
-    if (name.isEmpty) return AssessmentUrgency.selfCare;
+    if (name.isEmpty) {
+      throw const FormatException(
+        'Niveau d’urgence absent dans un parcours clinique.',
+      );
+    }
     for (final value in AssessmentUrgency.values) {
       if (value.name == name) return value;
     }
