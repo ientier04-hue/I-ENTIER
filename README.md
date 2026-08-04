@@ -21,5 +21,5 @@ paiement sont documentés dans
 ## Base de données
 
 Le schéma relationnel partagé par Patient, Professionnel et Administration est
-dans `supabase/migrations`. La migration démarre avec une base Supabase vide :
-les anciens comptes et données de test Firebase ne sont pas repris.
+dans `supabase/migrations`. La migration initialise une base Supabase vide ;
+les comptes et données sont ensuite gérés exclusivement par Supabase.

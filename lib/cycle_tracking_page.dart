@@ -90,7 +90,7 @@ class CycleEntry {
     this.note = '',
   });
 
-  factory CycleEntry.fromFirestore(
+  factory CycleEntry.fromSupabase(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data();
@@ -640,7 +640,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
                 final entries = <CycleEntry>[];
                 for (final document in snapshot.data!.docs) {
                   try {
-                    entries.add(CycleEntry.fromFirestore(document));
+                    entries.add(CycleEntry.fromSupabase(document));
                   } on FormatException {
                     // Ignore malformed legacy entries instead of hiding the page.
                   }

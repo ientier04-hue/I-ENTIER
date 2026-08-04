@@ -852,7 +852,6 @@ class _CollectionSpec {
           ? null
           : value;
     }
-    if (_firestoreIdKinds.contains(kind)) row['firestore_id'] = id;
     if (kind == _CollectionKind.notifications) {
       final source = data['source']?.toString() ?? 'app';
       final sourceId = data['sourceId']?.toString() ?? '';
@@ -933,6 +932,8 @@ const _columnMappings = <_CollectionKind, Map<String, String>>{
     'cancelledAt': 'cancelled_at',
     'patientHidden': 'patient_hidden',
     'providerHidden': 'provider_hidden',
+    'mobileClinicId': 'mobile_clinic_id',
+    'mobileClinicTourId': 'mobile_clinic_tour_id',
     'createdAt': 'created_at',
     'updatedAt': 'updated_at',
   },
@@ -1027,17 +1028,6 @@ const _relationFields = {
   'previousSurgeries',
   'symptoms',
   'feelings',
-};
-
-const _firestoreIdKinds = {
-  _CollectionKind.healthMeasurements,
-  _CollectionKind.cycleEntries,
-  _CollectionKind.mentalHealthEntries,
-  _CollectionKind.laboratoryResults,
-  _CollectionKind.preventiveRecords,
-  _CollectionKind.preventiveReminders,
-  _CollectionKind.prescriptions,
-  _CollectionKind.notifications,
 };
 
 class _QueryFilter {

@@ -202,7 +202,7 @@ class _HealthTrackingPageState extends State<HealthTrackingPage> {
           }
 
           final measurements = snapshot.data!.docs
-              .map(_HealthMeasurement.fromFirestore)
+              .map(_HealthMeasurement.fromSupabase)
               .whereType<_HealthMeasurement>()
               .toList();
           if (measurements.isEmpty) {
@@ -1146,7 +1146,7 @@ class _HealthMeasurement {
     this.note = '',
   });
 
-  static _HealthMeasurement? fromFirestore(
+  static _HealthMeasurement? fromSupabase(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data();

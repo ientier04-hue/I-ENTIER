@@ -125,6 +125,8 @@ class Appointment {
   final DateTime? cancelledAt;
   final bool patientHidden;
   final bool providerHidden;
+  final String mobileClinicId;
+  final String mobileClinicTourId;
 
   const Appointment({
     required this.id,
@@ -150,9 +152,11 @@ class Appointment {
     this.cancelledAt,
     this.patientHidden = false,
     this.providerHidden = false,
+    this.mobileClinicId = '',
+    this.mobileClinicTourId = '',
   });
 
-  factory Appointment.fromFirestore(
+  factory Appointment.fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};
@@ -195,6 +199,8 @@ class Appointment {
           : null,
       patientHidden: data['patientHidden'] == true,
       providerHidden: data['providerHidden'] == true,
+      mobileClinicId: text('mobileClinicId'),
+      mobileClinicTourId: text('mobileClinicTourId'),
     );
   }
 }
@@ -271,19 +277,19 @@ abstract class PatientAppointmentRepository {
 
 class SupabasePatientAppointmentRepository
     implements PatientAppointmentRepository {
-  final SupabaseDatabase firestore;
+  final SupabaseDatabase database;
 
-  SupabasePatientAppointmentRepository({SupabaseDatabase? firestore})
-    : firestore = firestore ?? SupabaseDatabase.instance;
+  SupabasePatientAppointmentRepository({SupabaseDatabase? database})
+    : database = database ?? SupabaseDatabase.instance;
 
   @override
-  Stream<List<Appointment>> watchForPatient(String patientId) => firestore
+  Stream<List<Appointment>> watchForPatient(String patientId) => database
       .collection('appointments')
       .where('patientId', isEqualTo: patientId)
       .snapshots()
       .map((snapshot) {
         final appointments = snapshot.docs
-            .map(Appointment.fromFirestore)
+            .map(Appointment.fromSupabase)
             .where((appointment) => !appointment.patientHidden)
             .toList(growable: false);
         appointments.sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
@@ -303,7 +309,7 @@ class SupabasePatientAppointmentRepository
   }) {
     final appointmentId =
         '${provider.id}_${scheduledAt.millisecondsSinceEpoch}';
-    return firestore.collection('appointments').doc(appointmentId).set({
+    return database.collection('appointments').doc(appointmentId).set({
       'patientId': patientId,
       'patientName': patientName.trim().isEmpty
           ? 'Patient i-ENTIER'
@@ -1749,7 +1755,8 @@ class _PatientAppointmentsPageState extends State<PatientAppointmentsPage> {
                       processing: _processingId == appointment.id,
                       onEdit:
                           widget.repository != null &&
-                              appointment.status == AppointmentStatus.pending
+                              appointment.status == AppointmentStatus.pending &&
+                              appointment.mobileClinicId.isEmpty
                           ? () => _edit(appointment)
                           : null,
                       onCancel:

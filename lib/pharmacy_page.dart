@@ -763,7 +763,7 @@ class _PrescriptionHistory extends StatelessWidget {
       }
 
       final prescriptions = snapshot.data!.docs
-          .map(_PrescriptionRecord.fromFirestore)
+          .map(_PrescriptionRecord.fromSupabase)
           .toList();
       if (prescriptions.isEmpty && !saving) {
         return _FeedbackCard(
@@ -1662,8 +1662,7 @@ class _NearbyPharmacies extends StatelessWidget {
         return const _FeedbackCard(
           icon: Icons.lock_outline_rounded,
           title: 'Pharmacies indisponibles',
-          message:
-              'Vérifiez l’accès à la table Supabase des institutions.',
+          message: 'Vérifiez l’accès à la table Supabase des institutions.',
         );
       }
       if (!snapshot.hasData) {
@@ -1674,7 +1673,7 @@ class _NearbyPharmacies extends StatelessWidget {
       }
 
       final pharmacies = snapshot.data!.docs
-          .map(_NearbyPharmacy.fromFirestore)
+          .map(_NearbyPharmacy.fromSupabase)
           .whereType<_NearbyPharmacy>()
           .toList();
       if (position != null) {
@@ -2222,7 +2221,7 @@ class _PrescriptionRecord {
     required this.createdAt,
   });
 
-  factory _PrescriptionRecord.fromFirestore(
+  factory _PrescriptionRecord.fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};
@@ -2303,7 +2302,7 @@ class _NearbyPharmacy {
     required this.longitude,
   });
 
-  static _NearbyPharmacy? fromFirestore(
+  static _NearbyPharmacy? fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};

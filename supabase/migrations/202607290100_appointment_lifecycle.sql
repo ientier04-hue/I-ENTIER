@@ -423,7 +423,6 @@ BEGIN
   generated_notification_id := 'appointment_update_' || p_appointment_id;
   INSERT INTO notifications (
     notification_id,
-    firestore_id,
     patient_id,
     title,
     message,
@@ -435,7 +434,6 @@ BEGIN
     appointment_id
   )
   VALUES (
-    generated_notification_id,
     generated_notification_id,
     target.patient_id,
     'Rendez-vous modifié',
@@ -577,7 +575,6 @@ BEGIN
   generated_notification_id := 'appointment_' || p_appointment_id;
   INSERT INTO notifications (
     notification_id,
-    firestore_id,
     patient_id,
     title,
     message,
@@ -589,7 +586,6 @@ BEGIN
     appointment_id
   )
   VALUES (
-    generated_notification_id,
     generated_notification_id,
     target.patient_id,
     CASE

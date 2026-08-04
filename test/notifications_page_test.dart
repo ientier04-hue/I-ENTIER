@@ -90,7 +90,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: NotificationsPage(
-          patientId: 'patient-without-firebase',
+          patientId: 'patient-without-notifications',
           notificationStream: Stream.value([notification]),
           onNotificationsChanged: (items) => changes.add(items),
         ),
@@ -124,7 +124,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: NotificationsPage(
-          patientId: 'patient-without-firebase',
+          patientId: 'patient-without-notifications',
           notificationStream: Stream.value([notification]),
           onNotificationsChanged: (items) => changes.add(items),
         ),
@@ -158,7 +158,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: NotificationsPage(
-          patientId: 'patient-without-firebase',
+          patientId: 'patient-without-notifications',
           notificationStream: Stream.value([notification]),
           onNotificationsChanged: (items) => changes.add(items),
         ),

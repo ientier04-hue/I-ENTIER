@@ -111,15 +111,14 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
           return const _PageFeedback(
             icon: Icons.lock_outline_rounded,
             title: 'Laboratoires indisponibles',
-            message:
-                'Vérifiez l’accès à la table Supabase des institutions.',
+            message: 'Vérifiez l’accès à la table Supabase des institutions.',
           );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: _teal));
         }
         final laboratories = snapshot.data!.docs
-            .map(Laboratory.fromFirestore)
+            .map(Laboratory.fromSupabase)
             .whereType<Laboratory>()
             .toList();
         return _buildDirectory(laboratories);
@@ -148,7 +147,7 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
           return const Center(child: CircularProgressIndicator(color: _teal));
         }
         final results = snapshot.data!.docs
-            .map(LaboratoryResult.fromFirestore)
+            .map(LaboratoryResult.fromSupabase)
             .toList();
         return _PatientResultsPage(results: results);
       },
@@ -2403,7 +2402,7 @@ class LaboratoryResult {
     this.publishedAt,
   });
 
-  factory LaboratoryResult.fromFirestore(
+  factory LaboratoryResult.fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};
@@ -2528,7 +2527,7 @@ class Laboratory {
     this.accredited = false,
   });
 
-  static Laboratory? fromFirestore(
+  static Laboratory? fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};

@@ -101,7 +101,7 @@ class MentalHealthEntry {
     required this.createdAt,
   });
 
-  factory MentalHealthEntry.fromFirestore(
+  factory MentalHealthEntry.fromSupabase(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data();
@@ -143,7 +143,7 @@ class MentalHealthProfessional {
     this.available = false,
   });
 
-  factory MentalHealthProfessional.fromFirestore(
+  factory MentalHealthProfessional.fromSupabase(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data();
@@ -238,7 +238,7 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
           .snapshots()
           .map(
             (snapshot) =>
-                snapshot.docs.map(MentalHealthEntry.fromFirestore).toList(),
+                snapshot.docs.map(MentalHealthEntry.fromSupabase).toList(),
           );
 
   Stream<List<MentalHealthProfessional>> get _professionalsStream =>
@@ -249,7 +249,7 @@ class _MentalHealthPageState extends State<MentalHealthPage> {
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
-                .map(MentalHealthProfessional.fromFirestore)
+                .map(MentalHealthProfessional.fromSupabase)
                 .where(
                   (professional) =>
                       professional.name.isNotEmpty &&

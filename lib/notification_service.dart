@@ -50,7 +50,7 @@ class AppNotification {
     sourceId: sourceId,
   );
 
-  static AppNotification? fromFirestore(
+  static AppNotification? fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data();
@@ -58,9 +58,9 @@ class AppNotification {
     final title = (data['title'] as String?)?.trim() ?? '';
     final message = (data['message'] as String?)?.trim() ?? '';
     if (title.isEmpty || message.isEmpty) return null;
-    final scheduledAt = _dateFromFirestore(data['scheduledAt']);
+    final scheduledAt = _dateFromSupabase(data['scheduledAt']);
     final createdAt =
-        _dateFromFirestore(data['createdAt']) ?? scheduledAt ?? DateTime.now();
+        _dateFromSupabase(data['createdAt']) ?? scheduledAt ?? DateTime.now();
     return AppNotification(
       id: document.id,
       title: title,
@@ -75,7 +75,7 @@ class AppNotification {
     );
   }
 
-  Map<String, dynamic> toFirestore() => {
+  Map<String, dynamic> toSupabase() => {
     'title': title,
     'message': message,
     'type': type.name,
@@ -88,7 +88,7 @@ class AppNotification {
   };
 }
 
-DateTime? _dateFromFirestore(Object? value) => switch (value) {
+DateTime? _dateFromSupabase(Object? value) => switch (value) {
   Timestamp timestamp => timestamp.toDate(),
   DateTime date => date,
   _ => null,
@@ -211,7 +211,7 @@ class SupabaseNotificationService {
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
-                .map(AppNotification.fromFirestore)
+                .map(AppNotification.fromSupabase)
                 .whereType<AppNotification>()
                 .toList(growable: false),
           );
@@ -295,7 +295,7 @@ class SupabaseNotificationService {
 
   Future<void> restore(String patientId, AppNotification notification) =>
       _collection(patientId).doc(notification.id).set({
-        ...notification.toFirestore(),
+        ...notification.toSupabase(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 

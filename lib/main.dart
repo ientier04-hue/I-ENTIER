@@ -19,6 +19,7 @@ import 'health_tracking_page.dart';
 import 'health_credit_page.dart';
 import 'laboratory_page.dart';
 import 'mental_health_page.dart';
+import 'mobile_clinic_page.dart';
 import 'notification_service.dart';
 import 'notifications_page.dart';
 import 'onboarding_page.dart';
@@ -1902,6 +1903,16 @@ const _homeServices = <HealthService>[
     icon: Icons.health_and_safety_rounded,
   ),
   HealthService(
+    id: 'clinique-mobile',
+    title: 'Clinique Mobile',
+    summary: 'Trouvez les soins certifiés qui viennent dans votre zone',
+    imagePath: 'assets/services/mobile_clinic_3d.png',
+    backgroundColor: '#E4F6EF',
+    accentColor: '#087F5B',
+    actionLabel: 'Voir les tournées',
+    icon: Icons.local_shipping_rounded,
+  ),
+  HealthService(
     id: 'laboratoire',
     title: 'Laboratoire',
     summary: 'Trouvez un labo pour votre examen',
@@ -2270,6 +2281,17 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (_) => RescuePage(
             userId: widget.user.uid,
             userDisplayName: _patientName,
+          ),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'clinique-mobile') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MobileClinicPage(
+            patientId: widget.user.uid,
+            patientName: _patientName,
           ),
         ),
       );
@@ -3040,7 +3062,7 @@ class _PersonnelDirectoryState extends State<_PersonnelDirectory> {
             }
             if (!snapshot.hasData) return const _DirectoryLoading();
             final allRecords = snapshot.data!.docs
-                .map(_Professional.fromFirestore)
+                .map(_Professional.fromSupabase)
                 .toList();
             final records = _filterRecords(allRecords);
             if (records.isEmpty) {
@@ -3145,7 +3167,7 @@ class _InstitutionsDirectoryState extends State<_InstitutionsDirectory> {
             }
             if (!snapshot.hasData) return const _DirectoryLoading();
             final allRecords = snapshot.data!.docs
-                .map((doc) => _Institution.fromFirestore(doc))
+                .map((doc) => _Institution.fromSupabase(doc))
                 .toList();
             final query = _normalizedSearch(_query);
             final records = query.isEmpty
@@ -3605,7 +3627,7 @@ class _Professional {
     required this.available,
   });
 
-  factory _Professional.fromFirestore(
+  factory _Professional.fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data() ?? const <String, dynamic>{};
@@ -3795,7 +3817,7 @@ class _Institution {
     required this.available,
   });
 
-  factory _Institution.fromFirestore(
+  factory _Institution.fromSupabase(
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data() ?? const <String, dynamic>{};

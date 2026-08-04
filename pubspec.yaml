@@ -79,6 +79,7 @@ flutter:
     - assets/services/mobilite_sante_3d.png
     - assets/services/i_entier_rescue_3d.png
     - assets/services/health_credit_3d.png
+    - assets/services/mobile_clinic_3d.png
     - assets/onboarding/
 
   # To add assets to your application, add an assets section, like this:

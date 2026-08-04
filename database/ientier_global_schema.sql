@@ -8,11 +8,11 @@
 -- Cible : PostgreSQL 15+
 -- Encodage attendu : UTF-8
 --
--- Ce schéma consolide les collections du projet Firebase partagé `i-entier`
--- dans un modèle relationnel normalisé. Les identifiants d'utilisateurs restent
--- des VARCHAR(128) afin d'accepter les UUID Supabase Auth sous forme textuelle.
+-- Ce schéma définit le modèle relationnel Supabase partagé de l'écosystème
+-- i-ENTIER. Les identifiants d'utilisateurs restent des VARCHAR(128) afin
+-- d'accepter les UUID Supabase Auth sous forme textuelle.
 --
--- Correspondance principale Firestore -> SQL :
+-- Correspondance principale des domaines applicatifs -> SQL :
 --   user                                      -> app_users
 --   patients                                 -> patient_profiles
 --   patients/*/healthMeasurements            -> health_measurements
@@ -38,9 +38,8 @@
 --     la RLS PostgreSQL. Les clients applicatifs ne doivent jamais utiliser le
 --     rôle propriétaire.
 --   * Pour une connexion applicative, le backend doit définir l'acteur :
---       SET LOCAL ientier.current_user_id = '<firebase-uid>';
---     Dans Supabase, remplacer current_actor_id() par auth.uid()::text est une
---     adaptation naturelle.
+--       SET LOCAL ientier.current_user_id = '<supabase-user-id>';
+--     Dans les clients Supabase, current_actor_id() s'appuie sur auth.uid().
 --   * Les écritures d'administration et les réponses aux rendez-vous doivent
 --     utiliser review_provider(...) et respond_to_appointment(...), afin que
 --     la décision et son audit/sa notification restent atomiques.
@@ -567,7 +566,6 @@ CREATE INDEX ix_provider_availability_lookup
 
 CREATE TABLE provider_reviews (
   review_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  firestore_id           VARCHAR(160) UNIQUE,
   provider_id            VARCHAR(128) NOT NULL
                          REFERENCES provider_profiles(provider_id) ON DELETE RESTRICT,
   admin_id               VARCHAR(128) NOT NULL
@@ -702,7 +700,6 @@ CREATE INDEX ix_appointment_history
 
 CREATE TABLE health_measurements (
   measurement_id         VARCHAR(160) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(160),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   kind                   health_metric_kind NOT NULL,
@@ -715,8 +712,6 @@ CREATE TABLE health_measurements (
   measured_at            TIMESTAMPTZ NOT NULL,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT uq_health_measurement_firestore
-    UNIQUE (patient_id, firestore_id),
   CONSTRAINT ck_health_measurement_note
     CHECK (length(note) <= 300),
   CONSTRAINT ck_health_measurement_context
@@ -765,7 +760,6 @@ CREATE INDEX ix_health_measurements_patient_metric
 
 CREATE TABLE cycle_entries (
   cycle_entry_id         VARCHAR(160) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(160),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   entry_date             DATE NOT NULL,
@@ -777,7 +771,6 @@ CREATE TABLE cycle_entries (
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT uq_cycle_entry_day UNIQUE (patient_id, entry_date),
-  CONSTRAINT uq_cycle_entry_firestore UNIQUE (patient_id, firestore_id),
   CONSTRAINT ck_cycle_entry_flow
     CHECK (is_period OR flow IS NULL),
   CONSTRAINT ck_cycle_entry_note
@@ -797,7 +790,6 @@ CREATE TABLE cycle_entry_symptoms (
 
 CREATE TABLE mental_health_entries (
   mental_health_entry_id VARCHAR(160) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(160),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   mood                   mental_health_mood NOT NULL,
@@ -805,8 +797,6 @@ CREATE TABLE mental_health_entries (
   note                   VARCHAR(500) NOT NULL DEFAULT '',
   created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT uq_mental_health_entry_firestore
-    UNIQUE (patient_id, firestore_id),
   CONSTRAINT ck_mental_health_mood_score
     CHECK (
       mood_score = CASE mood
@@ -857,7 +847,6 @@ CREATE TABLE laboratory_exam_catalog (
 
 CREATE TABLE laboratory_results (
   laboratory_result_id   VARCHAR(160) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(160),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   laboratory_id          VARCHAR(128)
@@ -876,8 +865,6 @@ CREATE TABLE laboratory_results (
   created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT uq_laboratory_result_firestore
-    UNIQUE (patient_id, firestore_id),
   CONSTRAINT uq_laboratory_result_id_patient
     UNIQUE (laboratory_result_id, patient_id),
   CONSTRAINT ck_laboratory_result_exam_name
@@ -940,7 +927,6 @@ CREATE INDEX ix_laboratory_result_items_result
 
 CREATE TABLE preventive_care_records (
   preventive_record_id   VARCHAR(160) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(160),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   category               preventive_care_category NOT NULL,
@@ -953,8 +939,6 @@ CREATE TABLE preventive_care_records (
   created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT uq_preventive_record_firestore
-    UNIQUE (patient_id, firestore_id),
   CONSTRAINT uq_preventive_record_id_patient
     UNIQUE (preventive_record_id, patient_id),
   CONSTRAINT ck_preventive_record_title
@@ -980,7 +964,6 @@ CREATE INDEX ix_preventive_records_due
 
 CREATE TABLE preventive_care_reminders (
   preventive_reminder_id VARCHAR(160) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(160),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   category               preventive_care_category NOT NULL,
@@ -991,8 +974,6 @@ CREATE TABLE preventive_care_reminders (
   created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT uq_preventive_reminder_firestore
-    UNIQUE (patient_id, firestore_id),
   CONSTRAINT uq_preventive_reminder_id_patient
     UNIQUE (preventive_reminder_id, patient_id),
   CONSTRAINT ck_preventive_reminder_title
@@ -1012,7 +993,6 @@ CREATE INDEX ix_preventive_reminders_due
 
 CREATE TABLE prescriptions (
   prescription_id        VARCHAR(160) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(160),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   source                 prescription_source NOT NULL,
@@ -1029,8 +1009,6 @@ CREATE TABLE prescriptions (
   created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT uq_prescription_firestore
-    UNIQUE (patient_id, firestore_id),
   CONSTRAINT uq_prescription_id_patient
     UNIQUE (prescription_id, patient_id),
   CONSTRAINT ck_prescription_file_name
@@ -1095,7 +1073,6 @@ CREATE INDEX ix_prescription_items
 
 CREATE TABLE notifications (
   notification_id        VARCHAR(180) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  firestore_id           VARCHAR(180),
   patient_id             VARCHAR(128) NOT NULL
                          REFERENCES patient_profiles(patient_id) ON DELETE CASCADE,
   title                  VARCHAR(120) NOT NULL,
@@ -1114,8 +1091,6 @@ CREATE TABLE notifications (
   created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-  CONSTRAINT uq_notification_firestore
-    UNIQUE (patient_id, firestore_id),
   CONSTRAINT fk_notification_appointment
     FOREIGN KEY (appointment_id, patient_id)
     REFERENCES appointments(appointment_id, patient_id) ON DELETE CASCADE,
@@ -1569,7 +1544,7 @@ CREATE TRIGGER trg_90_audit_appointment_status
 AFTER UPDATE OF status ON appointments
 FOR EACH ROW EXECUTE FUNCTION audit_appointment_status();
 
--- Collections immuables après création, conformément aux règles Firestore.
+-- Données immuables après création, conformément aux politiques RLS.
 CREATE TRIGGER trg_health_measurements_immutable
 BEFORE UPDATE ON health_measurements
 FOR EACH ROW EXECUTE FUNCTION prevent_row_update();
@@ -1739,7 +1714,6 @@ BEGIN
 
   INSERT INTO notifications (
     notification_id,
-    firestore_id,
     patient_id,
     title,
     message,
@@ -1751,7 +1725,6 @@ BEGIN
     appointment_id
   )
   VALUES (
-    generated_notification_id,
     generated_notification_id,
     target.patient_id,
     CASE
@@ -1814,7 +1787,7 @@ WHERE p.account_type = 'professional'
   AND p.is_visible = TRUE;
 
 COMMENT ON VIEW v_public_professionals IS
-  'Remplace la collection Firestore personnelMedical sans dupliquer le dossier privé.';
+  'Expose l’annuaire public des professionnels sans dupliquer le dossier privé.';
 
 CREATE VIEW v_public_institutions
 WITH (security_barrier = TRUE, security_invoker = TRUE)
@@ -1849,7 +1822,7 @@ WHERE p.account_type = 'institution'
   AND p.is_visible = TRUE;
 
 COMMENT ON VIEW v_public_institutions IS
-  'Remplace la collection Firestore institution et alimente hôpitaux, cliniques, pharmacies et laboratoires.';
+  'Expose l’annuaire public des hôpitaux, cliniques, pharmacies et laboratoires.';
 
 CREATE VIEW v_provider_application_queue
 WITH (security_barrier = TRUE, security_invoker = TRUE)

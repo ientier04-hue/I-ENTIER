@@ -87,7 +87,7 @@ class PreventiveCareRecord {
     this.note = '',
   });
 
-  static PreventiveCareRecord? fromFirestore(
+  static PreventiveCareRecord? fromSupabase(
     QueryDocumentSnapshot<Map<String, dynamic>> snapshot,
   ) {
     final data = snapshot.data();
@@ -126,7 +126,7 @@ class PreventiveCareReminder {
     this.note = '',
   });
 
-  static PreventiveCareReminder? fromFirestore(
+  static PreventiveCareReminder? fromSupabase(
     QueryDocumentSnapshot<Map<String, dynamic>> snapshot,
   ) {
     final data = snapshot.data();
@@ -418,7 +418,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map(PreventiveCareRecord.fromFirestore)
+              .map(PreventiveCareRecord.fromSupabase)
               .whereType<PreventiveCareRecord>()
               .toList(),
         );
@@ -433,7 +433,7 @@ class _PreventiveMedicinePageState extends State<PreventiveMedicinePage> {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map(PreventiveCareReminder.fromFirestore)
+              .map(PreventiveCareReminder.fromSupabase)
               .whereType<PreventiveCareReminder>()
               .toList(),
         );

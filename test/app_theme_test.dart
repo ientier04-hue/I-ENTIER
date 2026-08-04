@@ -67,7 +67,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tous les services'), findsOneWidget);
-    expect(find.text('11 services'), findsOneWidget);
+    expect(find.text('12 services'), findsOneWidget);
     expect(find.text('Diagnostic assisté'), findsOneWidget);
     expect(find.text('Pharmacie'), findsOneWidget);
     expect(find.text('Mobilité Santé'), findsOneWidget);
@@ -77,6 +77,16 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('Financement solidaire'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Clinique Mobile'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Clinique Mobile'), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/services/mobile_clinic_3d.png')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

@@ -3,8 +3,8 @@
 Les trois applications Flutter utilisent le projet Supabase
 `dktjnxbtyhxvapyheosh` et le schéma PostgreSQL `ientier`.
 
-La base démarre volontairement sans les comptes ni les données de test
-Firebase. Les nouveaux utilisateurs seront créés directement par Supabase Auth.
+La base démarre volontairement vide. Les nouveaux utilisateurs sont créés et
+gérés directement par Supabase Auth.
 
 ## Configuration du projet Supabase
 
