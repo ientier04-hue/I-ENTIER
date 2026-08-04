@@ -23,6 +23,7 @@ import 'notifications_page.dart';
 import 'onboarding_page.dart';
 import 'pharmacy_page.dart';
 import 'preventive_medicine_page.dart';
+import 'rescue_page.dart';
 import 'supabase_config.dart';
 import 'supabase_data.dart';
 
@@ -1880,6 +1881,16 @@ const _homeServices = <HealthService>[
     icon: Icons.volunteer_activism_rounded,
   ),
   HealthService(
+    id: 'i-entier-rescue',
+    title: 'I-Entier Rescue',
+    summary: 'Rejoignez le réseau national de volontaires d’urgence',
+    imagePath: '',
+    backgroundColor: '#FFEAE8',
+    accentColor: '#D92D20',
+    actionLabel: 'Ouvrir Rescue',
+    icon: Icons.health_and_safety_rounded,
+  ),
+  HealthService(
     id: 'laboratoire',
     title: 'Laboratoire',
     summary: 'Trouvez un labo pour votre examen',
@@ -2226,6 +2237,17 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (_) => PreventiveMedicinePage(
             patientId: widget.user.uid,
             patientProfile: widget.patientProfile,
+          ),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'i-entier-rescue') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => RescuePage(
+            userId: widget.user.uid,
+            userDisplayName: _patientName,
           ),
         ),
       );
