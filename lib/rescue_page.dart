@@ -526,7 +526,8 @@ class RescuePage extends StatefulWidget {
   State<RescuePage> createState() => _RescuePageState();
 }
 
-class _RescuePageState extends State<RescuePage> {
+class _RescuePageState extends State<RescuePage>
+    with SingleTickerProviderStateMixin {
   late final RescueRepository _repository =
       widget.repository ?? SupabaseRescueRepository();
   late final Stream<RescueVolunteerProfile?> _profile = _repository
@@ -534,7 +535,16 @@ class _RescuePageState extends State<RescuePage> {
   late final Stream<List<RescueMission>> _missions = _repository.watchMissions(
     widget.userId,
   );
-  int _index = 0;
+  late final TabController _tabController = TabController(
+    length: 4,
+    vsync: this,
+  );
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => StreamBuilder<RescueVolunteerProfile?>(
@@ -549,8 +559,8 @@ class _RescuePageState extends State<RescuePage> {
       final pages = <Widget>[
         _RescueOverview(
           profile: profile,
-          onRegister: () => setState(() => _index = 3),
-          onMissions: () => setState(() => _index = 1),
+          onRegister: () => _tabController.animateTo(3),
+          onMissions: () => _tabController.animateTo(1),
         ),
         _RescueMissions(
           profile: profile,
@@ -566,6 +576,7 @@ class _RescuePageState extends State<RescuePage> {
         ),
       ];
       return Scaffold(
+        backgroundColor: AppColors.canvas,
         appBar: AppBar(
           backgroundColor: Colors.white,
           titleSpacing: 12,
@@ -591,35 +602,39 @@ class _RescuePageState extends State<RescuePage> {
               ),
             ],
           ),
+          bottom: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelColor: _rescueRed,
+            unselectedLabelColor: AppColors.muted,
+            indicatorColor: _rescueRed,
+            dividerColor: AppColors.border,
+            tabs: const [
+              Tab(
+                key: ValueKey('rescue-tab-overview'),
+                icon: Icon(Icons.dashboard_outlined),
+                text: 'Accueil',
+              ),
+              Tab(
+                key: ValueKey('rescue-tab-missions'),
+                icon: Icon(Icons.campaign_outlined),
+                text: 'Missions',
+              ),
+              Tab(
+                key: ValueKey('rescue-tab-map'),
+                icon: Icon(Icons.map_outlined),
+                text: 'Carte',
+              ),
+              Tab(
+                key: ValueKey('rescue-tab-profile'),
+                icon: Icon(Icons.badge_outlined),
+                text: 'Profil',
+              ),
+            ],
+          ),
         ),
-        body: IndexedStack(index: _index, children: pages),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          indicatorColor: _rescueRedSoft,
-          onDestinationSelected: (value) => setState(() => _index = value),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard_rounded, color: _rescueRed),
-              label: 'Accueil',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.campaign_outlined),
-              selectedIcon: Icon(Icons.campaign_rounded, color: _rescueRed),
-              label: 'Missions',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.map_outlined),
-              selectedIcon: Icon(Icons.map_rounded, color: _rescueRed),
-              label: 'Carte',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.badge_outlined),
-              selectedIcon: Icon(Icons.badge_rounded, color: _rescueRed),
-              label: 'Profil',
-            ),
-          ],
-        ),
+        body: TabBarView(controller: _tabController, children: pages),
       );
     },
   );
@@ -1905,10 +1920,14 @@ class _RescueMark extends StatelessWidget {
       color: inverted ? Colors.white : _rescueRedSoft,
       borderRadius: BorderRadius.circular(size * .3),
     ),
-    child: Icon(
-      Icons.health_and_safety_rounded,
-      color: _rescueRed,
-      size: size * .65,
+    child: Padding(
+      padding: EdgeInsets.all(size * .06),
+      child: Image.asset(
+        'assets/services/i_entier_rescue_3d.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel: 'I-Entier Rescue',
+      ),
     ),
   );
 }

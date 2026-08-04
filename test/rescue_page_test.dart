@@ -17,6 +17,13 @@ void main() {
 
     expect(find.text('I-Entier Rescue'), findsOneWidget);
     expect(find.text('Réseau National de Volontaires'), findsOneWidget);
+    expect(find.byType(TabBar), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byKey(const ValueKey('rescue-tab-overview')), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/services/i_entier_rescue_3d.png')),
+      findsNWidgets(2),
+    );
     expect(find.text('Devenir volontaire'), findsOneWidget);
     expect(find.text('10'), findsOneWidget);
     expect(find.text('Push, SMS et e-mail'), findsOneWidget);

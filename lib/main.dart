@@ -16,6 +16,7 @@ import 'crowdfunding_page.dart';
 import 'cycle_tracking_page.dart';
 import 'diagnostic_assessment_page.dart';
 import 'health_tracking_page.dart';
+import 'health_credit_page.dart';
 import 'laboratory_page.dart';
 import 'mental_health_page.dart';
 import 'notification_service.dart';
@@ -1881,10 +1882,20 @@ const _homeServices = <HealthService>[
     icon: Icons.volunteer_activism_rounded,
   ),
   HealthService(
+    id: 'health-credit',
+    title: 'Crédit Santé',
+    summary: 'Recevez vos soins maintenant et payez selon vos moyens',
+    imagePath: 'assets/services/health_credit_3d.png',
+    backgroundColor: '#E8F0FF',
+    accentColor: '#155EEF',
+    actionLabel: 'Évaluer mon éligibilité',
+    icon: Icons.health_and_safety_rounded,
+  ),
+  HealthService(
     id: 'i-entier-rescue',
     title: 'I-Entier Rescue',
     summary: 'Rejoignez le réseau national de volontaires d’urgence',
-    imagePath: '',
+    imagePath: 'assets/services/i_entier_rescue_3d.png',
     backgroundColor: '#FFEAE8',
     accentColor: '#D92D20',
     actionLabel: 'Ouvrir Rescue',
@@ -2187,6 +2198,17 @@ class _HomeScreenState extends State<HomeScreen> {
             userId: widget.user.uid,
             userDisplayName: _patientName,
             patientProfile: widget.patientProfile,
+          ),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'health-credit') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => HealthCreditPage(
+            patientId: widget.user.uid,
+            patientName: _patientName,
           ),
         ),
       );
