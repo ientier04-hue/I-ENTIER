@@ -76,6 +76,10 @@ void main() {
     await tester.pumpWidget(_buildHome());
     await tester.pump();
 
+    final homeCardSize = tester.getSize(
+      find.byKey(const ValueKey('service-card-diagnostic-assiste')),
+    );
+
     await tester.tap(find.byKey(const ValueKey('home-search-bar')));
     await tester.pumpAndSettle();
 
@@ -96,19 +100,36 @@ void main() {
     expect(find.text('Diagnostic assisté'), findsOneWidget);
     expect(find.text('Pharmacie'), findsOneWidget);
     expect(find.text('Mobilité Santé'), findsOneWidget);
+    final catalogCard = find.byKey(
+      const ValueKey('service-card-diagnostic-assiste'),
+    );
+    final catalogCardSize = tester.getSize(catalogCard);
+    expect(
+      catalogCardSize.height / catalogCardSize.width,
+      closeTo(homeCardSize.height / homeCardSize.width, .01),
+    );
+    expect(catalogCardSize.height, lessThan(260));
+    final catalogImage = tester.widget<Image>(
+      find.descendant(of: catalogCard, matching: find.byType(Image)).first,
+    );
+    expect(catalogImage.image, isA<ResizeImage>());
     await _revealCatalogTarget(tester, find.text('Financement solidaire'));
     expect(find.text('Financement solidaire'), findsOneWidget);
     await _revealCatalogTarget(tester, find.text('Clinique Mobile'));
     expect(find.text('Clinique Mobile'), findsOneWidget);
     expect(
-      find.image(const AssetImage('assets/services/mobile_clinic_3d.png')),
+      find.descendant(
+        of: find.byKey(const ValueKey('service-card-clinique-mobile')),
+        matching: find.byType(Image),
+      ),
       findsOneWidget,
     );
     await _revealCatalogTarget(tester, find.text('Maternité & Petite Enfance'));
     expect(find.text('Maternité & Petite Enfance'), findsOneWidget);
     expect(
-      find.image(
-        const AssetImage('assets/services/maternity_childhood_3d.png'),
+      find.descendant(
+        of: find.byKey(const ValueKey('service-card-maman-bebe')),
+        matching: find.byType(Image),
       ),
       findsOneWidget,
     );

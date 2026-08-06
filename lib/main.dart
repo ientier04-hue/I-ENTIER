@@ -6026,22 +6026,41 @@ class _ServicesCatalogPageState extends State<_ServicesCatalogPage> {
                 else
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                    sliver: SliverGrid.builder(
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 270,
-                            mainAxisExtent: 350,
-                            crossAxisSpacing: 14,
-                            mainAxisSpacing: 14,
-                          ),
-                      itemCount: services.length,
-                      itemBuilder: (context, index) {
-                        final service = services[index];
-                        return _ServiceCard(
-                          service: service,
-                          onTap: () => Navigator.of(context).pop(service),
-                          pinned: _preferences.isPinned(service.id),
-                          onPinToggle: () => _togglePin(service),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, constraints) {
+                        const gap = 14.0;
+                        const maximumCardWidth = 270.0;
+                        final columnCount =
+                            (constraints.crossAxisExtent /
+                                    (maximumCardWidth + gap))
+                                .ceil()
+                                .clamp(1, services.length);
+                        final cardWidth =
+                            (constraints.crossAxisExtent -
+                                gap * (columnCount - 1)) /
+                            columnCount;
+                        final cardHeight = _serviceCardHeight(
+                          cardWidth,
+                          MediaQuery.textScalerOf(context),
+                        );
+                        return SliverGrid.builder(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: columnCount,
+                                mainAxisExtent: cardHeight,
+                                crossAxisSpacing: gap,
+                                mainAxisSpacing: gap,
+                              ),
+                          itemCount: services.length,
+                          itemBuilder: (context, index) {
+                            final service = services[index];
+                            return _ServiceCard(
+                              service: service,
+                              onTap: () => Navigator.of(context).pop(service),
+                              pinned: _preferences.isPinned(service.id),
+                              onPinToggle: () => _togglePin(service),
+                            );
+                          },
                         );
                       },
                     ),
@@ -6301,6 +6320,12 @@ String _normalizedSearch(String value) => value
     .replaceAll('ç', 'c')
     .replaceAll(RegExp(r'\s+'), ' ');
 
+double _serviceCardHeight(double width, TextScaler textScaler) {
+  final standardizedWidth = width.clamp(136.0, 260.0);
+  final scale = textScaler.scale(1).clamp(1.0, 2.0);
+  return standardizedWidth * (365 / 266) + math.max(0, scale - 1) * 72;
+}
+
 class _ServiceCarousel extends StatelessWidget {
   final bool wide;
   final List<HealthService> services;
@@ -6321,11 +6346,10 @@ class _ServiceCarousel extends StatelessWidget {
       final gapCount = visibleCards.ceil() - 1;
       final availableWidth = constraints.maxWidth - gap * gapCount;
       final cardWidth = (availableWidth / visibleCards).clamp(136.0, 260.0);
-      final textScale = MediaQuery.textScalerOf(
-        context,
-      ).scale(1).clamp(1.0, 2.0);
-      final cardHeight =
-          cardWidth * (365 / 266) + math.max(0, textScale - 1) * 72;
+      final cardHeight = _serviceCardHeight(
+        cardWidth,
+        MediaQuery.textScalerOf(context),
+      );
       return SizedBox(
         height: cardHeight,
         child: ListView.separated(
@@ -6367,6 +6391,7 @@ class _ServiceCard extends StatelessWidget {
       final imageSize = constraints.maxWidth * .64;
       final radius = BorderRadius.circular(compact ? 17 : 25);
       return Material(
+        key: ValueKey('service-card-${service.id}'),
         color: service.background,
         borderRadius: radius,
         clipBehavior: Clip.antiAlias,
@@ -6488,13 +6513,17 @@ class _ServiceImage extends StatelessWidget {
         ),
       );
     }
+    final cacheWidth = (size * MediaQuery.devicePixelRatioOf(context))
+        .round()
+        .clamp(1, 2048);
     if (service.hasRemoteImage) {
       return Image.network(
         service.imagePath,
         width: size,
         height: size,
+        cacheWidth: cacheWidth,
         fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (context, error, stackTrace) => const Icon(
           Icons.image_not_supported_outlined,
           size: 64,
@@ -6506,8 +6535,9 @@ class _ServiceImage extends StatelessWidget {
       service.imagePath,
       width: size,
       height: size,
+      cacheWidth: cacheWidth,
       fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.medium,
       errorBuilder: (context, error, stackTrace) => const Icon(
         Icons.image_not_supported_outlined,
         size: 64,
