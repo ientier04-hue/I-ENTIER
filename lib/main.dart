@@ -27,6 +27,7 @@ import 'onboarding_page.dart';
 import 'pharmacy_page.dart';
 import 'preventive_medicine_page.dart';
 import 'rescue_page.dart';
+import 'service_personalization.dart';
 import 'supabase_config.dart';
 import 'supabase_data.dart';
 
@@ -1838,16 +1839,6 @@ class HealthService {
 
 const _homeServices = <HealthService>[
   HealthService(
-    id: 'maman-bebe',
-    title: 'Maman & Bébé',
-    summary: 'Grossesse, alertes, calendrier et carnet de santé 0–5 ans',
-    imagePath: '',
-    backgroundColor: '#FFE8EF',
-    accentColor: '#C23D68',
-    actionLabel: 'Ouvrir mon suivi',
-    icon: Icons.pregnant_woman_rounded,
-  ),
-  HealthService(
     id: 'diagnostic-assiste',
     title: 'Diagnostic assisté',
     summary: 'Évaluez vos symptômes et sachez quelle suite donner',
@@ -1957,6 +1948,16 @@ const _homeServices = <HealthService>[
     accentColor: '#176BFF',
     actionLabel: 'Voir mon plan',
   ),
+  HealthService(
+    id: 'maman-bebe',
+    title: 'Maternité & Petite Enfance',
+    summary: 'Grossesse, alertes, calendrier et carnet de santé 0–5 ans',
+    imagePath: 'assets/services/maternity_childhood_3d.png',
+    backgroundColor: '#FFE8EF',
+    accentColor: '#C23D68',
+    actionLabel: 'Ouvrir mon suivi',
+    icon: Icons.pregnant_woman_rounded,
+  ),
 ];
 
 class HomeScreen extends StatefulWidget {
@@ -1964,12 +1965,14 @@ class HomeScreen extends StatefulWidget {
   final Map<String, dynamic> account;
   final Map<String, dynamic> patientProfile;
   final Stream<List<AppNotification>>? notificationStream;
+  final ServicePreferencesRepository? servicePreferencesRepository;
   const HomeScreen({
     super.key,
     required this.user,
     required this.account,
     required this.patientProfile,
     this.notificationStream,
+    this.servicePreferencesRepository,
   });
 
   @override
@@ -1977,9 +1980,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const _serviceRanker = ServiceRelevanceRanker();
+
   int _selectedTab = 0;
   final Set<int> _visitedTabs = {0};
   List<AppNotification> _notifications = const [];
+  ServicePreferences _servicePreferences = ServicePreferences.empty;
+  late final ServicePreferencesRepository _servicePreferencesRepository;
+  Future<void> _preferenceSaveTail = Future.value();
+  int _preferenceRevision = 0;
   StreamSubscription<List<AppNotification>>? _notificationSubscription;
   Timer? _notificationClock;
   late final List<ScrollController> _tabScrollControllers = List.generate(
@@ -2005,6 +2014,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _servicePreferencesRepository =
+        widget.servicePreferencesRepository ??
+        (SupabaseConfig.isInitialized
+            ? SupabaseServicePreferencesRepository(SupabaseConfig.client)
+            : MemoryServicePreferencesRepository());
+    unawaited(_loadServicePreferences());
     if (widget.notificationStream == null && !SupabaseConfig.isInitialized) {
       _notifications = defaultAppNotifications();
     }
@@ -2039,6 +2054,47 @@ class _HomeScreenState extends State<HomeScreen> {
             !notification.isRead && notification.isDeliveredAt(DateTime.now()),
       )
       .length;
+
+  List<HealthService> get _rankedServices => _serviceRanker.rank(
+    services: _homeServices,
+    idOf: (service) => service.id,
+    preferences: _servicePreferences,
+    patientProfile: widget.patientProfile,
+  );
+
+  Future<void> _loadServicePreferences() async {
+    final revisionAtStart = _preferenceRevision;
+    try {
+      final preferences = await _servicePreferencesRepository.load(
+        widget.user.uid,
+      );
+      if (!mounted || revisionAtStart != _preferenceRevision) return;
+      setState(() => _servicePreferences = preferences);
+    } catch (_) {
+      // Le classement par profil reste disponible si la synchronisation échoue.
+    }
+  }
+
+  void _applyServicePreferences(ServicePreferences preferences) {
+    if (!mounted) return;
+    setState(() {
+      _servicePreferences = preferences;
+      _preferenceRevision++;
+    });
+    _preferenceSaveTail = _preferenceSaveTail.then((_) async {
+      try {
+        await _servicePreferencesRepository.save(widget.user.uid, preferences);
+      } catch (_) {
+        // La préférence reste appliquée pour la session courante hors connexion.
+      }
+    });
+  }
+
+  void _recordServiceOpen(HealthService service) {
+    _applyServicePreferences(
+      _servicePreferences.recordOpen(service.id, DateTime.now()),
+    );
+  }
 
   @override
   void dispose() {
@@ -2098,7 +2154,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openServiceSearch() async {
     final service = await showSearch<HealthService?>(
       context: context,
-      delegate: _HealthServiceSearchDelegate(services: _homeServices),
+      delegate: _HealthServiceSearchDelegate(services: _rankedServices),
     );
     if (service != null && mounted) await _openService(service);
   }
@@ -2106,7 +2162,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openServicesCatalog() async {
     final service = await Navigator.of(context).push<HealthService>(
       MaterialPageRoute(
-        builder: (_) => const _ServicesCatalogPage(services: _homeServices),
+        builder: (_) => _ServicesCatalogPage(
+          services: _rankedServices,
+          initialPreferences: _servicePreferences,
+          onPreferencesChanged: _applyServicePreferences,
+        ),
       ),
     );
     if (service != null && mounted) await _openService(service);
@@ -2170,6 +2230,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openService(HealthService service) async {
+    _recordServiceOpen(service);
     final externalUrl = service.externalUrl;
     if (externalUrl != null && externalUrl.isNotEmpty) {
       final launched = await launchUrl(
@@ -2379,7 +2440,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 14),
         _ServiceCarousel(
           wide: wide,
-          services: _homeServices,
+          services: _rankedServices,
           onServiceTap: _openService,
         ),
         const SizedBox(height: 28),

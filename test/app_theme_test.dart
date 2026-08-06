@@ -67,7 +67,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tous les services'), findsOneWidget);
-    expect(find.text('12 services'), findsOneWidget);
+    expect(find.text('13 services'), findsOneWidget);
     expect(find.text('Diagnostic assisté'), findsOneWidget);
     expect(find.text('Pharmacie'), findsOneWidget);
     expect(find.text('Mobilité Santé'), findsOneWidget);
@@ -85,6 +85,18 @@ void main() {
     expect(find.text('Clinique Mobile'), findsOneWidget);
     expect(
       find.image(const AssetImage('assets/services/mobile_clinic_3d.png')),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Maternité & Petite Enfance'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Maternité & Petite Enfance'), findsOneWidget);
+    expect(
+      find.image(
+        const AssetImage('assets/services/maternity_childhood_3d.png'),
+      ),
       findsOneWidget,
     );
   });
@@ -136,6 +148,31 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Devenir partenaire'), findsOneWidget);
+  });
+
+  testWidgets('Maternité & Petite Enfance reste un service autonome', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_buildHome());
+    await tester.pump();
+
+    await tester.tap(find.text('Voir tout'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Maternité & Petite Enfance'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Maternité & Petite Enfance'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Votre parcours Maternité & Petite Enfance'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('maternal-create-pregnancy')), findsOneWidget);
   });
 
   testWidgets('masque l’invitation quand le profil est complet', (

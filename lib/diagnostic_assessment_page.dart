@@ -294,6 +294,7 @@ class DiagnosticAssessmentPage extends StatefulWidget {
   final String patientId;
   final Map<String, dynamic> patientProfile;
   final String? initialPathwayId;
+  final bool startImmediately;
   final SymptomAssessmentRepository? repository;
   final Stream<List<SymptomAssessmentRecord>>? assessmentStream;
   final VoidCallback? onOpenAppointments;
@@ -304,6 +305,7 @@ class DiagnosticAssessmentPage extends StatefulWidget {
     required this.patientId,
     required this.patientProfile,
     this.initialPathwayId,
+    this.startImmediately = false,
     this.repository,
     this.assessmentStream,
     this.onOpenAppointments,
@@ -330,6 +332,11 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
   void initState() {
     super.initState();
     if (SupabaseConfig.isInitialized) unawaited(_loadPublishedPathways());
+    if (widget.startImmediately) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_startAssessment());
+      });
+    }
   }
 
   Future<void> _loadPublishedPathways() async {

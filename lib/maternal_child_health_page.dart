@@ -80,11 +80,10 @@ class PregnancyProfile {
 
   int weekAt(DateTime now) => math.max(
     0,
-    math.min(42, now.difference(_dateOnly(lastMenstrualPeriod)).inDays ~/ 7),
+    math.min(42, _calendarDaysBetween(lastMenstrualPeriod, now) ~/ 7),
   );
 
-  int daysUntilDue(DateTime now) =>
-      _dateOnly(estimatedDueDate).difference(_dateOnly(now)).inDays;
+  int daysUntilDue(DateTime now) => _calendarDaysBetween(now, estimatedDueDate);
 
   PregnancyProfile copyWith({Set<String>? nutritionHabits}) => PregnancyProfile(
     id: id,
@@ -437,10 +436,35 @@ class SupabaseMaternalChildRepository implements MaternalChildRepository {
       .upsert(profile.toRow(), onConflict: 'pregnancy_id');
 
   @override
-  Future<void> saveReminder(PregnancyReminder reminder) => _client
-      .schema('ientier')
-      .from('pregnancy_reminders')
-      .upsert(reminder.toRow(), onConflict: 'reminder_id');
+  Future<void> saveReminder(PregnancyReminder reminder) async {
+    await _client
+        .schema('ientier')
+        .from('pregnancy_reminders')
+        .upsert(reminder.toRow(), onConflict: 'reminder_id');
+    if (reminder.completed) {
+      await _client
+          .schema('ientier')
+          .from('notifications')
+          .delete()
+          .eq('notification_id', reminder.id)
+          .eq('patient_id', reminder.patientId);
+      return;
+    }
+    final alertAt = reminder.dueAt.subtract(const Duration(days: 2));
+    await _client.schema('ientier').from('notifications').upsert({
+      'notification_id': reminder.id,
+      'patient_id': reminder.patientId,
+      'title': reminder.title,
+      'message':
+          '${reminder.category.label} prévue le ${_formatDate(reminder.dueAt)}. Confirmez la date avec votre équipe de soins.',
+      'type': 'reminder',
+      'is_read': false,
+      'scheduled_at': alertAt.toUtc().toIso8601String(),
+      'action_label': 'Ouvrir Maternité & Petite Enfance',
+      'source': 'app',
+      'source_id': reminder.id,
+    }, onConflict: 'notification_id');
+  }
 
   @override
   Future<void> saveChild(ChildProfile child) => _client
@@ -455,10 +479,35 @@ class SupabaseMaternalChildRepository implements MaternalChildRepository {
       .upsert(record.toRow(), onConflict: 'growth_record_id');
 
   @override
-  Future<void> saveVaccination(ChildVaccinationRecord record) => _client
-      .schema('ientier')
-      .from('child_vaccination_records')
-      .upsert(record.toRow(), onConflict: 'vaccination_record_id');
+  Future<void> saveVaccination(ChildVaccinationRecord record) async {
+    await _client
+        .schema('ientier')
+        .from('child_vaccination_records')
+        .upsert(record.toRow(), onConflict: 'vaccination_record_id');
+    if (record.completed) {
+      await _client
+          .schema('ientier')
+          .from('notifications')
+          .delete()
+          .eq('notification_id', record.id)
+          .eq('patient_id', record.guardianPatientId);
+      return;
+    }
+    final alertAt = record.dueOn.subtract(const Duration(days: 7));
+    await _client.schema('ientier').from('notifications').upsert({
+      'notification_id': record.id,
+      'patient_id': record.guardianPatientId,
+      'title': 'Vaccin à vérifier : ${record.vaccineName}',
+      'message':
+          '${record.doseLabel} prévue autour du ${_formatDate(record.dueOn)}. Confirmez le calendrier auprès d’un centre de vaccination.',
+      'type': 'reminder',
+      'is_read': false,
+      'scheduled_at': alertAt.toUtc().toIso8601String(),
+      'action_label': 'Ouvrir le carnet',
+      'source': 'app',
+      'source_id': record.id,
+    }, onConflict: 'notification_id');
+  }
 }
 
 class MaternalHealthScore {
@@ -523,7 +572,7 @@ MaternalHealthScore calculateMaternalHealthScore(
 
 List<PregnancyReminder> buildPregnancyCalendar(PregnancyProfile pregnancy) {
   DateTime atWeek(int week) =>
-      pregnancy.lastMenstrualPeriod.add(Duration(days: week * 7));
+      _addCalendarDays(pregnancy.lastMenstrualPeriod, week * 7);
 
   PregnancyReminder reminder(
     String suffix,
@@ -597,7 +646,7 @@ List<PregnancyReminder> buildPregnancyCalendar(PregnancyProfile pregnancy) {
 }
 
 List<ChildVaccinationRecord> buildChildVaccinationCalendar(ChildProfile child) {
-  DateTime weeks(int value) => child.birthDate.add(Duration(days: value * 7));
+  DateTime weeks(int value) => _addCalendarDays(child.birthDate, value * 7);
   DateTime months(int value) => DateTime(
     child.birthDate.year,
     child.birthDate.month + value,
@@ -654,7 +703,7 @@ List<String> detectChildHealthRisks(
     );
   }
   if (records.isEmpty ||
-      today.difference(records.first.measuredAt).inDays > 90) {
+      _calendarDaysBetween(records.first.measuredAt, today) > 90) {
     risks.add('Aucune mesure de croissance récente depuis plus de 3 mois.');
   }
   if (records.length >= 2) {
@@ -750,7 +799,7 @@ class _MaternalChildHealthPageState extends State<MaternalChildHealthPage> {
       setState(() {
         _loading = false;
         _error =
-            'Le dossier Maman & Bébé ne peut pas être synchronisé pour le moment.';
+            'Le dossier Maternité & Petite Enfance ne peut pas être synchronisé pour le moment.';
       });
     }
   }
@@ -865,6 +914,7 @@ class _MaternalChildHealthPageState extends State<MaternalChildHealthPage> {
         patientId: widget.patientId,
         patientProfile: {...widget.patientProfile, 'pregnancyStatus': 'Oui'},
         initialPathwayId: 'pregnancy',
+        startImmediately: true,
       ),
     ),
   );
@@ -962,7 +1012,7 @@ class _MaternalChildHealthPageState extends State<MaternalChildHealthPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Maman & Bébé'),
+      title: const Text('Maternité & Petite Enfance'),
       actions: [
         IconButton(
           tooltip: 'Actualiser',
@@ -1297,7 +1347,7 @@ class _HeroCard extends StatelessWidget {
               children: [
                 Text(
                   pregnancy == null
-                      ? 'Votre parcours Maman & Bébé'
+                      ? 'Votre parcours Maternité & Petite Enfance'
                       : 'Semaine ${week!} de grossesse',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
@@ -1431,7 +1481,7 @@ class _HealthScoreCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Score Santé Maman & Bébé',
+                  'Score Santé Maternité & Petite Enfance',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 4),
@@ -1588,7 +1638,7 @@ class _PregnancyProgressCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             const SizedBox(height: 12),
-            Text(_weeklyPregnancyMessage(week)),
+            Text(pregnancyWeekGuidance(week)),
             const SizedBox(height: 8),
             Text(
               'DDR : ${_formatDate(pregnancy.lastMenstrualPeriod)} • Terme : ${_formatDate(pregnancy.estimatedDueDate)}',
@@ -1975,8 +2025,7 @@ class _PregnancyProfileFormState extends State<_PregnancyProfileForm> {
       widget.initial?.lastMenstrualPeriod ??
       widget.now.subtract(const Duration(days: 70));
   late DateTime _dueDate =
-      widget.initial?.estimatedDueDate ??
-      _lastPeriod.add(const Duration(days: 280));
+      widget.initial?.estimatedDueDate ?? _addCalendarDays(_lastPeriod, 280);
   late final TextEditingController _gravida = TextEditingController(
     text: '${widget.initial?.gravida ?? 1}',
   );
@@ -2009,7 +2058,7 @@ class _PregnancyProfileFormState extends State<_PregnancyProfileForm> {
     if (value == null) return;
     setState(() {
       _lastPeriod = value;
-      _dueDate = value.add(const Duration(days: 280));
+      _dueDate = _addCalendarDays(value, 280);
     });
   }
 
@@ -2031,9 +2080,7 @@ class _PregnancyProfileFormState extends State<_PregnancyProfileForm> {
         .toList();
     Navigator.of(context).pop(
       PregnancyProfile(
-        id:
-            widget.initial?.id ??
-            'pregnancy-${widget.patientId}-${widget.now.microsecondsSinceEpoch}',
+        id: widget.initial?.id ?? 'preg-${widget.now.microsecondsSinceEpoch}',
         patientId: widget.patientId,
         lastMenstrualPeriod: _lastPeriod,
         estimatedDueDate: _dueDate,
@@ -2193,7 +2240,7 @@ class _ChildProfileFormState extends State<_ChildProfileForm> {
     if (_name.text.trim().isEmpty) return;
     Navigator.of(context).pop(
       ChildProfile(
-        id: 'child-${widget.patientId}-${widget.now.microsecondsSinceEpoch}',
+        id: 'child-${widget.now.microsecondsSinceEpoch}',
         guardianPatientId: widget.patientId,
         firstName: _name.text.trim(),
         birthDate: _birthDate,
@@ -2321,7 +2368,7 @@ class _GrowthFormState extends State<_GrowthForm> {
     }
     Navigator.of(context).pop(
       ChildGrowthRecord(
-        id: 'growth-${widget.child.id}-${widget.now.microsecondsSinceEpoch}',
+        id: 'growth-${widget.now.microsecondsSinceEpoch}',
         childId: widget.child.id,
         guardianPatientId: widget.child.guardianPatientId,
         measuredAt: widget.now,
@@ -2399,19 +2446,83 @@ const _highRiskFactorIds = {
   'ageOver35',
 };
 
-String _weeklyPregnancyMessage(int week) => switch (week) {
-  < 13 =>
-    'Premier trimestre : organisez le premier contact prénatal et le bilan initial.',
-  < 25 =>
-    'Deuxième trimestre : suivez les examens prévus et signalez tout signe inhabituel.',
-  < 37 =>
-    'Troisième trimestre : préparez la naissance, le transport et la maternité.',
+String pregnancyWeekGuidance(int week) => switch (week.clamp(0, 42)) {
+  <= 4 =>
+    'Début possible de grossesse : confirmez-la et contactez un professionnel dès que possible.',
+  5 =>
+    'Semaine 5 : notez vos traitements et ne les modifiez pas sans avis médical.',
+  6 =>
+    'Semaine 6 : préparez vos antécédents, allergies et questions pour le premier contact.',
+  7 =>
+    'Semaine 7 : hydratez-vous régulièrement et demandez de l’aide si les nausées empêchent de boire.',
+  8 =>
+    'Semaine 8 : faites le point sur les analyses et la supplémentation avec votre équipe.',
+  9 =>
+    'Semaine 9 : signalez rapidement saignement, douleur importante ou fièvre.',
+  10 =>
+    'Semaine 10 : le bilan prénatal initial devrait être planifié ou réalisé.',
+  11 =>
+    'Semaine 11 : vérifiez votre tension et les résultats déjà disponibles.',
+  12 =>
+    'Semaine 12 : premier contact prénatal de référence, à confirmer selon votre situation.',
+  13 =>
+    'Semaine 13 : poursuivez les repas variés et l’activité autorisée par votre professionnel.',
+  14 =>
+    'Semaine 14 : gardez votre carnet, vos analyses et vos contacts de soins ensemble.',
+  15 => 'Semaine 15 : préparez l’échographie recommandée avant 24 semaines.',
+  16 =>
+    'Semaine 16 : notez tout nouveau symptôme et parlez-en au prochain contact.',
+  17 => 'Semaine 17 : faites vérifier les rendez-vous et examens à venir.',
+  18 =>
+    'Semaine 18 : demandez quand et comment surveiller les mouvements du bébé.',
+  19 =>
+    'Semaine 19 : préparez vos questions pour l’échographie et le contact prénatal.',
+  20 =>
+    'Semaine 20 : repère pour l’échographie et le deuxième contact prénatal.',
+  21 =>
+    'Semaine 21 : signalez toute douleur sévère, fièvre ou perte de liquide.',
+  22 =>
+    'Semaine 22 : vérifiez les résultats, la tension et les prochaines étapes.',
+  23 =>
+    'Semaine 23 : l’échographie avant 24 semaines doit être confirmée avec l’équipe.',
+  24 =>
+    'Semaine 24 : commencez à réfléchir à la maternité et au trajet le plus sûr.',
+  25 => 'Semaine 25 : préparez le prochain contact et les analyses indiquées.',
+  26 =>
+    'Semaine 26 : contact prénatal de référence, à adapter au niveau de risque.',
+  27 =>
+    'Semaine 27 : surveillez les changements et gardez les numéros d’urgence accessibles.',
+  28 =>
+    'Semaine 28 : faites le point sur les analyses de suivi et la vaccination maternelle.',
+  29 =>
+    'Semaine 29 : discutez des signes de travail prématuré avec votre équipe.',
+  30 =>
+    'Semaine 30 : contact prénatal de référence et révision du plan de soins.',
+  31 =>
+    'Semaine 31 : choisissez une personne de confiance pour le jour de la naissance.',
+  32 =>
+    'Semaine 32 : finalisez le plan de naissance, le transport et une solution de secours.',
+  33 => 'Semaine 33 : préparez documents, carnet et affaires essentielles.',
+  34 =>
+    'Semaine 34 : contact prénatal de référence et vérification du lieu de naissance.',
+  35 =>
+    'Semaine 35 : revoyez les signes nécessitant un départ immédiat vers la maternité.',
+  36 =>
+    'Semaine 36 : contact prénatal rapproché et confirmation des moyens de transport.',
+  37 =>
+    'Semaine 37 : gardez téléphone, contacts et dossier de grossesse accessibles.',
+  38 =>
+    'Semaine 38 : contact prénatal rapproché; signalez une diminution des mouvements.',
+  39 =>
+    'Semaine 39 : le terme approche; suivez les consignes personnalisées de votre maternité.',
+  40 =>
+    'Semaine 40 : contactez l’équipe pour le suivi du terme et la conduite à tenir.',
   _ =>
-    'Le terme approche : gardez les contacts d’urgence et le plan de transport accessibles.',
+    'Après 40 semaines : un suivi professionnel rapide du dépassement de terme est nécessaire.',
 };
 
 String _dueLabel(DateTime date, DateTime now) {
-  final days = _dateOnly(date).difference(_dateOnly(now)).inDays;
+  final days = _calendarDaysBetween(now, date);
   if (days < 0) return 'En retard de ${-days} jour${days == -1 ? '' : 's'}';
   if (days == 0) return 'Aujourd’hui';
   if (days == 1) return 'Demain';
@@ -2420,6 +2531,15 @@ String _dueLabel(DateTime date, DateTime now) {
 
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
+
+int _calendarDaysBetween(DateTime start, DateTime end) => DateTime.utc(
+  end.year,
+  end.month,
+  end.day,
+).difference(DateTime.utc(start.year, start.month, start.day)).inDays;
+
+DateTime _addCalendarDays(DateTime date, int days) =>
+    DateTime(date.year, date.month, date.day + days);
 
 DateTime? _parseDate(Object? value) {
   if (value is DateTime) return value.toLocal();

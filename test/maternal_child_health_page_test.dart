@@ -40,6 +40,9 @@ void main() {
       ),
       isTrue,
     );
+    expect(pregnancyWeekGuidance(12), contains('Semaine 12'));
+    expect(pregnancyWeekGuidance(32), contains('plan de naissance'));
+    expect(pregnancyWeekGuidance(12), isNot(pregnancyWeekGuidance(13)));
   });
 
   test('identifie une grossesse nécessitant un accompagnement renforcé', () {
@@ -94,9 +97,9 @@ void main() {
       ),
     );
 
-    expect(find.text('Maman & Bébé'), findsOneWidget);
+    expect(find.text('Maternité & Petite Enfance'), findsOneWidget);
     expect(find.text('Semaine 22 de grossesse'), findsOneWidget);
-    expect(find.text('Score Santé Maman & Bébé'), findsOneWidget);
+    expect(find.text('Score Santé Maternité & Petite Enfance'), findsOneWidget);
     expect(find.byKey(const Key('maternal-pregnancy-alert')), findsOneWidget);
     expect(
       find.byKey(const Key('maternal-emergency-transport')),
@@ -105,6 +108,40 @@ void main() {
 
     await tester.tap(find.byKey(const Key('maternal-emergency-transport')));
     expect(transportOpened, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ouvre directement le parcours grossesse du Diagnostic Assisté', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MaternalChildHealthPage(
+          patientId: 'patient-1',
+          patientProfile: const {'pregnancyStatus': 'Oui'},
+          now: now,
+          initialSnapshot: MaternalChildSnapshot(
+            pregnancy: pregnancy,
+            reminders: buildPregnancyCalendar(pregnancy),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('maternal-pregnancy-alert')));
+    await tester.pumpAndSettle();
+    expect(find.text('Vos données, votre choix'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('consent-understood')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('consent-continue')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Étape de la grossesse'), findsOneWidget);
+    expect(find.text('Que ressentez-vous ?'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

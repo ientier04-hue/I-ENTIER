@@ -80,8 +80,6 @@ CREATE TABLE child_profiles (
     CHECK (length(btrim(first_name)) BETWEEN 1 AND 100),
   CONSTRAINT ck_child_birth_date
     CHECK (birth_date BETWEEN DATE '2000-01-01' AND CURRENT_DATE),
-  CONSTRAINT ck_child_age_scope
-    CHECK (birth_date >= CURRENT_DATE - INTERVAL '6 years'),
   CONSTRAINT ck_child_sex
     CHECK (sex IN ('feminin', 'masculin', 'intersexe', 'non_precise')),
   CONSTRAINT ck_child_birth_weight
