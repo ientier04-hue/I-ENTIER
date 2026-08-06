@@ -5888,9 +5888,15 @@ class _ProfileCompletionCard extends StatelessWidget {
 }
 
 class _ServicesCatalogPage extends StatefulWidget {
-  const _ServicesCatalogPage({required this.services});
+  const _ServicesCatalogPage({
+    required this.services,
+    required this.initialPreferences,
+    required this.onPreferencesChanged,
+  });
 
   final List<HealthService> services;
+  final ServicePreferences initialPreferences;
+  final ValueChanged<ServicePreferences> onPreferencesChanged;
 
   @override
   State<_ServicesCatalogPage> createState() => _ServicesCatalogPageState();
@@ -5898,16 +5904,65 @@ class _ServicesCatalogPage extends StatefulWidget {
 
 class _ServicesCatalogPageState extends State<_ServicesCatalogPage> {
   String _query = '';
+  late ServicePreferences _preferences;
+
+  @override
+  void initState() {
+    super.initState();
+    _preferences = widget.initialPreferences;
+  }
+
+  List<HealthService> get _rankedServices =>
+      const ServiceRelevanceRanker().rank(
+        services: widget.services,
+        idOf: (service) => service.id,
+        preferences: _preferences,
+      );
 
   List<HealthService> get _visibleServices {
     final query = _normalizedSearch(_query);
-    if (query.isEmpty) return widget.services;
-    return widget.services.where((service) {
+    if (query.isEmpty) return _rankedServices;
+    return _rankedServices.where((service) {
       final searchText = _normalizedSearch(
         '${service.title} ${service.summary} ${service.actionLabel}',
       );
       return searchText.contains(query);
     }).toList();
+  }
+
+  List<HealthService> get _pinnedServices {
+    final byId = {for (final service in widget.services) service.id: service};
+    return _preferences.pinnedServiceIds
+        .map((serviceId) => byId[serviceId])
+        .whereType<HealthService>()
+        .toList();
+  }
+
+  void _publishPreferences(ServicePreferences preferences) {
+    setState(() => _preferences = preferences);
+    widget.onPreferencesChanged(preferences);
+  }
+
+  void _togglePin(HealthService service) {
+    if (_preferences.isPinned(service.id)) {
+      _publishPreferences(_preferences.unpin(service.id));
+      return;
+    }
+    if (_preferences.pinnedServiceIds.length >= maximumPinnedServices) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Vous pouvez épingler jusqu’à 3 services. Retirez-en un pour continuer.',
+          ),
+        ),
+      );
+      return;
+    }
+    _publishPreferences(_preferences.pin(service.id));
+  }
+
+  void _reorderPinned(int oldIndex, int newIndex) {
+    _publishPreferences(_preferences.reorderPinned(oldIndex, newIndex));
   }
 
   @override
@@ -5920,59 +5975,220 @@ class _ServicesCatalogPageState extends State<_ServicesCatalogPage> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1120),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SearchField(
-                    hint: 'Rechercher un service...',
-                    onChanged: (value) => setState(() => _query = value),
+            child: CustomScrollView(
+              key: const ValueKey('services-catalog-scroll'),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  sliver: SliverList.list(
+                    children: [
+                      _SearchField(
+                        hint: 'Rechercher un service...',
+                        onChanged: (value) => setState(() => _query = value),
+                      ),
+                      if (_query.trim().isEmpty) ...[
+                        const SizedBox(height: 16),
+                        _PinnedServicesPanel(
+                          services: _pinnedServices,
+                          onUnpin: _togglePin,
+                          onReorder: _reorderPinned,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          '${services.length} service${services.length > 1 ? 's' : ''}',
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   ),
-                  const SizedBox(height: 18),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      '${services.length} service${services.length > 1 ? 's' : ''}',
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontWeight: FontWeight.w700,
+                ),
+                if (services.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: _DirectoryFeedback(
+                        icon: Icons.search_off_rounded,
+                        title: 'Aucun service trouvé',
+                        message:
+                            'Essayez un terme plus général, comme pharmacie ou prévention.',
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: services.isEmpty
-                        ? const _DirectoryFeedback(
-                            icon: Icons.search_off_rounded,
-                            title: 'Aucun service trouvé',
-                            message:
-                                'Essayez un terme plus général, comme pharmacie ou prévention.',
-                          )
-                        : GridView.builder(
-                            keyboardDismissBehavior:
-                                ScrollViewKeyboardDismissBehavior.onDrag,
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 270,
-                                  mainAxisExtent: 350,
-                                  crossAxisSpacing: 14,
-                                  mainAxisSpacing: 14,
-                                ),
-                            itemCount: services.length,
-                            itemBuilder: (context, index) {
-                              final service = services[index];
-                              return _ServiceCard(
-                                service: service,
-                                onTap: () => Navigator.of(context).pop(service),
-                              );
-                            },
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    sliver: SliverGrid.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 270,
+                            mainAxisExtent: 350,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
                           ),
+                      itemCount: services.length,
+                      itemBuilder: (context, index) {
+                        final service = services[index];
+                        return _ServiceCard(
+                          service: service,
+                          onTap: () => Navigator.of(context).pop(service),
+                          pinned: _preferences.isPinned(service.id),
+                          onPinToggle: () => _togglePin(service),
+                        );
+                      },
+                    ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PinnedServicesPanel extends StatelessWidget {
+  const _PinnedServicesPanel({
+    required this.services,
+    required this.onUnpin,
+    required this.onReorder,
+  });
+
+  final List<HealthService> services;
+  final ValueChanged<HealthService> onUnpin;
+  final ReorderCallback onReorder;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD2E2FA)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.push_pin_rounded,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Mes services épinglés',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${services.length}/$maximumPinnedServices',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              services.isEmpty
+                  ? 'Touchez l’épingle d’un service pour le garder en tête de liste.'
+                  : 'Faites glisser la poignée pour changer leur ordre.',
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+            if (services.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                itemCount: services.length,
+                onReorder: onReorder,
+                proxyDecorator: (child, index, animation) => Material(
+                  elevation: 6,
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  child: child,
+                ),
+                itemBuilder: (context, index) {
+                  final service = services[index];
+                  return Container(
+                    key: ValueKey('pinned-service-${service.id}'),
+                    margin: EdgeInsets.only(
+                      bottom: index == services.length - 1 ? 0 : 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      minTileHeight: 52,
+                      contentPadding: const EdgeInsets.only(left: 12),
+                      leading: Icon(
+                        service.icon ?? Icons.health_and_safety_outlined,
+                        color: service.accent,
+                      ),
+                      title: Text(
+                        service.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            key: ValueKey('pinned-unpin-${service.id}'),
+                            tooltip: 'Désépingler ${service.title}',
+                            onPressed: () => onUnpin(service),
+                            icon: const Icon(
+                              Icons.push_pin_rounded,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          ReorderableDragStartListener(
+                            key: ValueKey('pinned-drag-${service.id}'),
+                            index: index,
+                            child: Tooltip(
+                              message: 'Réordonner ${service.title}',
+                              child: const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Icon(
+                                  Icons.drag_handle_rounded,
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -6135,7 +6351,14 @@ class _ServiceCarousel extends StatelessWidget {
 class _ServiceCard extends StatelessWidget {
   final HealthService service;
   final VoidCallback onTap;
-  const _ServiceCard({required this.service, required this.onTap});
+  final bool pinned;
+  final VoidCallback? onPinToggle;
+  const _ServiceCard({
+    required this.service,
+    required this.onTap,
+    this.pinned = false,
+    this.onPinToggle,
+  });
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -6147,57 +6370,89 @@ class _ServiceCard extends StatelessWidget {
         color: service.background,
         borderRadius: radius,
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: radius,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 10 : 18,
-              compact ? 9 : 16,
-              compact ? 10 : 18,
-              compact ? 10 : 20,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: radius,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 10 : 18,
+                    compact ? 9 : 16,
+                    compact ? 10 : 18,
+                    compact ? 10 : 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: _ServiceImage(
+                            service: service,
+                            size: imageSize,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        service.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: compact ? 14 : 19,
+                          fontWeight: FontWeight.w800,
+                          color: service.contentColor,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        service.summary,
+                        maxLines: compact ? 3 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: compact ? 10.5 : 14,
+                          height: 1.2,
+                          color: service.contentColor,
+                        ),
+                      ),
+                      SizedBox(height: compact ? 7 : 13),
+                      Text(
+                        '${service.actionLabel}  →',
+                        style: TextStyle(
+                          fontSize: compact ? 12 : 16,
+                          fontWeight: FontWeight.bold,
+                          color: service.accessibleAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Center(
-                    child: _ServiceImage(service: service, size: imageSize),
+            if (onPinToggle != null)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Material(
+                  color: Colors.white.withValues(alpha: .94),
+                  shape: const CircleBorder(),
+                  elevation: pinned ? 3 : 1,
+                  child: IconButton(
+                    key: ValueKey('service-pin-${service.id}'),
+                    tooltip: pinned
+                        ? 'Désépingler ${service.title}'
+                        : 'Épingler ${service.title}',
+                    onPressed: onPinToggle,
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                      color: pinned ? AppColors.primary : AppColors.muted,
+                      size: 21,
+                    ),
                   ),
                 ),
-                Text(
-                  service.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: compact ? 14 : 19,
-                    fontWeight: FontWeight.w800,
-                    color: service.contentColor,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  service.summary,
-                  maxLines: compact ? 3 : 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: compact ? 10.5 : 14,
-                    height: 1.2,
-                    color: service.contentColor,
-                  ),
-                ),
-                SizedBox(height: compact ? 7 : 13),
-                Text(
-                  '${service.actionLabel}  →',
-                  style: TextStyle(
-                    fontSize: compact ? 12 : 16,
-                    fontWeight: FontWeight.bold,
-                    color: service.accessibleAccent,
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+          ],
         ),
       );
     },

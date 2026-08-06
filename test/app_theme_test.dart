@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:i_entier/app_theme.dart';
 import 'package:i_entier/main.dart';
 import 'package:i_entier/notification_service.dart';
+import 'package:i_entier/service_personalization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 User themeTestUser() => const User(
@@ -14,21 +15,45 @@ User themeTestUser() => const User(
   createdAt: '2026-07-20T00:00:00.000Z',
 );
 
-Widget _buildHome({TextScaler textScaler = TextScaler.noScaling}) =>
-    MaterialApp(
-      theme: AppTheme.light,
-      scrollBehavior: const AppScrollBehavior(),
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(textScaler: textScaler),
-        child: child!,
-      ),
-      home: HomeScreen(
-        user: themeTestUser(),
-        account: const {'displayName': 'Patient Test'},
-        patientProfile: const {},
-        notificationStream: Stream.value(defaultAppNotifications()),
-      ),
+Widget _buildHome({
+  TextScaler textScaler = TextScaler.noScaling,
+  ServicePreferencesRepository? servicePreferencesRepository,
+}) => MaterialApp(
+  theme: AppTheme.light,
+  scrollBehavior: const AppScrollBehavior(),
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+    child: child!,
+  ),
+  home: HomeScreen(
+    user: themeTestUser(),
+    account: const {'displayName': 'Patient Test'},
+    patientProfile: const {},
+    notificationStream: Stream.value(defaultAppNotifications()),
+    servicePreferencesRepository: servicePreferencesRepository,
+  ),
+);
+
+Future<void> _revealCatalogTarget(
+  WidgetTester tester,
+  Finder target, {
+  bool towardStart = false,
+}) async {
+  final catalog = find.byKey(const ValueKey('services-catalog-scroll'));
+  for (var attempt = 0; attempt < 20; attempt++) {
+    if (target.evaluate().isNotEmpty) {
+      final rect = tester.getRect(target);
+      if (rect.top >= 60 && rect.bottom <= 830) return;
+    }
+    await tester.drag(
+      catalog,
+      Offset(0, towardStart ? 260 : -260),
+      warnIfMissed: false,
     );
+    await tester.pump();
+  }
+  expect(target, findsWidgets);
+}
 
 void main() {
   test('le thème de production couvre les composants essentiels', () {
@@ -71,27 +96,15 @@ void main() {
     expect(find.text('Diagnostic assisté'), findsOneWidget);
     expect(find.text('Pharmacie'), findsOneWidget);
     expect(find.text('Mobilité Santé'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Financement solidaire'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await _revealCatalogTarget(tester, find.text('Financement solidaire'));
     expect(find.text('Financement solidaire'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Clinique Mobile'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await _revealCatalogTarget(tester, find.text('Clinique Mobile'));
     expect(find.text('Clinique Mobile'), findsOneWidget);
     expect(
       find.image(const AssetImage('assets/services/mobile_clinic_3d.png')),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(
-      find.text('Maternité & Petite Enfance'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await _revealCatalogTarget(tester, find.text('Maternité & Petite Enfance'));
     expect(find.text('Maternité & Petite Enfance'), findsOneWidget);
     expect(
       find.image(
@@ -99,6 +112,87 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('épingle au plus trois services et permet de les réordonner', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = MemoryServicePreferencesRepository();
+    await tester.pumpWidget(
+      _buildHome(servicePreferencesRepository: repository),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Voir tout'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mes services épinglés'), findsOneWidget);
+    expect(find.text('0/3'), findsOneWidget);
+
+    Future<void> pin(String serviceId) async {
+      final button = find.byKey(ValueKey('service-pin-$serviceId'));
+      await _revealCatalogTarget(tester, button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+    }
+
+    await pin('diagnostic-assiste');
+    await pin('pharmacie');
+    await pin('don-de-sang');
+    await pin('mobilite-sante');
+    expect(
+      find.text(
+        'Vous pouvez épingler jusqu’à 3 services. Retirez-en un pour continuer.',
+      ),
+      findsOneWidget,
+    );
+
+    await _revealCatalogTarget(
+      tester,
+      find.text('Mes services épinglés'),
+      towardStart: true,
+    );
+    expect(find.text('3/3'), findsOneWidget);
+
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('pinned-service-diagnostic-assiste')),
+          )
+          .dy,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey('pinned-service-don-de-sang')),
+            )
+            .dy,
+      ),
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('pinned-drag-diagnostic-assiste')),
+      const Offset(0, 130),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('pinned-service-diagnostic-assiste')),
+          )
+          .dy,
+      greaterThan(
+        tester
+            .getTopLeft(find.byKey(const ValueKey('pinned-service-pharmacie')))
+            .dy,
+      ),
+    );
+    final saved = await repository.load(themeTestUser().id);
+    expect(saved.pinnedServiceIds, [
+      'pharmacie',
+      'diagnostic-assiste',
+      'don-de-sang',
+    ]);
   });
 
   testWidgets(
@@ -140,6 +234,7 @@ void main() {
 
     await tester.tap(find.text('Voir tout'));
     await tester.pumpAndSettle();
+    await _revealCatalogTarget(tester, find.text('Mobilité Santé'));
     await tester.tap(find.text('Mobilité Santé'));
     await tester.pumpAndSettle();
 
@@ -160,11 +255,7 @@ void main() {
 
     await tester.tap(find.text('Voir tout'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Maternité & Petite Enfance'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await _revealCatalogTarget(tester, find.text('Maternité & Petite Enfance'));
     await tester.tap(find.text('Maternité & Petite Enfance'));
     await tester.pumpAndSettle();
 
