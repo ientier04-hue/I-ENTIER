@@ -19,6 +19,7 @@ import 'health_tracking_page.dart';
 import 'health_credit_page.dart';
 import 'laboratory_page.dart';
 import 'mental_health_page.dart';
+import 'maternal_child_health_page.dart';
 import 'mobile_clinic_page.dart';
 import 'notification_service.dart';
 import 'notifications_page.dart';
@@ -1837,6 +1838,16 @@ class HealthService {
 
 const _homeServices = <HealthService>[
   HealthService(
+    id: 'maman-bebe',
+    title: 'Maman & Bébé',
+    summary: 'Grossesse, alertes, calendrier et carnet de santé 0–5 ans',
+    imagePath: '',
+    backgroundColor: '#FFE8EF',
+    accentColor: '#C23D68',
+    actionLabel: 'Ouvrir mon suivi',
+    icon: Icons.pregnant_woman_rounded,
+  ),
+  HealthService(
     id: 'diagnostic-assiste',
     title: 'Diagnostic assisté',
     summary: 'Évaluez vos symptômes et sachez quelle suite donner',
@@ -2173,6 +2184,32 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    if (service.id == 'maman-bebe') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MaternalChildHealthPage(
+            patientId: widget.user.uid,
+            patientProfile: widget.patientProfile,
+            onOpenCareDirectory: () {
+              Navigator.of(context).pop();
+              _selectTab(1);
+            },
+            onOpenEmergencyTransport: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => CommunityTransportPage(
+                    patientId: widget.user.uid,
+                    patientName: _patientName,
+                    patientProfile: widget.patientProfile,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
     if (service.id == 'pharmacie') {
       Navigator.of(context).push(
         MaterialPageRoute<void>(

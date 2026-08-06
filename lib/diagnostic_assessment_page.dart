@@ -293,6 +293,7 @@ class _MemorySymptomAssessmentRepository
 class DiagnosticAssessmentPage extends StatefulWidget {
   final String patientId;
   final Map<String, dynamic> patientProfile;
+  final String? initialPathwayId;
   final SymptomAssessmentRepository? repository;
   final Stream<List<SymptomAssessmentRecord>>? assessmentStream;
   final VoidCallback? onOpenAppointments;
@@ -302,6 +303,7 @@ class DiagnosticAssessmentPage extends StatefulWidget {
     super.key,
     required this.patientId,
     required this.patientProfile,
+    this.initialPathwayId,
     this.repository,
     this.assessmentStream,
     this.onOpenAppointments,
@@ -395,11 +397,16 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
     );
     if (!mounted || consents == null) return;
 
-    final pathway = await Navigator.of(context).push<AssessmentPathway>(
-      MaterialPageRoute(
-        builder: (_) => _PathwayPickerPage(pathways: _pathways),
-      ),
-    );
+    final preferredPathway = widget.initialPathwayId == null
+        ? null
+        : _pathwayById(widget.initialPathwayId!);
+    final pathway =
+        preferredPathway ??
+        await Navigator.of(context).push<AssessmentPathway>(
+          MaterialPageRoute(
+            builder: (_) => _PathwayPickerPage(pathways: _pathways),
+          ),
+        );
     if (!mounted || pathway == null) return;
 
     Map<String, dynamic> contextSnapshot;
