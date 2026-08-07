@@ -30,6 +30,7 @@ import 'rescue_page.dart';
 import 'service_personalization.dart';
 import 'supabase_config.dart';
 import 'supabase_data.dart';
+import 'traditional_medicine_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1949,6 +1950,16 @@ const _homeServices = <HealthService>[
     actionLabel: 'Voir mon plan',
   ),
   HealthService(
+    id: 'medecine-traditionnelle',
+    title: 'Médecine Traditionnelle',
+    summary: 'Prévention et bien-être avec des praticiens vérifiés',
+    imagePath: '',
+    backgroundColor: '#E7F5EC',
+    accentColor: '#18794E',
+    actionLabel: 'Découvrir',
+    icon: Icons.spa_rounded,
+  ),
+  HealthService(
     id: 'maman-bebe',
     title: 'Maternité & Petite Enfance',
     summary: 'Grossesse, alertes, calendrier et carnet de santé 0–5 ans',
@@ -2368,6 +2379,41 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (_) => PreventiveMedicinePage(
             patientId: widget.user.uid,
             patientProfile: widget.patientProfile,
+          ),
+        ),
+      );
+      return;
+    }
+    if (service.id == 'medecine-traditionnelle') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TraditionalMedicinePage(
+            patientId: widget.user.uid,
+            patientName: _patientName,
+            onOpenCareDirectory: () {
+              Navigator.of(context).pop();
+              _selectTab(1);
+            },
+            onOpenMobileClinic: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => MobileClinicPage(
+                    patientId: widget.user.uid,
+                    patientName: _patientName,
+                  ),
+                ),
+              );
+            },
+            onEmergency: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => RescuePage(
+                    userId: widget.user.uid,
+                    userDisplayName: _patientName,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       );
