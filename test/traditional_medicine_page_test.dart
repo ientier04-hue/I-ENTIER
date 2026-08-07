@@ -208,6 +208,40 @@ void main() {
     expect(directoryOpened, isTrue);
   });
 
+  testWidgets('n’affiche pas un faux succès quand le carnet est indisponible', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TraditionalMedicinePage(
+          patientId: 'patient-1',
+          patientName: 'Marie Patient',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Mon carnet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('traditional-add-journal-entry')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('traditional-journal-title')),
+      'Observation hors connexion',
+    );
+    await tester.tap(find.byKey(const Key('traditional-save-journal')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('carnet est indisponible hors connexion'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Ajout enregistré dans votre carnet privé.'),
+      findsNothing,
+    );
+  });
+
   testWidgets('affiche l’alerte d’urgence avant toute consultation', (
     tester,
   ) async {

@@ -9,6 +9,9 @@ gérés directement par Supabase Auth.
 ## Configuration du projet Supabase
 
 1. Appliquer, dans l’ordre, les fichiers de `supabase/migrations`.
+   Pour activer le Carnet Santé Naturel sur une base déjà initialisée, appliquer
+   au minimum `20260807043705_add_traditional_medicine.sql` après les migrations
+   précédentes.
 2. Dans **Project Settings > API**, ajouter `ientier` aux schémas exposés.
 3. La clé publique est déjà configurée dans les trois clients. Elle peut être
    remplacée au build avec `SUPABASE_PUBLISHABLE_KEY`. Ne jamais placer la clé

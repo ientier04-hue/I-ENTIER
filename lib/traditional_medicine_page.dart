@@ -610,7 +610,17 @@ class _TraditionalMedicinePageState extends State<TraditionalMedicinePage> {
           context,
         ).showSnackBar(SnackBar(content: Text(success)));
       }
-    } catch (_) {
+    } on PostgrestException catch (error, stackTrace) {
+      debugPrint('Traditional medicine action failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_postgrestErrorMessage(error))));
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Traditional medicine action failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -780,19 +790,46 @@ class _TraditionalMedicinePageState extends State<TraditionalMedicinePage> {
       builder: (_) => const _JournalEntrySheet(),
     );
     if (entry == null) return;
+    final repository = _repository;
+    if (repository == null) {
+      _showJournalMessage(
+        'Le carnet est indisponible hors connexion. Réessayez après vous être connecté.',
+      );
+      return;
+    }
     await _run(
-      () =>
-          _repository?.addJournalEntry(
-            widget.patientId,
-            entry.type,
-            entry.title,
-            entry.details,
-            entry.productName,
-            entry.wellnessRating,
-          ) ??
-          Future.value(),
+      () => repository.addJournalEntry(
+        widget.patientId,
+        entry.type,
+        entry.title,
+        entry.details,
+        entry.productName,
+        entry.wellnessRating,
+      ),
       'Ajout enregistré dans votre carnet privé.',
     );
+  }
+
+  void _showJournalMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _postgrestErrorMessage(PostgrestException error) {
+    switch (error.code) {
+      case '42P01':
+        return 'Le carnet n’est pas encore activé sur cet environnement.';
+      case '42501':
+        return 'Votre session ne permet pas d’enregistrer cette entrée. Reconnectez-vous.';
+      case '23503':
+        return 'Votre profil patient doit être complété avant d’utiliser le carnet.';
+      case '23514':
+        return 'Les informations saisies ne respectent pas les règles du carnet.';
+      default:
+        return 'L’action n’a pas été enregistrée. Réessayez.';
+    }
   }
 
   Future<void> _revokeGrant(NaturalHealthSharingGrant grant) => _run(
