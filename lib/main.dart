@@ -2621,7 +2621,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   constraints: const BoxConstraints(maxWidth: 820),
                   child: SizedBox(
                     key: const ValueKey('home-tab-bar-shell'),
-                    height: 70,
+                    // A native iOS tab bar is 49 pt tall. SafeArea adds the
+                    // device-specific home-indicator inset below this shell.
+                    height: 49,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -2730,7 +2732,7 @@ class _GlassNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _GlassSurface(
     key: const ValueKey('home-tab-bar-surface'),
-    borderRadius: 35,
+    borderRadius: 24.5,
     child: Row(
       children: List.generate(destinations.length, (index) {
         final destination = destinations[index];
@@ -2775,24 +2777,24 @@ class _GlassNavigationDestination extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                width: selected ? 40 : 32,
-                height: 30,
+                width: selected ? 38 : 32,
+                height: 25,
                 decoration: BoxDecoration(
                   color: selected
                       ? const Color(0x241778D4)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
                   selected ? selectedIcon : icon,
-                  size: 22,
+                  size: 21,
                   color: selected ? AppColors.primary : AppColors.navy,
                 ),
               ),
@@ -7570,33 +7572,36 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
   }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: widget.compact ? 58 : 70,
-    height: widget.compact ? 58 : null,
-    child: Semantics(
-      button: true,
-      label: 'Urgences',
-      child: Tooltip(
-        message: 'Urgences',
-        child: _GlassSurface(
-          borderRadius: widget.compact ? 20 : 22,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              key: const ValueKey('emergency-bottom-button'),
-              onTap: _openEmergencySheet,
-              borderRadius: BorderRadius.circular(widget.compact ? 20 : 22),
-              child: Icon(
-                Icons.emergency_rounded,
-                size: widget.compact ? 29 : 30,
-                color: const Color(0xFFFF3029),
+  Widget build(BuildContext context) {
+    final diameter = widget.compact ? 58.0 : 49.0;
+    final radius = diameter / 2;
+    return SizedBox.square(
+      dimension: diameter,
+      child: Semantics(
+        button: true,
+        label: 'Urgences',
+        child: Tooltip(
+          message: 'Urgences',
+          child: _GlassSurface(
+            borderRadius: radius,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey('emergency-bottom-button'),
+                onTap: _openEmergencySheet,
+                borderRadius: BorderRadius.circular(radius),
+                child: Icon(
+                  Icons.emergency_rounded,
+                  size: widget.compact ? 29 : 30,
+                  color: const Color(0xFFFF3029),
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _EmergencyServiceIcon extends StatelessWidget {

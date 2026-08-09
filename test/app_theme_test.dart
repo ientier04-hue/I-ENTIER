@@ -417,7 +417,7 @@ void main() {
     await tester.pump();
 
     final shell = find.byKey(const ValueKey('home-tab-bar-shell'));
-    expect(tester.getSize(shell).height, 70);
+    expect(tester.getSize(shell).height, 49);
     expect(tester.getSize(shell).width, lessThanOrEqualTo(366));
     final surface = find.byKey(const ValueKey('home-tab-bar-surface'));
     final surfaceDecoration = tester
@@ -429,11 +429,12 @@ void main() {
         .decoration;
     expect(
       (surfaceDecoration as BoxDecoration).borderRadius,
-      BorderRadius.circular(35),
+      BorderRadius.circular(24.5),
     );
-    expect(
-      find.byKey(const ValueKey('emergency-bottom-button')),
-      findsOneWidget,
+    final emergencyButton = find.byKey(
+      const ValueKey('emergency-bottom-button'),
     );
+    expect(emergencyButton, findsOneWidget);
+    expect(tester.getSize(emergencyButton), const Size.square(49));
   });
 }
