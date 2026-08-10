@@ -71,6 +71,13 @@ String _longDate(DateTime date) =>
 String _shortDate(DateTime date) =>
     '${date.day} ${_shortMonthNames[date.month - 1]}';
 
+String _dateRange(DateTime start, DateTime end) {
+  if (start.year == end.year && start.month == end.month) {
+    return '${start.day}–${end.day} ${_monthNames[end.month - 1]} ${end.year}';
+  }
+  return '${_shortDate(start)} – ${_longDate(end)}';
+}
+
 class CycleEntry {
   final String id;
   final DateTime date;
@@ -144,6 +151,11 @@ class _PeriodEpisode {
   });
 
   int get length => _calendarDayDifference(end, start) + 1;
+
+  int get recordedDayCount =>
+      entries.map((entry) => cycleDateKey(entry.date)).toSet().length;
+
+  bool get hasCompleteDailyRecord => recordedDayCount == length;
 }
 
 List<_PeriodEpisode> _periodEpisodes(Iterable<CycleEntry> entries) {
@@ -151,11 +163,24 @@ List<_PeriodEpisode> _periodEpisodes(Iterable<CycleEntry> entries) {
     ..sort((first, second) => first.date.compareTo(second.date));
   final groups = <List<CycleEntry>>[];
   for (final entry in periodEntries) {
-    if (groups.isEmpty ||
-        _calendarDayDifference(entry.date, groups.last.first.date) >= 15) {
+    if (groups.isEmpty) {
       groups.add([entry]);
-    } else {
+      continue;
+    }
+
+    final current = groups.last;
+    final gapFromPrevious = _calendarDayDifference(
+      entry.date,
+      current.last.date,
+    );
+
+    // Allow one missed journal day inside an episode. Consecutive bleeding is
+    // never split, even when it lasts unusually long: doing so would invent a
+    // new cycle. After two unlogged days, a new bleeding episode starts.
+    if (gapFromPrevious <= 2) {
       groups.last.add(entry);
+    } else {
+      groups.add([entry]);
     }
   }
   return groups
@@ -169,6 +194,34 @@ List<_PeriodEpisode> _periodEpisodes(Iterable<CycleEntry> entries) {
       .toList();
 }
 
+int _median(List<int> values) {
+  if (values.isEmpty) {
+    throw ArgumentError.value(values, 'values', 'Must not be empty');
+  }
+  final sorted = List<int>.from(values)..sort();
+  final middle = sorted.length ~/ 2;
+  if (sorted.length.isOdd) return sorted[middle];
+  return ((sorted[middle - 1] + sorted[middle]) / 2).round();
+}
+
+List<int> _recentValues(List<int> values, [int limit = 12]) =>
+    values.length > limit ? values.sublist(values.length - limit) : values;
+
+bool _containsPossibleTrackingGap(List<int> intervals) {
+  if (intervals.length < 3) return false;
+  for (final shorter in intervals) {
+    if (shorter <= 0) continue;
+    for (final longer in intervals) {
+      if (longer < shorter * 1.75) continue;
+      final multiple = (longer / shorter).round();
+      if (multiple < 2 || multiple > 3) continue;
+      final tolerance = multiple + 1;
+      if ((longer - shorter * multiple).abs() <= tolerance) return true;
+    }
+  }
+  return false;
+}
+
 Iterable<DateTime> _datesInRange(DateTime start, DateTime end) sync* {
   var date = _dateOnly(start);
   final last = _dateOnly(end);
@@ -178,27 +231,49 @@ Iterable<DateTime> _datesInRange(DateTime start, DateTime end) sync* {
   }
 }
 
+enum CycleHistoryQuality { insufficient, limited, stable, veryStable }
+
 class CycleInsights {
   final DateTime today;
   final List<DateTime> periodStarts;
-  final int averageCycleLength;
-  final int averagePeriodLength;
+  final int? typicalCycleLength;
+  final int? typicalPeriodLength;
+  final int cycleSampleCount;
+  final int periodSampleCount;
+  final int? cycleVariationDays;
+  final CycleHistoryQuality historyQuality;
+  final bool hasPossibleTrackingGap;
+  final bool hasOutOfRangeInterval;
+  final bool hasRecentAmbiguousBleeding;
+  final bool hasHistoryBreak;
+  final bool hasAtypicalCycleFrequency;
+  final bool hasIncompletePeriodRecord;
+  final bool hasProlongedBleeding;
   final DateTime? lastPeriodStart;
   final DateTime? nextPeriodStart;
-  final DateTime? ovulationDate;
-  final DateTime? fertileWindowStart;
-  final DateTime? fertileWindowEnd;
+  final DateTime? nextPeriodEarliest;
+  final DateTime? nextPeriodLatest;
 
   CycleInsights._({
     required this.today,
     required this.periodStarts,
-    required this.averageCycleLength,
-    required this.averagePeriodLength,
+    required this.typicalCycleLength,
+    required this.typicalPeriodLength,
+    required this.cycleSampleCount,
+    required this.periodSampleCount,
+    required this.cycleVariationDays,
+    required this.historyQuality,
+    required this.hasPossibleTrackingGap,
+    required this.hasOutOfRangeInterval,
+    required this.hasRecentAmbiguousBleeding,
+    required this.hasHistoryBreak,
+    required this.hasAtypicalCycleFrequency,
+    required this.hasIncompletePeriodRecord,
+    required this.hasProlongedBleeding,
     required this.lastPeriodStart,
     required this.nextPeriodStart,
-    required this.ovulationDate,
-    required this.fertileWindowStart,
-    required this.fertileWindowEnd,
+    required this.nextPeriodEarliest,
+    required this.nextPeriodLatest,
   });
 
   factory CycleInsights.fromEntries(
@@ -206,78 +281,163 @@ class CycleInsights {
     DateTime? now,
   }) {
     final today = _dateOnly(now ?? DateTime.now());
-    final periodDays =
-        entries
-            .where((entry) => entry.isPeriod && !entry.date.isAfter(today))
-            .map((entry) => _dateOnly(entry.date))
-            .toSet()
-            .toList()
-          ..sort();
-
-    final runs = <List<DateTime>>[];
-    for (final day in periodDays) {
-      // Bleeding days less than 15 days apart belong to the same episode.
-      // This keeps a missed journal day from looking like a new cycle.
-      if (runs.isEmpty || _calendarDayDifference(day, runs.last.first) >= 15) {
-        runs.add([day]);
-      } else {
-        runs.last.add(day);
-      }
-    }
-    final starts = runs.map((run) => run.first).toList();
-    final intervals = <int>[];
+    final episodes = _periodEpisodes(
+      entries.where((entry) => !_dateOnly(entry.date).isAfter(today)),
+    );
+    final starts = episodes.map((episode) => episode.start).toList();
+    final allIntervals = <int>[];
     for (var index = 1; index < starts.length; index++) {
-      final interval = _calendarDayDifference(starts[index], starts[index - 1]);
-      if (interval >= 15 && interval <= 90) intervals.add(interval);
+      allIntervals.add(
+        _calendarDayDifference(starts[index], starts[index - 1]),
+      );
     }
-    final recentIntervals = intervals.length > 6
-        ? intervals.sublist(intervals.length - 6)
-        : intervals;
-    final averageCycle = recentIntervals.isEmpty
-        ? 28
-        : (recentIntervals.reduce((a, b) => a + b) / recentIntervals.length)
-              .round();
+    var lastHistoryBreakIndex = -1;
+    for (var index = 0; index < allIntervals.length; index++) {
+      if (allIntervals[index] > 90) lastHistoryBreakIndex = index;
+    }
+    final hasHistoryBreak = lastHistoryBreakIndex >= 0;
+    final segmentIntervals = lastHistoryBreakIndex < 0
+        ? allIntervals
+        : allIntervals.sublist(lastHistoryBreakIndex + 1);
+    final validIntervals = <int>[];
+    var followsVeryShortInterval = false;
+    for (final interval in segmentIntervals) {
+      if (interval >= 15 && interval <= 90 && !followsVeryShortInterval) {
+        validIntervals.add(interval);
+      }
+      // A bleeding episode less than 15 days after the previous start may be
+      // intermenstrual bleeding. The interval immediately after it cannot be
+      // assumed to represent a full cycle either.
+      followsVeryShortInterval = interval < 15;
+    }
+    final recentIntervals = _recentValues(validIntervals);
+    final recentRawIntervals = _recentValues(segmentIntervals);
+    final hasOutOfRangeInterval = recentRawIntervals.any(
+      (interval) => interval < 15 || interval > 90,
+    );
+    final hasRecentAmbiguousBleeding =
+        segmentIntervals.isNotEmpty && segmentIntervals.last < 15;
+    final hasPossibleTrackingGap = _containsPossibleTrackingGap(
+      recentIntervals,
+    );
+    final hasAtypicalCycleFrequency = recentIntervals.any(
+      (interval) => interval < 24 || interval > 38,
+    );
 
-    final completedRunLengths = runs
-        .where((run) => run.length >= 2 && run.length <= 10)
-        .map((run) => run.length)
+    final segmentEpisodes = lastHistoryBreakIndex < 0
+        ? episodes
+        : episodes.sublist(lastHistoryBreakIndex + 1);
+    final recentEpisodes = segmentEpisodes.length > 12
+        ? segmentEpisodes.sublist(segmentEpisodes.length - 12)
+        : segmentEpisodes;
+    final confirmedEpisodes = recentEpisodes.length < 2
+        ? const <_PeriodEpisode>[]
+        : recentEpisodes.sublist(0, recentEpisodes.length - 1);
+    final completedPeriodLengths = confirmedEpisodes
+        .where(
+          (episode) =>
+              episode.length >= 1 &&
+              episode.length <= 10 &&
+              episode.hasCompleteDailyRecord,
+        )
+        .map((episode) => episode.length)
         .toList();
-    final recentRunLengths = completedRunLengths.length > 6
-        ? completedRunLengths.sublist(completedRunLengths.length - 6)
-        : completedRunLengths;
-    final averagePeriod = recentRunLengths.isEmpty
-        ? 5
-        : (recentRunLengths.reduce((a, b) => a + b) / recentRunLengths.length)
-              .round()
-              .clamp(1, 10);
+    final recentPeriodLengths = _recentValues(completedPeriodLengths);
+    final typicalPeriod = recentPeriodLengths.length < 3
+        ? null
+        : _median(recentPeriodLengths).clamp(1, 10);
+
+    final hasEnoughHistory = recentIntervals.length >= 3;
+    final predictionSuspended =
+        hasRecentAmbiguousBleeding || hasPossibleTrackingGap;
+    final typicalCycle = hasEnoughHistory && !predictionSuspended
+        ? _median(recentIntervals)
+        : null;
+    final sortedIntervals = List<int>.from(recentIntervals)..sort();
+    final variation = sortedIntervals.isEmpty
+        ? null
+        : sortedIntervals.last - sortedIntervals.first;
+    final historyQuality = !hasEnoughHistory
+        ? CycleHistoryQuality.insufficient
+        : hasOutOfRangeInterval ||
+              hasPossibleTrackingGap ||
+              hasRecentAmbiguousBleeding ||
+              hasAtypicalCycleFrequency ||
+              (variation ?? 0) > 9
+        ? CycleHistoryQuality.limited
+        : recentIntervals.length >= 9 && (variation ?? 0) <= 4
+        ? CycleHistoryQuality.veryStable
+        : recentIntervals.length >= 6 && (variation ?? 0) <= 7
+        ? CycleHistoryQuality.stable
+        : CycleHistoryQuality.limited;
 
     final lastStart = starts.isEmpty ? null : starts.last;
     DateTime? nextStart;
-    if (lastStart != null) {
-      nextStart = _addCalendarDays(lastStart, averageCycle);
-      while (nextStart!.isBefore(today)) {
-        nextStart = _addCalendarDays(nextStart, averageCycle);
-      }
+    DateTime? earliest;
+    DateTime? latest;
+    if (lastStart != null && typicalCycle != null) {
+      nextStart = _addCalendarDays(lastStart, typicalCycle);
+      final earliestLength =
+          (sortedIntervals.first < typicalCycle - 2
+                  ? sortedIntervals.first
+                  : typicalCycle - 2)
+              .clamp(15, 90);
+      final latestLength =
+          (sortedIntervals.last > typicalCycle + 2
+                  ? sortedIntervals.last
+                  : typicalCycle + 2)
+              .clamp(15, 92);
+      earliest = _addCalendarDays(lastStart, earliestLength);
+      latest = _addCalendarDays(lastStart, latestLength);
     }
-    final ovulation = nextStart == null
-        ? null
-        : _addCalendarDays(nextStart, -14);
 
     return CycleInsights._(
       today: today,
       periodStarts: starts,
-      averageCycleLength: averageCycle,
-      averagePeriodLength: averagePeriod,
+      typicalCycleLength: typicalCycle,
+      typicalPeriodLength: typicalPeriod,
+      cycleSampleCount: recentIntervals.length,
+      periodSampleCount: recentPeriodLengths.length,
+      cycleVariationDays: variation,
+      historyQuality: historyQuality,
+      hasPossibleTrackingGap: hasPossibleTrackingGap,
+      hasOutOfRangeInterval: hasOutOfRangeInterval,
+      hasRecentAmbiguousBleeding: hasRecentAmbiguousBleeding,
+      hasHistoryBreak: hasHistoryBreak,
+      hasAtypicalCycleFrequency: hasAtypicalCycleFrequency,
+      hasIncompletePeriodRecord: recentEpisodes.any(
+        (episode) => !episode.hasCompleteDailyRecord,
+      ),
+      hasProlongedBleeding: recentEpisodes.any((episode) => episode.length > 8),
       lastPeriodStart: lastStart,
       nextPeriodStart: nextStart,
-      ovulationDate: ovulation,
-      fertileWindowStart: ovulation == null
-          ? null
-          : _addCalendarDays(ovulation, -5),
-      fertileWindowEnd: ovulation == null
-          ? null
-          : _addCalendarDays(ovulation, 1),
+      nextPeriodEarliest: earliest,
+      nextPeriodLatest: latest,
     );
+  }
+
+  // Compatibility aliases remain nullable: no population value is presented
+  // as a personal average.
+  int? get averageCycleLength => typicalCycleLength;
+  int? get averagePeriodLength => typicalPeriodLength;
+
+  // Used only to prefill an editable form, never as a displayed insight.
+  int get suggestedPeriodLength => typicalPeriodLength ?? 5;
+
+  bool get hasPrediction =>
+      historyQuality != CycleHistoryQuality.insufficient &&
+      nextPeriodStart != null &&
+      nextPeriodEarliest != null &&
+      nextPeriodLatest != null;
+
+  bool get isPredictionSuspended =>
+      hasRecentAmbiguousBleeding || hasPossibleTrackingGap;
+
+  bool get hasHighVariability => (cycleVariationDays ?? 0) > 9;
+
+  int get additionalCyclesNeeded {
+    final missingIntervals = 3 - cycleSampleCount;
+    return missingIntervals > 0 ? missingIntervals : 0;
   }
 
   int? get currentCycleDay => lastPeriodStart == null
@@ -288,18 +448,31 @@ class CycleInsights {
       ? null
       : _calendarDayDifference(nextPeriodStart!, today);
 
+  bool get isOverdue => hasPrediction && today.isAfter(nextPeriodLatest!);
+
+  int? get daysPastPredictionWindow =>
+      !isOverdue ? null : _calendarDayDifference(today, nextPeriodLatest!);
+
+  int? get predictionWindowDays => !hasPrediction
+      ? null
+      : _calendarDayDifference(nextPeriodLatest!, nextPeriodEarliest!) + 1;
+
+  bool get canHighlightPrediction =>
+      hasPrediction && !isOverdue && (predictionWindowDays ?? 0) <= 14;
+
+  // Dates of bleeding alone cannot confirm or precisely predict ovulation.
+  DateTime? get ovulationDate => null;
+  DateTime? get fertileWindowStart => null;
+  DateTime? get fertileWindowEnd => null;
+
   bool isPredictedPeriod(DateTime date) {
-    if (nextPeriodStart == null) return false;
-    final difference = _calendarDayDifference(date, nextPeriodStart!);
-    return difference >= 0 && difference < averagePeriodLength;
+    if (!canHighlightPrediction) return false;
+    final day = _dateOnly(date);
+    return !day.isBefore(nextPeriodEarliest!) &&
+        !day.isAfter(nextPeriodLatest!);
   }
 
-  bool isFertile(DateTime date) {
-    if (fertileWindowStart == null || fertileWindowEnd == null) return false;
-    final day = _dateOnly(date);
-    return !day.isBefore(fertileWindowStart!) &&
-        !day.isAfter(fertileWindowEnd!);
-  }
+  bool isFertile(DateTime date) => false;
 }
 
 typedef CycleEntryCallback = Future<void> Function(CycleEntry entry);
@@ -377,7 +550,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
       builder: (context) => _PeriodRangeForm(
         today: _today,
         episode: episode,
-        suggestedLength: insights.averagePeriodLength,
+        suggestedLength: insights.suggestedPeriodLength,
       ),
     );
     if (result == null || !mounted) return;
@@ -653,7 +826,9 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
 
   Widget _buildDashboard(List<CycleEntry> entries) {
     final insights = CycleInsights.fromEntries(entries, now: _today);
-    final episodes = _periodEpisodes(entries);
+    final episodes = _periodEpisodes(
+      entries.where((entry) => !_dateOnly(entry.date).isAfter(_today)),
+    );
     final journalEntries = entries
         .where(
           (entry) =>
@@ -683,6 +858,8 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
               ),
               const SizedBox(height: 18),
               const _PrivacyNotice(),
+              const SizedBox(height: 22),
+              const _MedicalNotice(),
               const SizedBox(height: 22),
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -743,8 +920,6 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
                   onEntryTap: (entry) => _openEntryForm(entry.date, entries),
                 ),
               ],
-              const SizedBox(height: 22),
-              const _MedicalNotice(),
             ],
           ),
         ),
@@ -909,29 +1084,53 @@ class _CycleStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasCycle = insights.lastPeriodStart != null;
     final inPeriod = todayEntry?.isPeriod ?? false;
-    final days = insights.daysUntilNextPeriod;
     final String title;
     final String subtitle;
     final IconData icon;
+    final Key? titleKey;
     if (!hasCycle) {
       title = 'Votre cycle en un coup d’œil';
       subtitle =
-          'Ajoutez au moins un jour de règles pour obtenir une estimation.';
+          'Ajoutez le premier jour de vos règles pour commencer votre historique.';
       icon = Icons.auto_graph_rounded;
+      titleKey = const Key('cycle-history-insufficient');
     } else if (inPeriod) {
       title = 'Règles en cours';
       subtitle = 'Jour ${insights.currentCycleDay ?? 1} de votre cycle';
       icon = Icons.water_drop_rounded;
-    } else if (days == 0) {
-      title = 'Règles prévues aujourd’hui';
-      subtitle = 'Cette date reste une estimation basée sur votre historique.';
-      icon = Icons.event_rounded;
+      titleKey = null;
+    } else if (insights.isPredictionSuspended) {
+      title = 'Prévision suspendue';
+      subtitle = insights.hasRecentAmbiguousBleeding
+          ? 'Un saignement très rapproché doit être vérifié avant de servir de nouveau début de cycle.'
+          : 'Un intervalle peut correspondre à un ou plusieurs cycles non enregistrés. Vérifiez l’historique.';
+      icon = Icons.pause_circle_outline_rounded;
+      titleKey = const Key('cycle-prediction-suspended');
+    } else if (!insights.hasPrediction) {
+      final missing = insights.additionalCyclesNeeded;
+      title = insights.hasHistoryBreak
+          ? 'Historique récent à compléter'
+          : 'Historique insuffisant pour prévoir';
+      subtitle = insights.hasHistoryBreak
+          ? 'Après une longue interruption, enregistrez encore $missing début${missing == 1 ? '' : 's'} de règles avant une nouvelle estimation.'
+          : 'Enregistrez encore $missing début${missing == 1 ? '' : 's'} de règles pour calculer une plage personnelle.';
+      icon = Icons.hourglass_top_rounded;
+      titleKey = const Key('cycle-history-insufficient');
+    } else if (insights.isOverdue) {
+      final overdue = insights.daysPastPredictionWindow!;
+      title = 'Cycle plus long que la plage estimée';
+      subtitle =
+          'La plage est dépassée de $overdue jour${overdue == 1 ? '' : 's'}. La prévision n’est pas reportée automatiquement.';
+      icon = Icons.update_rounded;
+      titleKey = const Key('cycle-overdue-notice');
     } else {
-      title = 'Prochaines règles dans $days jour${days == 1 ? '' : 's'}';
-      subtitle = insights.nextPeriodStart == null
-          ? ''
-          : 'Autour du ${_longDate(insights.nextPeriodStart!)}';
+      title = 'Prochaines règles estimées';
+      subtitle = _dateRange(
+        insights.nextPeriodEarliest!,
+        insights.nextPeriodLatest!,
+      );
       icon = Icons.event_available_rounded;
+      titleKey = const Key('cycle-next-period-range');
     }
 
     return Container(
@@ -963,6 +1162,7 @@ class _CycleStatusCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      key: titleKey,
                       style: const TextStyle(
                         color: _navy,
                         fontSize: 18,
@@ -984,16 +1184,18 @@ class _CycleStatusCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _MetricChip(
-                label: 'Cycle moyen',
-                value: '${insights.averageCycleLength} jours',
-                color: _purple,
-              ),
-              _MetricChip(
-                label: 'Règles moyennes',
-                value: '${insights.averagePeriodLength} jours',
-                color: _rose,
-              ),
+              if (insights.typicalCycleLength != null)
+                _MetricChip(
+                  label: 'Cycle habituel',
+                  value: '${insights.typicalCycleLength} jours',
+                  color: _purple,
+                ),
+              if (insights.typicalPeriodLength != null)
+                _MetricChip(
+                  label: 'Durée habituelle',
+                  value: '${insights.typicalPeriodLength} jours',
+                  color: _rose,
+                ),
               if (insights.currentCycleDay != null)
                 _MetricChip(
                   label: 'Aujourd’hui',
@@ -1002,22 +1204,149 @@ class _CycleStatusCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (insights.fertileWindowStart != null) ...[
+          if (inPeriod && !insights.hasPrediction) ...[
+            const SizedBox(height: 10),
+            _InsightWarning(
+              key: Key(
+                insights.isPredictionSuspended
+                    ? 'cycle-prediction-suspended'
+                    : 'cycle-history-insufficient',
+              ),
+              icon: Icons.hourglass_top_rounded,
+              message: insights.isPredictionSuspended
+                  ? 'La prévision reste suspendue jusqu’à la vérification des épisodes rapprochés ou manquants.'
+                  : insights.hasHistoryBreak
+                  ? 'Après cette interruption, il faut encore ${insights.additionalCyclesNeeded} débuts de règles pour reconstruire une tendance récente.'
+                  : 'Il faut encore ${insights.additionalCyclesNeeded} débuts de règles pour calculer une plage personnelle.',
+            ),
+          ],
+          if (insights.hasPrediction) ...[
             const SizedBox(height: 17),
             Container(
+              key: const Key('cycle-history-quality'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: _purpleSoft,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.analytics_outlined,
+                    color: _purple,
+                    size: 19,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      '${_historyQualityLabel(insights.historyQuality)} · ${insights.cycleSampleCount} cycles complets analysés${insights.cycleVariationDays == null ? '' : ' · variation de ${insights.cycleVariationDays} jours'}',
+                      style: const TextStyle(
+                        color: _ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (insights.isOverdue) ...[
+            const SizedBox(height: 10),
+            const _InsightWarning(
+              key: Key('cycle-overdue-guidance'),
+              icon: Icons.rule_rounded,
+              message:
+                  'Vérifiez qu’aucun début de règles n’a été oublié. Si une grossesse est possible, pensez à faire un test ou à demander conseil.',
+            ),
+          ],
+          if (insights.hasPrediction &&
+              insights.historyQuality == CycleHistoryQuality.limited) ...[
+            const SizedBox(height: 10),
+            const _InsightWarning(
+              key: Key('cycle-estimation-prudent'),
+              icon: Icons.info_outline_rounded,
+              message:
+                  'Estimation prudente : cette plage peut encore changer avec de nouveaux cycles.',
+            ),
+          ],
+          if (insights.hasHighVariability) ...[
+            const SizedBox(height: 10),
+            const _InsightWarning(
+              key: Key('cycle-variability-warning'),
+              icon: Icons.show_chart_rounded,
+              message:
+                  'Les durées enregistrées varient beaucoup. L’estimation est donc élargie ou suspendue.',
+            ),
+          ],
+          if (insights.hasPossibleTrackingGap ||
+              insights.hasOutOfRangeInterval ||
+              insights.hasRecentAmbiguousBleeding) ...[
+            const SizedBox(height: 10),
+            const _InsightWarning(
+              key: Key('cycle-tracking-gap-warning'),
+              icon: Icons.fact_check_outlined,
+              message:
+                  'Un intervalle inhabituel peut venir d’un oubli ou d’un saignement rapproché. Vérifiez l’historique et demandez conseil si les dates sont exactes.',
+            ),
+          ],
+          if (insights.hasAtypicalCycleFrequency) ...[
+            const SizedBox(height: 10),
+            const _InsightWarning(
+              key: Key('cycle-atypical-frequency-warning'),
+              icon: Icons.monitor_heart_outlined,
+              message:
+                  'Des cycles hors de la plage adulte courante de 24 à 38 jours sont enregistrés. Ce n’est pas un diagnostic; demandez conseil si cela vous inquiète.',
+            ),
+          ],
+          if (insights.hasIncompletePeriodRecord) ...[
+            const SizedBox(height: 10),
+            const _InsightWarning(
+              key: Key('cycle-incomplete-period-warning'),
+              icon: Icons.edit_calendar_outlined,
+              message:
+                  'Une période comporte des journées non saisies. Sa durée n’est pas utilisée dans la tendance habituelle.',
+            ),
+          ],
+          if (insights.hasProlongedBleeding) ...[
+            const SizedBox(height: 10),
+            const _InsightWarning(
+              key: Key('cycle-prolonged-bleeding-warning'),
+              icon: Icons.health_and_safety_outlined,
+              message:
+                  'Un saignement de plus de 8 jours est enregistré. En cas d’inquiétude, demandez un avis professionnel.',
+            ),
+          ],
+          if (hasCycle) ...[
+            const SizedBox(height: 10),
+            Container(
+              key: const Key('cycle-fertility-unavailable'),
               width: double.infinity,
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
                 color: _tealSoft,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Text(
-                'Fenêtre fertile estimée : ${_shortDate(insights.fertileWindowStart!)} – ${_shortDate(insights.fertileWindowEnd!)}',
-                style: const TextStyle(
-                  color: Color(0xFF087568),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.science_outlined, color: _teal, size: 19),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Ovulation non prédite : les dates de règles seules ne permettent pas de la confirmer avec fiabilité.',
+                      style: TextStyle(
+                        color: Color(0xFF087568),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1025,6 +1354,48 @@ class _CycleStatusCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _historyQualityLabel(CycleHistoryQuality quality) => switch (quality) {
+  CycleHistoryQuality.insufficient => 'Données insuffisantes',
+  CycleHistoryQuality.limited => 'Historique court ou variable',
+  CycleHistoryQuality.stable => 'Historique assez stable',
+  CycleHistoryQuality.veryStable => 'Historique stable',
+};
+
+class _InsightWarning extends StatelessWidget {
+  final IconData icon;
+  final String message;
+
+  const _InsightWarning({super.key, required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF8E8),
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: const Color(0xFFF4DCA2)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFFA36800), size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: Color(0xFF76510A),
+              fontSize: 12.5,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _MetricChip extends StatelessWidget {
@@ -1201,14 +1572,18 @@ class _CycleCalendar extends StatelessWidget {
             },
           ),
           const SizedBox(height: 12),
-          const Wrap(
+          Wrap(
             alignment: WrapAlignment.center,
             spacing: 14,
             runSpacing: 8,
             children: [
-              _LegendDot(color: _rose, label: 'Règles'),
-              _LegendDot(color: _purple, label: 'Prévues', outlined: true),
-              _LegendDot(color: _teal, label: 'Fertilité estimée'),
+              const _LegendDot(color: _rose, label: 'Règles enregistrées'),
+              if (insights.canHighlightPrediction)
+                const _LegendDot(
+                  color: _purple,
+                  label: 'Début estimé',
+                  outlined: true,
+                ),
             ],
           ),
         ],
@@ -1248,8 +1623,8 @@ class _CalendarDay extends StatelessWidget {
       if (selected) 'sélectionné',
       if (future) 'date future',
       if (period) 'règles enregistrées',
-      if (predictedPeriod && !period) 'règles prévues',
-      if (fertile) 'fertilité estimée',
+      if (predictedPeriod && !period)
+        'date possible du début des prochaines règles, estimation',
       if (hasDetails) 'informations enregistrées',
     ].join(', ');
     final background = period
@@ -1551,7 +1926,9 @@ class _PeriodHistorySection extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          '${episode.length} jour${episode.length == 1 ? '' : 's'} enregistré${episode.length == 1 ? '' : 's'}',
+                          episode.hasCompleteDailyRecord
+                              ? '${episode.length} jour${episode.length == 1 ? '' : 's'} enregistré${episode.length == 1 ? '' : 's'}'
+                              : '${episode.recordedDayCount} jour${episode.recordedDayCount == 1 ? '' : 's'} saisi${episode.recordedDayCount == 1 ? '' : 's'} · période calendaire de ${episode.length} jours',
                           style: const TextStyle(color: _muted, fontSize: 13),
                         ),
                       ],
@@ -1685,6 +2062,7 @@ class _MedicalNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+    key: const Key('cycle-contraception-warning'),
     padding: const EdgeInsets.all(15),
     decoration: BoxDecoration(
       color: const Color(0xFFFFF8E8),
@@ -1698,7 +2076,7 @@ class _MedicalNotice extends StatelessWidget {
         SizedBox(width: 10),
         Expanded(
           child: Text(
-            'Les dates affichées sont des estimations, pas un diagnostic ni une méthode contraceptive. Consultez un professionnel en cas de douleur intense, saignement inhabituel ou inquiétude.',
+            'N’utilisez pas ces estimations pour éviter une grossesse : aucun jour affiché ne peut être considéré comme sans risque. Le calendrier seul ne confirme pas l’ovulation. Consultez un professionnel en cas de douleur intense, saignement inhabituel ou inquiétude.',
             style: TextStyle(
               color: Color(0xFF76510A),
               fontSize: 12.5,
