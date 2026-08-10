@@ -18,12 +18,14 @@ const _canvas = Color(0xFFF5F8FC);
 
 class PharmacyPage extends StatefulWidget {
   final String patientId;
+  final String initialQuery;
   final Stream<QuerySnapshot<Map<String, dynamic>>>? institutionStream;
   final Stream<QuerySnapshot<Map<String, dynamic>>>? prescriptionStream;
 
   const PharmacyPage({
     super.key,
     required this.patientId,
+    this.initialQuery = '',
     this.institutionStream,
     this.prescriptionStream,
   });
@@ -33,11 +35,11 @@ class PharmacyPage extends StatefulWidget {
 }
 
 class _PharmacyPageState extends State<PharmacyPage> {
-  final _searchController = TextEditingController();
+  late final TextEditingController _searchController;
   _PharmacySection _section = _PharmacySection.medications;
   String _category = 'Tous';
   bool _prescriptionOnly = false;
-  bool _availableOnly = true;
+  late bool _availableOnly;
   Position? _position;
   bool _locating = false;
   bool _savingPrescription = false;
@@ -59,6 +61,15 @@ class _PharmacyPageState extends State<PharmacyPage> {
           .orderBy('createdAt', descending: true)
           .limit(100)
           .snapshots();
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.initialQuery);
+    // Un résultat ouvert depuis la recherche universelle doit rester visible,
+    // même lorsqu'il est momentanément indisponible.
+    _availableOnly = widget.initialQuery.trim().isEmpty;
+  }
 
   @override
   void dispose() {
@@ -2486,6 +2497,38 @@ String _formatPrescriptionDate(DateTime? value) {
 }
 
 const _categories = ['Tous', 'Douleur', 'Rhume', 'Digestif', 'Vitamines'];
+
+/// Vue légère et immuable du catalogue utilisée par la recherche universelle.
+class PharmacySearchEntry {
+  final String name;
+  final String activeIngredient;
+  final String category;
+  final String price;
+  final bool requiresPrescription;
+  final bool available;
+
+  const PharmacySearchEntry({
+    required this.name,
+    required this.activeIngredient,
+    required this.category,
+    required this.price,
+    required this.requiresPrescription,
+    required this.available,
+  });
+}
+
+List<PharmacySearchEntry> get pharmacySearchCatalog => List.unmodifiable(
+  _medications.map(
+    (medication) => PharmacySearchEntry(
+      name: medication.name,
+      activeIngredient: medication.activeIngredient,
+      category: medication.category,
+      price: medication.price,
+      requiresPrescription: medication.requiresPrescription,
+      available: medication.available,
+    ),
+  ),
+);
 
 const _medications = <_Medication>[
   _Medication(

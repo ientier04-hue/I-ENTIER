@@ -190,7 +190,7 @@ void main() {
     expect(find.text('PT'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(
-      find.text('Rechercher un service, un professionnel...'),
+      find.text('Institution, personnel, malaise, médicament, examen...'),
       findsOneWidget,
     );
     expect(find.byTooltip('Filtrer'), findsOneWidget);

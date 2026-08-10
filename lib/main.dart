@@ -14,6 +14,7 @@ import 'blood_donation_page.dart';
 import 'community_transport_page.dart';
 import 'crowdfunding_page.dart';
 import 'cycle_tracking_page.dart';
+import 'diagnostic_assessment.dart';
 import 'diagnostic_assessment_page.dart';
 import 'health_tracking_page.dart';
 import 'health_credit_page.dart';
@@ -2162,12 +2163,106 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _openServiceSearch() async {
-    final service = await showSearch<HealthService?>(
+  Future<void> _openUniversalSearch({
+    _UniversalSearchCategory initialCategory = _UniversalSearchCategory.all,
+  }) async {
+    final personnelStream = SupabaseConfig.isInitialized
+        ? SupabaseDatabase.instance
+              .collection('personnelMedical')
+              .limit(100)
+              .snapshots()
+              .map(
+                (snapshot) => snapshot.docs
+                    .map(_Professional.fromSupabase)
+                    .toList(growable: false),
+              )
+        : null;
+    final institutionStream = SupabaseConfig.isInitialized
+        ? SupabaseDatabase.instance
+              .collection('institution')
+              .limit(100)
+              .snapshots()
+              .map(
+                (snapshot) => snapshot.docs
+                    .map(_Institution.fromSupabase)
+                    .toList(growable: false),
+              )
+        : null;
+    final result = await showSearch<_UniversalSearchResult?>(
       context: context,
-      delegate: _HealthServiceSearchDelegate(services: _rankedServices),
+      delegate: _UniversalSearchDelegate(
+        services: _rankedServices,
+        personnelStream: personnelStream,
+        institutionStream: institutionStream,
+        initialCategory: initialCategory,
+      ),
     );
-    if (service != null && mounted) await _openService(service);
+    if (result == null || !mounted) return;
+    await _openUniversalSearchResult(result);
+  }
+
+  Future<void> _openUniversalSearchResult(_UniversalSearchResult result) async {
+    final payload = result.payload;
+    if (payload is HealthService) {
+      await _openService(payload);
+      return;
+    }
+    if (payload is AssessmentPathway) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => DiagnosticAssessmentPage(
+            patientId: widget.user.uid,
+            patientProfile: widget.patientProfile,
+            initialPathwayId: payload.id,
+            startImmediately: true,
+            onOpenAppointments: () => _selectTab(2),
+          ),
+        ),
+      );
+      return;
+    }
+    if (payload is PharmacySearchEntry) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PharmacyPage(
+            patientId: widget.user.uid,
+            initialQuery: payload.name,
+          ),
+        ),
+      );
+      return;
+    }
+    if (payload is LaboratoryExam) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => LaboratoryExamDetailPage(examination: payload),
+        ),
+      );
+      return;
+    }
+    if (payload is _Professional) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => _ProfessionalDetailPage(
+            professional: payload,
+            patientId: widget.user.uid,
+            patientName: _patientName,
+          ),
+        ),
+      );
+      return;
+    }
+    if (payload is _Institution) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => _InstitutionDetailPage(
+            institution: payload,
+            patientId: widget.user.uid,
+            patientName: _patientName,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openServicesCatalog() async {
@@ -2470,8 +2565,9 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SearchField(
-          onTap: _openServiceSearch,
-          onFilterTap: _openServicesCatalog,
+          hint: 'Institution, personnel, malaise, médicament, examen...',
+          onTap: _openUniversalSearch,
+          onFilterTap: _openUniversalSearch,
         ),
         if (widget.patientProfile['profileComplete'] != true) ...[
           const SizedBox(height: 16),
@@ -6262,21 +6358,156 @@ class _PinnedServicesPanel extends StatelessWidget {
   }
 }
 
-class _HealthServiceSearchDelegate extends SearchDelegate<HealthService?> {
-  _HealthServiceSearchDelegate({required this.services})
-    : super(searchFieldLabel: 'Service de santé');
+enum _UniversalSearchCategory {
+  all,
+  institutions,
+  personnel,
+  symptoms,
+  medications,
+  examinations,
+  services,
+}
+
+extension on _UniversalSearchCategory {
+  String get label => switch (this) {
+    _UniversalSearchCategory.all => 'Tout',
+    _UniversalSearchCategory.institutions => 'Institutions',
+    _UniversalSearchCategory.personnel => 'Personnel médical',
+    _UniversalSearchCategory.symptoms => 'Malaises',
+    _UniversalSearchCategory.medications => 'Médicaments',
+    _UniversalSearchCategory.examinations => 'Examens',
+    _UniversalSearchCategory.services => 'Services',
+  };
+
+  IconData get icon => switch (this) {
+    _UniversalSearchCategory.all => Icons.manage_search_rounded,
+    _UniversalSearchCategory.institutions => Icons.local_hospital_outlined,
+    _UniversalSearchCategory.personnel => Icons.medical_services_outlined,
+    _UniversalSearchCategory.symptoms => Icons.health_and_safety_outlined,
+    _UniversalSearchCategory.medications => Icons.medication_outlined,
+    _UniversalSearchCategory.examinations => Icons.biotech_outlined,
+    _UniversalSearchCategory.services => Icons.apps_rounded,
+  };
+
+  Color get color => switch (this) {
+    _UniversalSearchCategory.all => AppColors.primary,
+    _UniversalSearchCategory.institutions => const Color(0xFF176BFF),
+    _UniversalSearchCategory.personnel => const Color(0xFF087A6B),
+    _UniversalSearchCategory.symptoms => const Color(0xFFD66B16),
+    _UniversalSearchCategory.medications => const Color(0xFF7656D8),
+    _UniversalSearchCategory.examinations => const Color(0xFF008A7C),
+    _UniversalSearchCategory.services => const Color(0xFF335C9A),
+  };
+}
+
+class _UniversalSearchResult {
+  final _UniversalSearchCategory category;
+  final String title;
+  final String subtitle;
+  final String searchableText;
+  final Object payload;
+
+  const _UniversalSearchResult({
+    required this.category,
+    required this.title,
+    required this.subtitle,
+    required this.searchableText,
+    required this.payload,
+  });
+}
+
+class _UniversalSearchDelegate extends SearchDelegate<_UniversalSearchResult?> {
+  _UniversalSearchDelegate({
+    required this.services,
+    required this.personnelStream,
+    required this.institutionStream,
+    required _UniversalSearchCategory initialCategory,
+  }) : selectedCategory = ValueNotifier(initialCategory),
+       super(searchFieldLabel: 'Rechercher partout');
 
   final List<HealthService> services;
+  final Stream<List<_Professional>>? personnelStream;
+  final Stream<List<_Institution>>? institutionStream;
+  final ValueNotifier<_UniversalSearchCategory> selectedCategory;
+  late final List<_UniversalSearchResult> _catalogResults =
+      _buildCatalogResults();
 
-  List<HealthService> get _results {
-    final normalizedQuery = _normalizedSearch(query);
-    if (normalizedQuery.isEmpty) return services;
-    return services.where((service) {
-      final searchText = _normalizedSearch(
-        '${service.title} ${service.summary} ${service.actionLabel}',
-      );
-      return searchText.contains(normalizedQuery);
-    }).toList();
+  List<_UniversalSearchResult> _buildCatalogResults() => [
+    for (final pathway in assessmentPathways)
+      _UniversalSearchResult(
+        category: _UniversalSearchCategory.symptoms,
+        title: pathway.title,
+        subtitle: pathway.subtitle,
+        searchableText: [
+          pathway.title,
+          pathway.subtitle,
+          for (final question in pathway.questions) ...[
+            question.title,
+            question.prompt,
+            for (final option in question.options) option.label,
+          ],
+          for (final possibility in pathway.possibilities) possibility.title,
+        ].join(' '),
+        payload: pathway,
+      ),
+    for (final medication in pharmacySearchCatalog)
+      _UniversalSearchResult(
+        category: _UniversalSearchCategory.medications,
+        title: medication.name,
+        subtitle: [
+          medication.activeIngredient,
+          medication.category,
+          medication.price,
+          if (medication.requiresPrescription) 'Sur ordonnance',
+          if (!medication.available) 'Indisponible',
+        ].join(' · '),
+        searchableText:
+            '${medication.name} ${medication.activeIngredient} '
+            '${medication.category}',
+        payload: medication,
+      ),
+    for (final examination in laboratoryExaminations)
+      _UniversalSearchResult(
+        category: _UniversalSearchCategory.examinations,
+        title: examination.name,
+        subtitle: '${examination.category} · ${examination.sample}',
+        searchableText: [
+          examination.name,
+          examination.category,
+          examination.description,
+          examination.sample,
+          examination.preparation,
+        ].join(' '),
+        payload: examination,
+      ),
+    for (final service in services)
+      _UniversalSearchResult(
+        category: _UniversalSearchCategory.services,
+        title: service.title,
+        subtitle: service.summary,
+        searchableText:
+            '${service.title} ${service.summary} ${service.actionLabel}',
+        payload: service,
+      ),
+  ];
+
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.copyWith(
+      appBarTheme: theme.appBarTheme.copyWith(
+        backgroundColor: AppColors.canvas,
+        surfaceTintColor: Colors.transparent,
+      ),
+      inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
   }
 
   @override
@@ -6297,64 +6528,488 @@ class _HealthServiceSearchDelegate extends SearchDelegate<HealthService?> {
   );
 
   @override
-  Widget buildResults(BuildContext context) => _buildResults(context);
+  PreferredSizeWidget? buildBottom(BuildContext context) => PreferredSize(
+    preferredSize: const Size.fromHeight(58),
+    child: Material(
+      color: AppColors.canvas,
+      child: ValueListenableBuilder<_UniversalSearchCategory>(
+        valueListenable: selectedCategory,
+        builder: (context, selected, child) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 5, 16, 9),
+          child: Row(
+            children: [
+              for (final category in _UniversalSearchCategory.values) ...[
+                ChoiceChip(
+                  key: ValueKey('universal-search-filter-${category.name}'),
+                  label: Text(category.label),
+                  avatar: Icon(category.icon, size: 17),
+                  selected: selected == category,
+                  showCheckmark: false,
+                  onSelected: (_) => selectedCategory.value = category,
+                ),
+                if (category != _UniversalSearchCategory.values.last)
+                  const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 
   @override
-  Widget buildSuggestions(BuildContext context) => _buildResults(context);
+  Widget buildResults(BuildContext context) => _buildSearchBody(context);
 
-  Widget _buildResults(BuildContext context) {
-    final results = _results;
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildSearchBody(context);
+
+  Widget _buildSearchBody(BuildContext context) =>
+      ValueListenableBuilder<_UniversalSearchCategory>(
+        valueListenable: selectedCategory,
+        builder: (context, category, child) => _withPersonnel(
+          category,
+          (personnel, personnelLoading, personnelError) => _withInstitutions(
+            category,
+            (institutions, institutionsLoading, institutionsError) =>
+                _buildResultList(
+                  context,
+                  category: category,
+                  personnel: personnel,
+                  institutions: institutions,
+                  loading: personnelLoading || institutionsLoading,
+                  directoryError: personnelError || institutionsError,
+                ),
+          ),
+        ),
+      );
+
+  Widget _withPersonnel(
+    _UniversalSearchCategory category,
+    Widget Function(List<_Professional>, bool, bool) builder,
+  ) {
+    final stream = personnelStream;
+    final relevant =
+        category == _UniversalSearchCategory.all ||
+        category == _UniversalSearchCategory.personnel;
+    if (stream == null || !relevant) {
+      return builder(const <_Professional>[], false, false);
+    }
+    return StreamBuilder<List<_Professional>>(
+      stream: stream,
+      builder: (context, snapshot) => builder(
+        snapshot.data ?? const <_Professional>[],
+        snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData,
+        snapshot.hasError,
+      ),
+    );
+  }
+
+  Widget _withInstitutions(
+    _UniversalSearchCategory category,
+    Widget Function(List<_Institution>, bool, bool) builder,
+  ) {
+    final stream = institutionStream;
+    final relevant =
+        category == _UniversalSearchCategory.all ||
+        category == _UniversalSearchCategory.institutions;
+    if (stream == null || !relevant) {
+      return builder(const <_Institution>[], false, false);
+    }
+    return StreamBuilder<List<_Institution>>(
+      stream: stream,
+      builder: (context, snapshot) => builder(
+        snapshot.data ?? const <_Institution>[],
+        snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData,
+        snapshot.hasError,
+      ),
+    );
+  }
+
+  Widget _buildResultList(
+    BuildContext context, {
+    required _UniversalSearchCategory category,
+    required List<_Professional> personnel,
+    required List<_Institution> institutions,
+    required bool loading,
+    required bool directoryError,
+  }) {
+    final normalizedQuery = _normalizedSearch(query);
+    if (normalizedQuery.isEmpty && category == _UniversalSearchCategory.all) {
+      return _UniversalSearchIntro(onExampleTap: (value) => query = value);
+    }
+
+    final candidates = <_UniversalSearchResult>[
+      ..._catalogResults,
+      for (final professional in personnel)
+        _UniversalSearchResult(
+          category: _UniversalSearchCategory.personnel,
+          title: professional.name,
+          subtitle: [
+            professional.role,
+            professional.workplace,
+            professional.address,
+          ].where((value) => value.isNotEmpty).join(' · '),
+          searchableText: [
+            professional.name,
+            professional.role,
+            professional.workplace,
+            professional.biography,
+            professional.qualification,
+            professional.services,
+            professional.address,
+          ].join(' '),
+          payload: professional,
+        ),
+      for (final institution in institutions)
+        _UniversalSearchResult(
+          category: _UniversalSearchCategory.institutions,
+          title: institution.name,
+          subtitle: [
+            institution.type,
+            institution.address,
+          ].where((value) => value.isNotEmpty).join(' · '),
+          searchableText: [
+            institution.name,
+            institution.type,
+            institution.description,
+            institution.services,
+            institution.address,
+          ].join(' '),
+          payload: institution,
+        ),
+    ];
+    final results =
+        candidates.where((result) {
+          if (category != _UniversalSearchCategory.all &&
+              result.category != category) {
+            return false;
+          }
+          return _universalSearchMatches(result, normalizedQuery);
+        }).toList()..sort((left, right) {
+          final scoreComparison = _universalSearchScore(
+            left,
+            normalizedQuery,
+          ).compareTo(_universalSearchScore(right, normalizedQuery));
+          if (scoreComparison != 0) return scoreComparison;
+          return _normalizedSearch(
+            left.title,
+          ).compareTo(_normalizedSearch(right.title));
+        });
+
+    if (results.isEmpty && loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (results.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: _DirectoryFeedback(
             icon: Icons.search_off_rounded,
-            title: 'Aucun service trouvé',
-            message: 'Vérifiez l’orthographe ou essayez un autre terme.',
+            title: 'Aucun résultat trouvé',
+            message: directoryError
+                ? 'Les résultats de l’annuaire sont temporairement indisponibles. Les autres catégories restent accessibles.'
+                : 'Vérifiez l’orthographe, essayez un terme plus général ou choisissez « Tout ».',
           ),
         ),
       );
     }
-    return ListView.separated(
+
+    final grouped = <_UniversalSearchCategory, List<_UniversalSearchResult>>{};
+    for (final result in results) {
+      grouped.putIfAbsent(result.category, () => []).add(result);
+    }
+
+    return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      itemCount: results.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final service = results[index];
-        return Material(
-          color: service.background,
-          borderRadius: BorderRadius.circular(18),
-          clipBehavior: Clip.antiAlias,
-          child: ListTile(
-            onTap: () => close(context, service),
-            leading: SizedBox.square(
-              dimension: 48,
-              child: _ServiceImage(service: service, size: 48),
-            ),
-            title: Text(
-              service.title,
-              style: TextStyle(
-                color: service.contentColor,
-                fontWeight: FontWeight.w800,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${results.length} résultat${results.length > 1 ? 's' : ''}',
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-            subtitle: Text(
-              service.summary,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: service.contentColor),
+            if (category != _UniversalSearchCategory.all)
+              Text(
+                category.label,
+                style: TextStyle(
+                  color: category.color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+          ],
+        ),
+        if (loading) ...[
+          const SizedBox(height: 10),
+          const LinearProgressIndicator(minHeight: 2),
+        ],
+        const SizedBox(height: 10),
+        for (final section in _UniversalSearchCategory.values)
+          if (section != _UniversalSearchCategory.all &&
+              grouped[section]?.isNotEmpty == true) ...[
+            _UniversalSearchSectionHeader(
+              category: section,
+              count: grouped[section]!.length,
             ),
-            trailing: Icon(
-              Icons.arrow_forward_rounded,
-              color: service.accessibleAccent,
-            ),
-          ),
-        );
-      },
+            const SizedBox(height: 8),
+            for (final result in grouped[section]!) ...[
+              _UniversalSearchResultTile(
+                result: result,
+                onTap: () => close(context, result),
+              ),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 8),
+          ],
+        if (directoryError) const _UniversalDirectoryErrorNotice(),
+      ],
     );
   }
+
+  @override
+  void dispose() {
+    selectedCategory.dispose();
+    super.dispose();
+  }
+}
+
+bool _universalSearchMatches(
+  _UniversalSearchResult result,
+  String normalizedQuery,
+) {
+  if (normalizedQuery.isEmpty) return true;
+  final searchable = _normalizedSearch(
+    '${result.category.label} ${result.title} ${result.subtitle} '
+    '${result.searchableText}',
+  );
+  return normalizedQuery.split(' ').every(searchable.contains);
+}
+
+int _universalSearchScore(
+  _UniversalSearchResult result,
+  String normalizedQuery,
+) {
+  if (normalizedQuery.isEmpty) return 0;
+  final title = _normalizedSearch(result.title);
+  if (title == normalizedQuery) return 0;
+  if (title.startsWith(normalizedQuery)) return 1;
+  if (title.contains(normalizedQuery)) return 2;
+  final searchable = _normalizedSearch(result.searchableText);
+  if (searchable.contains(normalizedQuery)) return 3;
+  return 4;
+}
+
+class _UniversalSearchIntro extends StatelessWidget {
+  final ValueChanged<String> onExampleTap;
+
+  const _UniversalSearchIntro({required this.onExampleTap});
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.fromLTRB(24, 34, 24, 28),
+    children: [
+      Center(
+        child: Container(
+          width: 68,
+          height: 68,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: const Icon(
+            Icons.manage_search_rounded,
+            color: AppColors.primary,
+            size: 34,
+          ),
+        ),
+      ),
+      const SizedBox(height: 18),
+      const Text(
+        'Une seule recherche pour toute votre santé',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.navy,
+          fontSize: 21,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      const SizedBox(height: 9),
+      const Text(
+        'Recherchez une institution, un professionnel, un malaise, un médicament, un examen ou un service. Utilisez les filtres pour cibler une catégorie.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: AppColors.muted, height: 1.45),
+      ),
+      const SizedBox(height: 28),
+      const Text(
+        'Essayez par exemple',
+        style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final example in const [
+            'mal au ventre',
+            'paracétamol',
+            'glycémie',
+            'cardiologue',
+            'clinique',
+          ])
+            ActionChip(
+              label: Text(example),
+              avatar: const Icon(Icons.north_west_rounded, size: 16),
+              onPressed: () => onExampleTap(example),
+            ),
+        ],
+      ),
+    ],
+  );
+}
+
+class _UniversalSearchSectionHeader extends StatelessWidget {
+  final _UniversalSearchCategory category;
+  final int count;
+
+  const _UniversalSearchSectionHeader({
+    required this.category,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Icon(category.icon, size: 20, color: category.color),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          category.label,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      Text(
+        '$count',
+        style: TextStyle(color: category.color, fontWeight: FontWeight.w800),
+      ),
+    ],
+  );
+}
+
+class _UniversalSearchResultTile extends StatelessWidget {
+  final _UniversalSearchResult result;
+  final VoidCallback onTap;
+
+  const _UniversalSearchResultTile({required this.result, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(18),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      key: ValueKey(
+        'universal-search-result-${result.category.name}-${result.title}',
+      ),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: result.category.color.withValues(alpha: .11),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                result.category.icon,
+                color: result.category.color,
+                size: 23,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    result.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (result.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      result.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12.5,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: result.category.color,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _UniversalDirectoryErrorNotice extends StatelessWidget {
+  const _UniversalDirectoryErrorNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF7E8),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: const Row(
+      children: [
+        Icon(Icons.cloud_off_outlined, color: Color(0xFFB25E09)),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'L’annuaire n’a pas pu être actualisé. Les autres résultats restent disponibles.',
+            style: TextStyle(color: AppColors.ink, fontSize: 12.5),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 String _normalizedSearch(String value) => value

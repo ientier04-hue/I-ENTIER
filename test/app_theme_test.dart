@@ -68,7 +68,7 @@ void main() {
     expect(theme.snackBarTheme.behavior, SnackBarBehavior.floating);
   });
 
-  testWidgets('la recherche et le catalogue de services sont fonctionnels', (
+  testWidgets('la recherche universelle et le catalogue sont fonctionnels', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -85,6 +85,13 @@ void main() {
 
     final searchField = find.byType(TextField);
     expect(searchField, findsOneWidget);
+    expect(find.text('Tout'), findsOneWidget);
+    expect(find.text('Institutions'), findsOneWidget);
+    expect(find.text('Personnel médical'), findsOneWidget);
+    expect(find.text('Malaises'), findsOneWidget);
+    expect(find.text('Médicaments'), findsOneWidget);
+    expect(find.text('Examens'), findsOneWidget);
+    expect(find.text('Services'), findsOneWidget);
     await tester.enterText(searchField, 'prévention');
     await tester.pump();
     expect(find.text('Prévention'), findsOneWidget);
@@ -133,6 +140,72 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+    'filtre les médicaments puis ouvre la pharmacie sur le résultat choisi',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(_buildHome());
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('home-search-bar')));
+      await tester.pumpAndSettle();
+
+      final medicationFilter = find.byKey(
+        const ValueKey('universal-search-filter-medications'),
+      );
+      await tester.ensureVisible(medicationFilter);
+      await tester.tap(medicationFilter);
+      await tester.pump();
+
+      final searchField = find.byType(TextField);
+      await tester.enterText(searchField, 'amoxicilline');
+      await tester.pump();
+
+      expect(find.text('Amoxicilline 500 mg'), findsOneWidget);
+      expect(find.text('Paracétamol 500 mg'), findsNothing);
+
+      final result = find.byKey(
+        const ValueKey(
+          'universal-search-result-medications-Amoxicilline 500 mg',
+        ),
+      );
+      await tester.ensureVisible(result);
+      await tester.tap(result);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pharmacie'), findsWidgets);
+      expect(find.text('Amoxicilline 500 mg'), findsWidgets);
+      final pharmacySearch = tester.widget<TextField>(
+        find.byKey(const Key('pharmacy-search-field')),
+      );
+      expect(pharmacySearch.controller?.text, 'Amoxicilline 500 mg');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('retrouve les malaises et les examens sans accents', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_buildHome());
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('home-search-bar')));
+    await tester.pumpAndSettle();
+
+    final searchField = find.byType(TextField);
+    await tester.enterText(searchField, 'vertiges');
+    await tester.pump();
+    expect(find.text('Vertiges et malaise'), findsOneWidget);
+
+    await tester.enterText(searchField, 'glycemie');
+    await tester.pump();
+    expect(find.text('Glycémie'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('épingle au plus trois services et permet de les réordonner', (
