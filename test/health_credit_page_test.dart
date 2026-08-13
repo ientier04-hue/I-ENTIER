@@ -4,6 +4,7 @@ import 'package:i_entier/app_theme.dart';
 import 'package:i_entier/health_credit_models.dart';
 import 'package:i_entier/health_credit_page.dart';
 import 'package:i_entier/health_credit_repository.dart';
+import 'package:i_entier/insurance_coverage.dart';
 
 void main() {
   test('classe le risque à partir du Score Santé Financier', () {
@@ -72,6 +73,32 @@ void main() {
     expect(find.text('Référence 2'), findsOneWidget);
     expect(find.text('Référence 3'), findsOneWidget);
   });
+
+  testWidgets('verrouille la demande sans couverture OFATMA valide', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: HealthCreditPage(
+          patientId: 'patient-1',
+          patientName: 'Marie Jean',
+          repository: _FakeHealthCreditRepository(_ineligibleDashboard),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Couverture OFATMA requise'), findsOneWidget);
+    expect(find.byKey(const ValueKey('health-credit-apply')), findsNothing);
+
+    await tester.tap(find.text('Demande'));
+    await tester.pumpAndSettle();
+    expect(find.text('Demande verrouillée'), findsOneWidget);
+  });
 }
 
 final _dashboardWithCredit = HealthCreditDashboardData(
@@ -108,7 +135,28 @@ final _dashboardWithCredit = HealthCreditDashboardData(
   solidarityRequests: const [],
 );
 
-const _emptyDashboard = HealthCreditDashboardData(
+final _emptyDashboard = HealthCreditDashboardData(
+  applications: [],
+  credit: null,
+  installments: [],
+  payments: [],
+  scoreEvents: [],
+  assessment: null,
+  partnerCenters: [],
+  solidarityRequests: [],
+  insuranceCoverage: MedicalInsuranceCoverage(
+    id: 'coverage-1',
+    insurerCode: 'OFATMA',
+    memberNumber: 'OF-123',
+    status: 'verified',
+    reviewNote: '',
+    validFrom: DateTime(2026, 1, 1),
+    validUntil: DateTime(2099, 12, 31),
+    submittedAt: DateTime(2026, 1, 1),
+  ),
+);
+
+const _ineligibleDashboard = HealthCreditDashboardData(
   applications: [],
   credit: null,
   installments: [],

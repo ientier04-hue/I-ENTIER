@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'pharmacy_repository.dart';
+import 'supabase_config.dart';
 import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +23,7 @@ class PharmacyPage extends StatefulWidget {
   final String initialQuery;
   final Stream<QuerySnapshot<Map<String, dynamic>>>? institutionStream;
   final Stream<QuerySnapshot<Map<String, dynamic>>>? prescriptionStream;
+  final PatientPharmacyRepository? repository;
 
   const PharmacyPage({
     super.key,
@@ -28,6 +31,7 @@ class PharmacyPage extends StatefulWidget {
     this.initialQuery = '',
     this.institutionStream,
     this.prescriptionStream,
+    this.repository,
   });
 
   @override
@@ -44,6 +48,11 @@ class _PharmacyPageState extends State<PharmacyPage> {
   bool _locating = false;
   bool _savingPrescription = false;
   String? _locationMessage;
+  late final PatientPharmacyRepository? _repository;
+  StreamSubscription<List<PatientPharmacyProduct>>? _catalogSubscription;
+  List<_Medication>? _liveMedications;
+  final Map<String, int> _cart = {};
+  bool _placingOrder = false;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _institutions =>
       widget.institutionStream ??
@@ -66,6 +75,25 @@ class _PharmacyPageState extends State<PharmacyPage> {
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.initialQuery);
+    _repository =
+        widget.repository ??
+        (SupabaseConfig.isInitialized
+            ? SupabasePatientPharmacyRepository()
+            : null);
+    _catalogSubscription = _repository?.watchCatalog().listen(
+      (products) {
+        if (!mounted) return;
+        setState(
+          () => _liveMedications = products
+              .map(_Medication.fromPublishedProduct)
+              .toList(growable: false),
+        );
+      },
+      onError: (_) {
+        // Conserve le catalogue de démonstration pendant une coupure ou avant
+        // l’application de la migration pharmacie.
+      },
+    );
     // Un résultat ouvert depuis la recherche universelle doit rester visible,
     // même lorsqu'il est momentanément indisponible.
     _availableOnly = widget.initialQuery.trim().isEmpty;
@@ -73,13 +101,14 @@ class _PharmacyPageState extends State<PharmacyPage> {
 
   @override
   void dispose() {
+    _catalogSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   List<_Medication> get _visibleMedications {
     final query = _searchController.text.trim().toLowerCase();
-    return _medications.where((medication) {
+    return (_liveMedications ?? _medications).where((medication) {
       final matchesQuery =
           query.isEmpty ||
           medication.name.toLowerCase().contains(query) ||
@@ -101,6 +130,93 @@ class _PharmacyPageState extends State<PharmacyPage> {
       (_category == 'Tous' ? 0 : 1) +
       (_prescriptionOnly ? 1 : 0) +
       (_availableOnly ? 1 : 0);
+
+  void _addToCart(_Medication medication) {
+    if (medication.productId.isEmpty || medication.pharmacyId.isEmpty) {
+      _showMessage(
+        'Ce produit sera commandable lorsqu’une pharmacie le publiera.',
+      );
+      return;
+    }
+    String? existingPharmacy;
+    for (final item in _liveMedications ?? const <_Medication>[]) {
+      if (_cart.containsKey(item.productId)) {
+        existingPharmacy = item.pharmacyId;
+        break;
+      }
+    }
+    if (existingPharmacy != null && existingPharmacy != medication.pharmacyId) {
+      _showMessage('Finalisez d’abord la commande de l’autre pharmacie.');
+      return;
+    }
+    final next = (_cart[medication.productId] ?? 0) + 1;
+    if (next > medication.stockQuantity) {
+      _showMessage('Quantité disponible insuffisante.');
+      return;
+    }
+    setState(() => _cart[medication.productId] = next);
+    _showMessage('${medication.name} ajouté au panier.');
+  }
+
+  Future<void> _openCart() async {
+    if (_placingOrder) return;
+    final repository = _repository;
+    final medications = (_liveMedications ?? const <_Medication>[])
+        .where((item) => _cart.containsKey(item.productId))
+        .toList(growable: false);
+    if (repository == null || medications.isEmpty) {
+      _showMessage('Votre panier est vide.');
+      return;
+    }
+    List<PatientPrescriptionOption> prescriptions = const [];
+    try {
+      prescriptions = await repository.listPrescriptions(widget.patientId);
+    } catch (_) {
+      // Les produits sans ordonnance peuvent toujours être commandés.
+    }
+    if (!mounted) return;
+    final result = await showDialog<_PatientCartResult>(
+      context: context,
+      builder: (context) => _PatientCartDialog(
+        medications: medications,
+        quantities: Map<String, int>.from(_cart),
+        prescriptions: prescriptions,
+      ),
+    );
+    if (result == null || result.quantities.isEmpty) return;
+    setState(() => _placingOrder = true);
+    try {
+      final orderNumber = await repository.placeOrder(
+        pharmacyId: medications.first.pharmacyId,
+        lines: [
+          for (final entry in result.quantities.entries)
+            PatientPharmacyOrderLine(
+              productId: entry.key,
+              quantity: entry.value,
+            ),
+        ],
+        prescriptionId: result.prescriptionId,
+        note: result.note,
+      );
+      if (!mounted) return;
+      setState(_cart.clear);
+      _showMessage(
+        orderNumber.isEmpty
+            ? 'Commande transmise à la pharmacie.'
+            : 'Commande $orderNumber transmise à la pharmacie.',
+      );
+    } catch (error) {
+      if (mounted) {
+        _showMessage(
+          error.toString().toLowerCase().contains('ordonnance')
+              ? 'Ajoutez une ordonnance valide pour ce produit.'
+              : 'La commande n’a pas pu être transmise. Vérifiez le stock.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _placingOrder = false);
+    }
+  }
 
   Future<void> _pickPrescription() async {
     final source = await showModalBottomSheet<ImageSource>(
@@ -346,8 +462,14 @@ class _PharmacyPageState extends State<PharmacyPage> {
         actions: [
           IconButton(
             tooltip: 'Mon panier',
-            onPressed: () => _showMessage('Votre panier est vide.'),
-            icon: const Icon(Icons.shopping_bag_outlined),
+            onPressed: _openCart,
+            icon: Badge(
+              isLabelVisible: _cart.isNotEmpty,
+              label: Text(
+                '${_cart.values.fold<int>(0, (sum, value) => sum + value)}',
+              ),
+              child: const Icon(Icons.shopping_bag_outlined),
+            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -431,11 +553,7 @@ class _PharmacyPageState extends State<PharmacyPage> {
         },
       )
     else
-      _MedicationGrid(
-        medications: medications,
-        onAdd: (medication) =>
-            _showMessage('${medication.name} a été ajouté au panier.'),
-      ),
+      _MedicationGrid(medications: medications, onAdd: _addToCart),
   ]);
 
   Widget _buildPharmaciesPage() => _pageScroll('pharmacies', [
@@ -2268,6 +2386,9 @@ class _PrescriptionRecord {
 }
 
 class _Medication {
+  final String productId;
+  final String pharmacyId;
+  final String pharmacyName;
   final String name;
   final String activeIngredient;
   final String category;
@@ -2277,8 +2398,13 @@ class _Medication {
   final IconData icon;
   final Color color;
   final Color accent;
+  final double unitPrice;
+  final double stockQuantity;
 
   const _Medication({
+    this.productId = '',
+    this.pharmacyId = '',
+    this.pharmacyName = '',
     required this.name,
     required this.activeIngredient,
     required this.category,
@@ -2288,7 +2414,252 @@ class _Medication {
     required this.icon,
     required this.color,
     required this.accent,
+    this.unitPrice = 0,
+    this.stockQuantity = 0,
   });
+
+  factory _Medication.fromPublishedProduct(PatientPharmacyProduct product) =>
+      _Medication(
+        productId: product.id,
+        pharmacyId: product.pharmacyId,
+        pharmacyName: product.pharmacyName,
+        name: product.name,
+        activeIngredient: [
+          product.activeIngredient,
+          product.strength,
+          product.packSize,
+        ].where((value) => value.isNotEmpty).join(' · '),
+        category: product.category,
+        price: '${product.price.toStringAsFixed(0)} HTG',
+        requiresPrescription: product.requiresPrescription,
+        available: product.stockQuantity > 0,
+        icon: Icons.medication_rounded,
+        color: _greenSoft,
+        accent: _green,
+        unitPrice: product.price,
+        stockQuantity: product.stockQuantity,
+      );
+}
+
+class _PatientCartResult {
+  final Map<String, int> quantities;
+  final String? prescriptionId;
+  final String note;
+
+  const _PatientCartResult({
+    required this.quantities,
+    required this.prescriptionId,
+    required this.note,
+  });
+}
+
+class _PatientCartDialog extends StatefulWidget {
+  final List<_Medication> medications;
+  final Map<String, int> quantities;
+  final List<PatientPrescriptionOption> prescriptions;
+
+  const _PatientCartDialog({
+    required this.medications,
+    required this.quantities,
+    required this.prescriptions,
+  });
+
+  @override
+  State<_PatientCartDialog> createState() => _PatientCartDialogState();
+}
+
+class _PatientCartDialogState extends State<_PatientCartDialog> {
+  late final Map<String, int> _quantities;
+  final _note = TextEditingController();
+  String? _prescriptionId;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantities = Map<String, int>.from(widget.quantities);
+  }
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  double get _total => widget.medications.fold<double>(
+    0,
+    (sum, medication) =>
+        sum + (medication.unitPrice * (_quantities[medication.productId] ?? 0)),
+  );
+
+  bool get _requiresPrescription => widget.medications.any(
+    (medication) =>
+        medication.requiresPrescription &&
+        (_quantities[medication.productId] ?? 0) > 0,
+  );
+
+  void _remove(_Medication medication) {
+    final current = _quantities[medication.productId] ?? 0;
+    setState(() {
+      if (current <= 1) {
+        _quantities.remove(medication.productId);
+      } else {
+        _quantities[medication.productId] = current - 1;
+      }
+    });
+  }
+
+  void _add(_Medication medication) {
+    final current = _quantities[medication.productId] ?? 0;
+    if (current + 1 > medication.stockQuantity) return;
+    setState(() => _quantities[medication.productId] = current + 1);
+  }
+
+  void _confirm() {
+    if (_requiresPrescription && _prescriptionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sélectionnez une ordonnance.')),
+      );
+      return;
+    }
+    Navigator.pop(
+      context,
+      _PatientCartResult(
+        quantities: _quantities,
+        prescriptionId: _prescriptionId,
+        note: _note.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Mon panier pharmacie'),
+    content: SizedBox(
+      width: 560,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.medications.isNotEmpty)
+              Text(
+                widget.medications.first.pharmacyName,
+                style: const TextStyle(
+                  color: _green,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            const SizedBox(height: 12),
+            for (final medication in widget.medications)
+              if ((_quantities[medication.productId] ?? 0) > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              medication.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              medication.price,
+                              style: const TextStyle(
+                                color: _muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _remove(medication),
+                        icon: const Icon(Icons.remove_circle_outline),
+                      ),
+                      Text('${_quantities[medication.productId] ?? 0}'),
+                      IconButton(
+                        onPressed: () => _add(medication),
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ],
+                  ),
+                ),
+            const Divider(),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Total estimé',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  '${_total.toStringAsFixed(0)} HTG',
+                  style: const TextStyle(
+                    color: _navy,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            if (_requiresPrescription) ...[
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                initialValue: _prescriptionId,
+                decoration: const InputDecoration(
+                  labelText: 'Ordonnance requise',
+                  prefixIcon: Icon(Icons.description_outlined),
+                ),
+                items: [
+                  for (final prescription in widget.prescriptions)
+                    DropdownMenuItem(
+                      value: prescription.id,
+                      child: Text(prescription.label),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _prescriptionId = value),
+              ),
+              if (widget.prescriptions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 7),
+                  child: Text(
+                    'Ajoutez d’abord une ordonnance dans l’onglet Ordonnance.',
+                    style: TextStyle(color: Color(0xFFB42318), fontSize: 12),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 14),
+            TextField(
+              controller: _note,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Note à la pharmacie (facultatif)',
+                alignLabelWithHint: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Continuer mes achats'),
+      ),
+      FilledButton.icon(
+        key: const ValueKey('submit-pharmacy-order'),
+        onPressed: _quantities.isEmpty ? null : _confirm,
+        style: FilledButton.styleFrom(backgroundColor: _green),
+        icon: const Icon(Icons.send_outlined),
+        label: const Text('Commander'),
+      ),
+    ],
+  );
 }
 
 class _NearbyPharmacy {

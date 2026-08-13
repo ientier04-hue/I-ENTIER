@@ -20,6 +20,11 @@ paiement sont documentés dans
 
 ## Base de données
 
-Le schéma relationnel partagé par Patient, Professionnel et Administration est
-dans `supabase/migrations`. La migration initialise une base Supabase vide ;
-les comptes et données sont ensuite gérés exclusivement par Supabase.
+Le schéma relationnel partagé par Patient, Professionnel, Pharmacie et
+Administration est dans `supabase/migrations`. La migration
+`20260810172603_add_pharmacy_operations.sql` ajoute la régulation des
+pharmacies, le catalogue patient, le stock, les achats, les ventes, les
+commandes et le service clientèle. Les comptes et données sont gérés
+exclusivement par Supabase.
+
+Le client pharmacien se trouve dans le projet frère `../i_entier_pharmacie`.

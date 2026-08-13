@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'health_credit_models.dart';
+import 'insurance_coverage.dart';
 import 'supabase_config.dart';
 
 class HealthCreditDocumentDraft {
@@ -122,6 +123,12 @@ class SupabaseHealthCreditRepository implements HealthCreditRepository {
           .select()
           .eq('patient_id', patientId)
           .order('created_at', ascending: false),
+      client
+          .schema('ientier')
+          .from('medical_insurance_coverages')
+          .select()
+          .eq('patient_id', patientId)
+          .order('submitted_at', ascending: false),
     ]);
     List<Map<String, dynamic>> rows(int index) =>
         List<Map<String, dynamic>>.from(results[index] as List);
@@ -150,6 +157,9 @@ class SupabaseHealthCreditRepository implements HealthCreditRepository {
           : HealthSocialAssessment.fromRow(rows(5).first),
       partnerCenters: rows(6).map(HealthPartnerCenter.fromRow).toList(),
       solidarityRequests: rows(7).map(HealthSolidarityRequest.fromRow).toList(),
+      insuranceCoverage: rows(8).isEmpty
+          ? null
+          : MedicalInsuranceCoverage.fromRow(rows(8).first),
     );
   }
 

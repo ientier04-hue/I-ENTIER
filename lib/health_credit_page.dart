@@ -114,6 +114,7 @@ class _HealthCreditPageState extends State<HealthCreditPage> {
                           1 => _CreditApplicationSection(
                             applications: data.applications,
                             credit: data.credit,
+                            insuranceEligible: data.insuranceEligible,
                             onApply: _openApplication,
                           ),
                           2 => _CreditRepaymentSection(
@@ -213,7 +214,11 @@ class _CreditOverview extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
           ),
           child: credit == null
-              ? _NoCreditHero(application: latest, onApply: onApply)
+              ? _NoCreditHero(
+                  application: latest,
+                  insuranceEligible: data.insuranceEligible,
+                  onApply: onApply,
+                )
               : _ActiveCreditHero(credit: credit, onPayments: onPayments),
         ),
         if (credit?.status == 'suspended') ...[
@@ -228,6 +233,16 @@ class _CreditOverview extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 18),
+        if (credit == null && !data.insuranceEligible) ...[
+          const _CreditNotice(
+            icon: Icons.verified_user_outlined,
+            color: AppColors.warning,
+            title: 'Couverture OFATMA requise',
+            message:
+                'Ajoutez votre carte dans Paramètres › Suivi et couverture. Une validation dans I-ENTIER Professionnel vous rendra éligible au Crédit Santé.',
+          ),
+          const SizedBox(height: 18),
+        ],
         if (credit != null) ...[
           _CreditPanel(
             title: 'Historique du score',
@@ -269,9 +284,14 @@ class _CreditOverview extends StatelessWidget {
 
 class _NoCreditHero extends StatelessWidget {
   final HealthCreditApplication? application;
+  final bool insuranceEligible;
   final VoidCallback onApply;
 
-  const _NoCreditHero({required this.application, required this.onApply});
+  const _NoCreditHero({
+    required this.application,
+    required this.insuranceEligible,
+    required this.onApply,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -288,7 +308,11 @@ class _NoCreditHero extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         Text(
-          pending ? 'Votre demande est en cours' : 'Soignez-vous maintenant',
+          pending
+              ? 'Votre demande est en cours'
+              : insuranceEligible
+              ? 'Soignez-vous maintenant'
+              : 'Validez d’abord votre couverture',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 26,
@@ -299,10 +323,12 @@ class _NoCreditHero extends StatelessWidget {
         Text(
           pending
               ? '${application!.validatedReferences}/3 références minimum validées. Échéancier estimé : ${application!.recommendedInstallments} mois.'
-              : 'Demandez un financement adapté à votre reste à vivre et remboursez en plusieurs échéances.',
+              : insuranceEligible
+              ? 'Demandez un financement adapté à votre reste à vivre et remboursez en plusieurs échéances.'
+              : 'Une carte OFATMA valide est nécessaire avant de déposer une demande de Crédit Santé.',
           style: const TextStyle(color: Color(0xFFD9E6FF), height: 1.5),
         ),
-        if (!pending) ...[
+        if (!pending && insuranceEligible) ...[
           const SizedBox(height: 20),
           FilledButton.icon(
             key: const ValueKey('health-credit-apply'),
@@ -431,11 +457,13 @@ class _ActiveCreditHero extends StatelessWidget {
 class _CreditApplicationSection extends StatelessWidget {
   final List<HealthCreditApplication> applications;
   final HealthCredit? credit;
+  final bool insuranceEligible;
   final VoidCallback onApply;
 
   const _CreditApplicationSection({
     required this.applications,
     required this.credit,
+    required this.insuranceEligible,
     required this.onApply,
   });
 
@@ -444,7 +472,8 @@ class _CreditApplicationSection extends StatelessWidget {
     final openApplication = applications
         .where((item) => !const {'rejected', 'cancelled'}.contains(item.status))
         .firstOrNull;
-    final canApply = credit == null && openApplication == null;
+    final canApply =
+        credit == null && openApplication == null && insuranceEligible;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -455,12 +484,24 @@ class _CreditApplicationSection extends StatelessWidget {
               'Une analyse transparente de vos revenus, charges, antécédents et références.',
         ),
         const SizedBox(height: 18),
-        if (canApply)
+        if (credit == null && openApplication == null && !insuranceEligible)
+          const _CreditNotice(
+            icon: Icons.lock_outline_rounded,
+            color: AppColors.warning,
+            title: 'Demande verrouillée',
+            message:
+                'Faites valider votre carte OFATMA depuis Paramètres › Suivi et couverture pour devenir éligible.',
+          )
+        else if (canApply)
           _CreditPanel(
             title: 'Préparer mon dossier',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const _Requirement(
+                  icon: Icons.verified_user_outlined,
+                  text: 'Couverture OFATMA valide',
+                ),
                 const _Requirement(
                   icon: Icons.account_balance_wallet_outlined,
                   text: 'Revenus et dépenses mensuels',

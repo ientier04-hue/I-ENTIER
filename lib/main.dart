@@ -18,6 +18,7 @@ import 'diagnostic_assessment.dart';
 import 'diagnostic_assessment_page.dart';
 import 'health_tracking_page.dart';
 import 'health_credit_page.dart';
+import 'insurance_coverage.dart';
 import 'laboratory_page.dart';
 import 'mental_health_page.dart';
 import 'maternal_child_health_page.dart';
@@ -790,7 +791,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   late final TextEditingController _surgeriesController;
   late final TextEditingController _specialNeedsController;
   late final TextEditingController _primaryDoctorController;
-  late final TextEditingController _insuranceController;
   String? _sex;
   String? _bloodType;
   String? _pregnancyStatus;
@@ -909,9 +909,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     _primaryDoctorController = TextEditingController(
       text: _profileText(data, ['primaryDoctor', 'medecinTraitant']),
     );
-    _insuranceController = TextEditingController(
-      text: _profileText(data, ['insurance', 'assurance']),
-    );
   }
 
   @override
@@ -930,7 +927,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     _surgeriesController.dispose();
     _specialNeedsController.dispose();
     _primaryDoctorController.dispose();
-    _insuranceController.dispose();
     super.dispose();
   }
 
@@ -995,7 +991,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           'specialNeeds': _specialNeedsController.text.trim(),
           'pregnancyStatus': _pregnancyStatus ?? '',
           'primaryDoctor': _primaryDoctorController.text.trim(),
-          'insurance': _insuranceController.text.trim(),
         },
         'profileComplete': true,
         'updatedAt': FieldValue.serverTimestamp(),
@@ -1508,11 +1503,63 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           ),
                           const SizedBox(height: 18),
                           _profileLabel('Assurance ou couverture médicale'),
-                          TextFormField(
-                            controller: _insuranceController,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: _profileDecoration(
-                              'Nom de l’assurance ou couverture (facultatif)',
+                          const SizedBox(height: 6),
+                          Material(
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(16),
+                            child: InkWell(
+                              key: const ValueKey(
+                                'open-medical-insurance-coverage',
+                              ),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => MedicalInsurancePage(
+                                    patientId: widget.user.uid,
+                                    patientName: _nameController.text.trim(),
+                                  ),
+                                ),
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              child: const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.verified_user_outlined,
+                                      color: AppColors.primary,
+                                      size: 30,
+                                    ),
+                                    SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Ajouter ou vérifier OFATMA',
+                                            style: TextStyle(
+                                              color: AppColors.navy,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            'Scannez votre carte. Sa validation active votre éligibilité au Crédit Santé.',
+                                            style: TextStyle(
+                                              color: AppColors.muted,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: AppColors.primary,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],

@@ -1,3 +1,5 @@
+import 'insurance_coverage.dart';
+
 enum HealthCreditRisk { excellent, good, medium, high }
 
 extension HealthCreditRiskDetails on HealthCreditRisk {
@@ -285,6 +287,7 @@ class HealthCreditDashboardData {
   final HealthSocialAssessment? assessment;
   final List<HealthPartnerCenter> partnerCenters;
   final List<HealthSolidarityRequest> solidarityRequests;
+  final MedicalInsuranceCoverage? insuranceCoverage;
 
   const HealthCreditDashboardData({
     required this.applications,
@@ -295,7 +298,10 @@ class HealthCreditDashboardData {
     required this.assessment,
     required this.partnerCenters,
     required this.solidarityRequests,
+    this.insuranceCoverage,
   });
+
+  bool get insuranceEligible => insuranceCoverage?.isCurrentlyValid == true;
 }
 
 class HealthCreditReferenceDraft {
