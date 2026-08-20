@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:i_entier/main.dart';
 import 'package:i_entier/notification_service.dart';
 import 'package:i_entier/onboarding_page.dart';
+import 'package:i_entier/supabase_config.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 User fakeUser() => const User(
@@ -130,6 +133,73 @@ void main() {
 
     expect(find.text('Bienvenue sur I-ENTIER'), findsOneWidget);
     expect(find.text('Continuer avec Google'), findsOneWidget);
+    expect(find.text('Continuer en mode invité'), findsOneWidget);
+    expect(find.byKey(const ValueKey('anonymous-sign-in')), findsOneWidget);
+  });
+
+  testWidgets('démarre une connexion anonyme depuis le portail', (
+    tester,
+  ) async {
+    var anonymousSignInCalls = 0;
+    final completer = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SignInScreen(
+          anonymousSignIn: () {
+            anonymousSignInCalls++;
+            return completer.future;
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('anonymous-sign-in')));
+    await tester.pump();
+
+    expect(anonymousSignInCalls, 1);
+    expect(find.text('Connexion invitée en cours...'), findsOneWidget);
+
+    completer.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Continuer en mode invité'), findsOneWidget);
+  });
+
+  testWidgets('explique quand le mode anonyme est désactivé côté Supabase', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SignInScreen(
+          anonymousSignIn: () => throw const AuthException(
+            'Anonymous sign-ins are disabled',
+            statusCode: '422',
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('anonymous-sign-in')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Le mode invité n’est pas encore activé sur ce projet Supabase.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  test('identifie le fournisseur d’un compte anonyme', () {
+    const anonymousUser = User(
+      id: 'anonymous-patient',
+      appMetadata: {},
+      userMetadata: {},
+      aud: 'authenticated',
+      createdAt: '2026-08-20T00:00:00.000Z',
+      isAnonymous: true,
+    );
+
+    expect(anonymousUser.authProvider, 'anonymous');
   });
 
   testWidgets('regroupe le profil en catégories et propose la déconnexion', (

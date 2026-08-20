@@ -23,6 +23,21 @@ gérés directement par Supabase Auth.
    - `com.ientier.i_entier_pharmacie://login-callback`
    - les URL Web locales et de production utilisées par l’administration.
 
+## Connexion anonyme
+
+Dans **Authentication > Providers**, activer **Allow anonymous sign-ins** pour
+le projet hébergé. La configuration locale équivalente est déjà activée avec
+`auth.enable_anonymous_sign_ins = true` dans `supabase/config.toml`.
+
+Le client Patient propose alors **Continuer en mode invité**. Supabase crée un
+utilisateur avec le rôle PostgreSQL `authenticated` et le claim JWT
+`is_anonymous = true`; les politiques RLS existantes continuent donc à isoler
+ses données avec `auth.uid()`. Un compte invité ne peut pas être récupéré après
+une déconnexion, un changement d’appareil ou l’effacement des données locales.
+
+Avant une mise en production à grande échelle, activer CAPTCHA/Turnstile et
+prévoir la purge périodique des comptes anonymes anciens pour limiter les abus.
+
 ## Connexion Google
 
 Dans Google Cloud Console, le client OAuth Web doit autoriser l’URI :

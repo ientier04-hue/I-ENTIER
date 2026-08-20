@@ -46,6 +46,13 @@ class SupabaseConfig {
 extension IEntierSupabaseUser on User {
   String get uid => id;
 
+  String get authProvider {
+    if (isAnonymous) return 'anonymous';
+    final provider = appMetadata['provider']?.toString().trim();
+    if (provider == null || provider.isEmpty) return 'email';
+    return provider == 'google' ? 'google.com' : provider;
+  }
+
   String? get displayName {
     final metadata = userMetadata;
     return (metadata?['full_name'] ?? metadata?['name'])?.toString();

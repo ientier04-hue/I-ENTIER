@@ -137,13 +137,16 @@ class _AccountBootstrapState extends State<AccountBootstrap> {
         .doc(widget.user.uid);
     final snapshot = await reference.get();
     final existing = snapshot.data() ?? const <String, dynamic>{};
+    final existingEmail = _profileText(existing, ['email']);
+    final accountEmail =
+        widget.user.email ?? (existingEmail.isEmpty ? null : existingEmail);
     await reference.set({
       'displayName': _profileText(existing, ['displayName']).isEmpty
           ? (widget.user.displayName ?? '')
           : _profileText(existing, ['displayName']),
-      'email': widget.user.email ?? _profileText(existing, ['email']),
+      'email': accountEmail,
       'photoUrl': widget.user.photoURL ?? _profileText(existing, ['photoUrl']),
-      'provider': 'google.com',
+      'provider': widget.user.authProvider,
       'updatedAt': FieldValue.serverTimestamp(),
       if (!snapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -151,7 +154,7 @@ class _AccountBootstrapState extends State<AccountBootstrap> {
       ...existing,
       'displayName':
           widget.user.displayName ?? _profileText(existing, ['displayName']),
-      'email': widget.user.email ?? _profileText(existing, ['email']),
+      'email': accountEmail,
       'photoUrl': widget.user.photoURL ?? _profileText(existing, ['photoUrl']),
     };
   }
@@ -230,19 +233,21 @@ class _LoadingScreen extends StatelessWidget {
 }
 
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key});
+  final Future<void> Function()? anonymousSignIn;
+
+  const SignInScreen({super.key, this.anonymousSignIn});
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
 }
 
 class _SignInScreenState extends State<SignInScreen> {
-  bool _isSigningIn = false;
+  _SignInMethod? _signingInWith;
   String? _error;
 
   Future<void> _signInWithGoogle() async {
     setState(() {
-      _isSigningIn = true;
+      _signingInWith = _SignInMethod.google;
       _error = null;
     });
     try {
@@ -256,7 +261,30 @@ class _SignInScreenState extends State<SignInScreen> {
     } catch (_) {
       _error = 'La connexion Google n’a pas abouti. Réessayez.';
     } finally {
-      if (mounted) setState(() => _isSigningIn = false);
+      if (mounted) setState(() => _signingInWith = null);
+    }
+  }
+
+  Future<void> _signInAnonymously() async {
+    setState(() {
+      _signingInWith = _SignInMethod.anonymous;
+      _error = null;
+    });
+    try {
+      final anonymousSignIn = widget.anonymousSignIn;
+      if (anonymousSignIn != null) {
+        await anonymousSignIn();
+      } else {
+        await SupabaseConfig.client.auth.signInAnonymously(
+          data: const {'full_name': 'Invité I-ENTIER'},
+        );
+      }
+    } on AuthException catch (error) {
+      _error = _anonymousSignInError(error);
+    } catch (_) {
+      _error = 'La connexion en mode invité n’a pas abouti. Réessayez.';
+    } finally {
+      if (mounted) setState(() => _signingInWith = null);
     }
   }
 
@@ -291,9 +319,10 @@ class _SignInScreenState extends State<SignInScreen> {
                               Expanded(
                                 flex: 9,
                                 child: _SignInCard(
-                                  isSigningIn: _isSigningIn,
+                                  signingInWith: _signingInWith,
                                   error: _error,
                                   onGoogleTap: _signInWithGoogle,
+                                  onAnonymousTap: _signInAnonymously,
                                 ),
                               ),
                             ],
@@ -304,9 +333,10 @@ class _SignInScreenState extends State<SignInScreen> {
                               const _MobileSignInBrand(),
                               const SizedBox(height: 26),
                               _SignInCard(
-                                isSigningIn: _isSigningIn,
+                                signingInWith: _signingInWith,
                                 error: _error,
                                 onGoogleTap: _signInWithGoogle,
+                                onAnonymousTap: _signInAnonymously,
                               ),
                               const SizedBox(height: 20),
                               const _SignInFooter(light: true),
@@ -321,6 +351,19 @@ class _SignInScreenState extends State<SignInScreen> {
       ],
     ),
   );
+}
+
+enum _SignInMethod { google, anonymous }
+
+String _anonymousSignInError(AuthException error) {
+  if (error.statusCode == '429') {
+    return 'Trop de connexions invitées ont été demandées. Réessayez plus tard.';
+  }
+  final details = '${error.code ?? ''} ${error.message}'.toLowerCase();
+  if (details.contains('anonymous') && details.contains('disabled')) {
+    return 'Le mode invité n’est pas encore activé sur ce projet Supabase.';
+  }
+  return 'La connexion en mode invité est indisponible. Réessayez.';
 }
 
 class _SignInBackdrop extends StatelessWidget {
@@ -454,13 +497,15 @@ class _MobileSignInBrand extends StatelessWidget {
 }
 
 class _SignInCard extends StatelessWidget {
-  final bool isSigningIn;
+  final _SignInMethod? signingInWith;
   final String? error;
   final VoidCallback onGoogleTap;
+  final VoidCallback onAnonymousTap;
   const _SignInCard({
-    required this.isSigningIn,
+    required this.signingInWith,
     required this.error,
     required this.onGoogleTap,
+    required this.onAnonymousTap,
   });
 
   @override
@@ -551,7 +596,7 @@ class _SignInCard extends StatelessWidget {
         SizedBox(
           height: 58,
           child: FilledButton.icon(
-            onPressed: isSigningIn ? null : onGoogleTap,
+            onPressed: signingInWith == null ? onGoogleTap : null,
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.navy,
               disabledBackgroundColor: const Color(0xFFB7C1D0),
@@ -559,7 +604,7 @@ class _SignInCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
-            icon: isSigningIn
+            icon: signingInWith == _SignInMethod.google
                 ? const SizedBox.square(
                     dimension: 20,
                     child: CircularProgressIndicator(
@@ -569,9 +614,74 @@ class _SignInCard extends StatelessWidget {
                   )
                 : const _GoogleMark(),
             label: Text(
-              isSigningIn ? 'Connexion en cours...' : 'Continuer avec Google',
+              signingInWith == _SignInMethod.google
+                  ? 'Connexion en cours...'
+                  : 'Continuer avec Google',
             ),
           ),
+        ),
+        const SizedBox(height: 18),
+        const Row(
+          children: [
+            Expanded(child: Divider(color: AppColors.border)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'OU',
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: AppColors.border)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          height: 56,
+          child: OutlinedButton.icon(
+            key: const ValueKey('anonymous-sign-in'),
+            onPressed: signingInWith == null ? onAnonymousTap : null,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.navy,
+              side: const BorderSide(color: AppColors.border),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            icon: signingInWith == _SignInMethod.anonymous
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.person_outline_rounded),
+            label: Text(
+              signingInWith == _SignInMethod.anonymous
+                  ? 'Connexion invitée en cours...'
+                  : 'Continuer en mode invité',
+            ),
+          ),
+        ),
+        const SizedBox(height: 13),
+        const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded, size: 17, color: AppColors.muted),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Aucun email requis. Ce compte ne pourra plus être récupéré après une déconnexion, un changement d’appareil ou l’effacement des données.',
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11.5,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 22),
         const _TrustLine(),
@@ -1000,9 +1110,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       await Future.wait([
         accountReference.set({
           'displayName': _nameController.text.trim(),
-          'email': widget.user.email ?? '',
+          'email': widget.user.email,
           'photoUrl': widget.user.photoURL,
-          'provider': 'google.com',
+          'provider': widget.user.authProvider,
           'updatedAt': FieldValue.serverTimestamp(),
           if (widget.accountProfile.isEmpty)
             'createdAt': FieldValue.serverTimestamp(),
@@ -1029,8 +1139,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Se déconnecter ?'),
-        content: const Text(
-          'Vous devrez vous reconnecter pour accéder à votre espace santé.',
+        content: Text(
+          widget.user.isAnonymous
+              ? 'Ce compte invité ne pourra pas être récupéré après la déconnexion. Les données associées resteront inaccessibles.'
+              : 'Vous devrez vous reconnecter pour accéder à votre espace santé.',
         ),
         actions: [
           TextButton(
