@@ -324,6 +324,7 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
           ? SupabaseSymptomAssessmentRepository()
           : _MemorySymptomAssessmentRepository());
   List<AssessmentPathway> _pathways = assessmentPathways;
+  bool _isPreparingAssessment = false;
 
   Stream<List<SymptomAssessmentRecord>> get _stream =>
       widget.assessmentStream ?? _repository.watch(widget.patientId);
@@ -399,73 +400,85 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
   }
 
   Future<void> _startAssessment() async {
+    if (_isPreparingAssessment) return;
     final consents = await Navigator.of(context).push<Map<String, bool>>(
-      MaterialPageRoute(builder: (_) => const _AssessmentConsentPage()),
+      MaterialPageRoute(
+        builder: (_) => _AssessmentConsentPage(
+          onContinue: () {
+            if (!mounted || _isPreparingAssessment) return;
+            setState(() => _isPreparingAssessment = true);
+          },
+        ),
+      ),
     );
     if (!mounted || consents == null) return;
 
-    final preferredPathway = widget.initialPathwayId == null
-        ? null
-        : _pathwayById(widget.initialPathwayId!);
-    final pathway =
-        preferredPathway ??
-        await Navigator.of(context).push<AssessmentPathway>(
-          MaterialPageRoute(
-            builder: (_) => _PathwayPickerPage(pathways: _pathways),
+    try {
+      final preferredPathway = widget.initialPathwayId == null
+          ? null
+          : _pathwayById(widget.initialPathwayId!);
+      final pathway =
+          preferredPathway ??
+          await Navigator.of(context).push<AssessmentPathway>(
+            MaterialPageRoute(
+              builder: (_) => _PathwayPickerPage(pathways: _pathways),
+            ),
+          );
+      if (!mounted || pathway == null) return;
+
+      Map<String, dynamic> contextSnapshot;
+      try {
+        contextSnapshot = await _repository.loadAuthorizedContext(
+          patientId: widget.patientId,
+          patientProfile: widget.patientProfile,
+          consents: consents,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Les données autorisées n’ont pas pu être chargées. Vérifiez votre connexion.',
+            ),
           ),
         );
-    if (!mounted || pathway == null) return;
+        return;
+      }
 
-    Map<String, dynamic> contextSnapshot;
-    try {
-      contextSnapshot = await _repository.loadAuthorizedContext(
+      final now = DateTime.now();
+      final assessment = SymptomAssessmentRecord(
+        id: _newAssessmentId(widget.patientId, now),
         patientId: widget.patientId,
-        patientProfile: widget.patientProfile,
+        pathwayId: pathway.id,
+        pathwayTitle: pathway.title,
+        pathwayVersion: pathway.version,
+        pathwaySnapshot: assessmentPathwayToMap(pathway),
+        status: 'draft',
+        currentQuestionId: pathway.questions.first.id,
+        answers: const {},
         consents: consents,
+        contextSnapshot: contextSnapshot,
+        result: null,
+        startedAt: now,
+        updatedAt: now,
+        completedAt: null,
       );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Les données autorisées n’ont pas pu être chargées. Vérifiez votre connexion.',
+      try {
+        await _repository.save(assessment);
+        if (!mounted) return;
+        await _openQuestionnaire(assessment);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Impossible de synchroniser cette évaluation. Réessayez lorsque la connexion est disponible.',
+            ),
           ),
-        ),
-      );
-      return;
-    }
-
-    final now = DateTime.now();
-    final assessment = SymptomAssessmentRecord(
-      id: _newAssessmentId(widget.patientId, now),
-      patientId: widget.patientId,
-      pathwayId: pathway.id,
-      pathwayTitle: pathway.title,
-      pathwayVersion: pathway.version,
-      pathwaySnapshot: assessmentPathwayToMap(pathway),
-      status: 'draft',
-      currentQuestionId: pathway.questions.first.id,
-      answers: const {},
-      consents: consents,
-      contextSnapshot: contextSnapshot,
-      result: null,
-      startedAt: now,
-      updatedAt: now,
-      completedAt: null,
-    );
-    try {
-      await _repository.save(assessment);
-      if (!mounted) return;
-      await _openQuestionnaire(assessment);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Impossible de synchroniser cette évaluation. Réessayez lorsque la connexion est disponible.',
-          ),
-        ),
-      );
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPreparingAssessment = false);
     }
   }
 
@@ -510,58 +523,134 @@ class _DiagnosticAssessmentPageState extends State<DiagnosticAssessmentPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Évaluation assistée')),
-    body: StreamBuilder<List<SymptomAssessmentRecord>>(
-      stream: _stream,
-      builder: (context, snapshot) {
-        final records = snapshot.data ?? const <SymptomAssessmentRecord>[];
-        return RefreshIndicator(
-          onRefresh: () async => setState(() {}),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
-            children: [
-              _AssessmentHero(onStart: _startAssessment),
-              const SizedBox(height: 18),
-              const _MedicalBoundaryCard(),
-              const SizedBox(height: 28),
-              Row(
+    body: Stack(
+      children: [
+        StreamBuilder<List<SymptomAssessmentRecord>>(
+          stream: _stream,
+          builder: (context, snapshot) {
+            final records = snapshot.data ?? const <SymptomAssessmentRecord>[];
+            return RefreshIndicator(
+              onRefresh: () async => setState(() {}),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Mes évaluations',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  if (records.isNotEmpty)
-                    Text(
-                      '${records.length} au total',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (snapshot.hasError)
-                const _HistoryError()
-              else if (snapshot.connectionState == ConnectionState.waiting &&
-                  records.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (records.isEmpty)
-                const _EmptyAssessmentHistory()
-              else
-                for (final assessment in records) ...[
-                  _AssessmentHistoryCard(
-                    assessment: assessment,
-                    pathway: _pathwayForAssessment(assessment),
-                    onTap: () => _openRecord(assessment),
+                  _AssessmentHero(onStart: _startAssessment),
+                  const SizedBox(height: 18),
+                  const _MedicalBoundaryCard(),
+                  const SizedBox(height: 28),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Mes évaluations',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      if (records.isNotEmpty)
+                        Text(
+                          '${records.length} au total',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 12),
+                  if (snapshot.hasError)
+                    const _HistoryError()
+                  else if (snapshot.connectionState ==
+                          ConnectionState.waiting &&
+                      records.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (records.isEmpty)
+                    const _EmptyAssessmentHistory()
+                  else
+                    for (final assessment in records) ...[
+                      _AssessmentHistoryCard(
+                        assessment: assessment,
+                        pathway: _pathwayForAssessment(assessment),
+                        onTap: () => _openRecord(assessment),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                 ],
-            ],
+              ),
+            );
+          },
+        ),
+        if (_isPreparingAssessment) const _AssessmentPreparationOverlay(),
+      ],
+    ),
+  );
+}
+
+class _AssessmentPreparationOverlay extends StatelessWidget {
+  const _AssessmentPreparationOverlay();
+
+  @override
+  Widget build(BuildContext context) => Positioned.fill(
+    child: ColoredBox(
+      key: const Key('assessment-preparing'),
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Semantics(
+        liveRegion: true,
+        label: 'Préparation de votre évaluation en cours',
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const SizedBox.square(
+                        dimension: 96,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 5,
+                          color: AppColors.primary,
+                          backgroundColor: AppColors.primarySoft,
+                        ),
+                      ),
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primarySoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.health_and_safety_outlined,
+                          color: AppColors.primary,
+                          size: 34,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Préparation de votre évaluation…',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Nous chargeons uniquement les informations que vous avez autorisées. Cela peut prendre quelques instants.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.muted,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        );
-      },
+        ),
+      ),
     ),
   );
 }
@@ -793,7 +882,8 @@ class _AssessmentHistoryCard extends StatelessWidget {
 }
 
 class _AssessmentConsentPage extends StatefulWidget {
-  const _AssessmentConsentPage();
+  final VoidCallback onContinue;
+  const _AssessmentConsentPage({required this.onContinue});
 
   @override
   State<_AssessmentConsentPage> createState() => _AssessmentConsentPageState();
@@ -870,7 +960,10 @@ class _AssessmentConsentPageState extends State<_AssessmentConsentPage> {
         FilledButton.icon(
           key: const Key('consent-continue'),
           onPressed: _understood
-              ? () => Navigator.of(context).pop(Map.of(_consents))
+              ? () {
+                  widget.onContinue();
+                  Navigator.of(context).pop(Map.of(_consents));
+                }
               : null,
           icon: const Icon(Icons.arrow_forward_rounded),
           label: const Text('Continuer'),

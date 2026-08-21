@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:i_entier/app_theme.dart';
@@ -7,6 +9,7 @@ import 'package:i_entier/diagnostic_assessment_page.dart';
 class _FakeAssessmentRepository implements SymptomAssessmentRepository {
   final List<SymptomAssessmentRecord> saved = [];
   Map<String, dynamic> context = const {};
+  Future<Map<String, dynamic>>? contextFuture;
   bool failSaves = false;
 
   @override
@@ -14,7 +17,7 @@ class _FakeAssessmentRepository implements SymptomAssessmentRepository {
     required String patientId,
     required Map<String, dynamic> patientProfile,
     required Map<String, bool> consents,
-  }) async => context;
+  }) async => contextFuture == null ? context : await contextFuture!;
 
   @override
   Future<void> save(SymptomAssessmentRecord assessment) async {
@@ -688,6 +691,52 @@ void main() {
           );
         }
       }
+    },
+  );
+
+  testWidgets(
+    'affiche une attente animée pendant la préparation du diagnostic',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 1700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _FakeAssessmentRepository();
+      final contextCompleter = Completer<Map<String, dynamic>>();
+      repository.contextFuture = contextCompleter.future;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: DiagnosticAssessmentPage(
+            patientId: 'patient-test',
+            patientProfile: const {},
+            initialPathwayId: 'abdominal',
+            startImmediately: true,
+            repository: repository,
+            assessmentStream: Stream.value(const []),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('consent-understood')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('consent-continue')));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byKey(const Key('assessment-preparing')), findsOneWidget);
+      expect(find.text('Préparation de votre évaluation…'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      contextCompleter.complete(const {});
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Depuis quand avez-vous mal au ventre ?'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('assessment-preparing')), findsNothing);
+      expect(tester.takeException(), isNull);
     },
   );
 
