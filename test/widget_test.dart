@@ -133,8 +133,99 @@ void main() {
 
     expect(find.text('Bienvenue sur I-ENTIER'), findsOneWidget);
     expect(find.text('Continuer avec Google'), findsOneWidget);
+    expect(find.text('Se connecter par e-mail'), findsOneWidget);
+    expect(find.byKey(const ValueKey('email-auth-email')), findsOneWidget);
+    expect(find.byKey(const ValueKey('email-auth-password')), findsOneWidget);
     expect(find.text('Continuer en mode invité'), findsOneWidget);
     expect(find.byKey(const ValueKey('anonymous-sign-in')), findsOneWidget);
+  });
+
+  testWidgets('se connecte avec une adresse e-mail et un mot de passe', (
+    tester,
+  ) async {
+    String? submittedEmail;
+    String? submittedPassword;
+    bool? submittedCreateAccount;
+    final completer = Completer<bool>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SignInScreen(
+          emailAuthentication:
+              ({required email, required password, required createAccount}) {
+                submittedEmail = email;
+                submittedPassword = password;
+                submittedCreateAccount = createAccount;
+                return completer.future;
+              },
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('email-auth-email')),
+      ' patient@example.com ',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('email-auth-password')),
+      'mot-de-passe',
+    );
+    final submit = find.byKey(const ValueKey('email-auth-submit'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pump();
+
+    expect(submittedEmail, 'patient@example.com');
+    expect(submittedPassword, 'mot-de-passe');
+    expect(submittedCreateAccount, isFalse);
+    expect(find.text('Connexion par e-mail...'), findsOneWidget);
+
+    completer.complete(false);
+    await tester.pumpAndSettle();
+    expect(find.text('Se connecter par e-mail'), findsOneWidget);
+  });
+
+  testWidgets('permet de créer un compte par e-mail', (tester) async {
+    bool? submittedCreateAccount;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SignInScreen(
+          emailAuthentication:
+              ({
+                required email,
+                required password,
+                required createAccount,
+              }) async {
+                submittedCreateAccount = createAccount;
+                return true;
+              },
+        ),
+      ),
+    );
+
+    final toggle = find.byKey(const ValueKey('email-auth-mode-toggle'));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump();
+    expect(find.text('Créer mon compte'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('email-auth-email')),
+      'nouveau@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('email-auth-password')),
+      'secret-solide',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(submittedCreateAccount, isTrue);
+    expect(
+      find.text(
+        'Compte créé. Consultez votre e-mail pour confirmer votre adresse, puis connectez-vous.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('démarre une connexion anonyme depuis le portail', (
@@ -153,7 +244,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('anonymous-sign-in')));
+    final anonymousButton = find.byKey(const ValueKey('anonymous-sign-in'));
+    await tester.ensureVisible(anonymousButton);
+    await tester.tap(anonymousButton);
     await tester.pump();
 
     expect(anonymousSignInCalls, 1);
@@ -178,7 +271,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('anonymous-sign-in')));
+    final anonymousButton = find.byKey(const ValueKey('anonymous-sign-in'));
+    await tester.ensureVisible(anonymousButton);
+    await tester.tap(anonymousButton);
     await tester.pumpAndSettle();
 
     expect(

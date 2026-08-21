@@ -233,18 +233,43 @@ class _LoadingScreen extends StatelessWidget {
   );
 }
 
+typedef EmailAuthentication =
+    Future<bool> Function({
+      required String email,
+      required String password,
+      required bool createAccount,
+    });
+
 class SignInScreen extends StatefulWidget {
   final Future<void> Function()? anonymousSignIn;
+  final EmailAuthentication? emailAuthentication;
 
-  const SignInScreen({super.key, this.anonymousSignIn});
+  const SignInScreen({
+    super.key,
+    this.anonymousSignIn,
+    this.emailAuthentication,
+  });
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
 }
 
 class _SignInScreenState extends State<SignInScreen> {
+  final _emailFormKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   _SignInMethod? _signingInWith;
   String? _error;
+  String? _notice;
+  bool _createEmailAccount = false;
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _signInWithGoogle() async {
     setState(() {
@@ -289,6 +314,76 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  Future<void> _authenticateWithEmail() async {
+    if (!(_emailFormKey.currentState?.validate() ?? false)) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _signingInWith = _SignInMethod.email;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      final emailAuthentication = widget.emailAuthentication;
+      final confirmationRequired = emailAuthentication != null
+          ? await emailAuthentication(
+              email: email,
+              password: password,
+              createAccount: _createEmailAccount,
+            )
+          : await _authenticateEmailWithSupabase(
+              email: email,
+              password: password,
+              createAccount: _createEmailAccount,
+            );
+      if (confirmationRequired) {
+        _notice =
+            'Compte créé. Consultez votre e-mail pour confirmer votre adresse, puis connectez-vous.';
+      }
+    } on AuthException catch (error) {
+      _error = _emailAuthenticationError(
+        error,
+        createAccount: _createEmailAccount,
+      );
+    } catch (_) {
+      _error = _createEmailAccount
+          ? 'La création du compte n’a pas abouti. Réessayez.'
+          : 'La connexion par e-mail n’a pas abouti. Réessayez.';
+    } finally {
+      if (mounted) setState(() => _signingInWith = null);
+    }
+  }
+
+  Future<bool> _authenticateEmailWithSupabase({
+    required String email,
+    required String password,
+    required bool createAccount,
+  }) async {
+    if (!createAccount) {
+      await SupabaseConfig.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      return false;
+    }
+    final response = await SupabaseConfig.client.auth.signUp(
+      email: email,
+      password: password,
+      emailRedirectTo: SupabaseConfig.authRedirectUrl,
+    );
+    return response.session == null;
+  }
+
+  void _toggleEmailMode() {
+    setState(() {
+      _createEmailAccount = !_createEmailAccount;
+      _error = null;
+      _notice = null;
+    });
+    _emailFormKey.currentState?.reset();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.navy,
@@ -320,9 +415,20 @@ class _SignInScreenState extends State<SignInScreen> {
                               Expanded(
                                 flex: 9,
                                 child: _SignInCard(
+                                  emailFormKey: _emailFormKey,
+                                  emailController: _emailController,
+                                  passwordController: _passwordController,
                                   signingInWith: _signingInWith,
                                   error: _error,
+                                  notice: _notice,
+                                  createEmailAccount: _createEmailAccount,
+                                  obscurePassword: _obscurePassword,
                                   onGoogleTap: _signInWithGoogle,
+                                  onEmailSubmit: _authenticateWithEmail,
+                                  onEmailModeToggle: _toggleEmailMode,
+                                  onPasswordVisibilityToggle: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
                                   onAnonymousTap: _signInAnonymously,
                                 ),
                               ),
@@ -334,9 +440,20 @@ class _SignInScreenState extends State<SignInScreen> {
                               const _MobileSignInBrand(),
                               const SizedBox(height: 26),
                               _SignInCard(
+                                emailFormKey: _emailFormKey,
+                                emailController: _emailController,
+                                passwordController: _passwordController,
                                 signingInWith: _signingInWith,
                                 error: _error,
+                                notice: _notice,
+                                createEmailAccount: _createEmailAccount,
+                                obscurePassword: _obscurePassword,
                                 onGoogleTap: _signInWithGoogle,
+                                onEmailSubmit: _authenticateWithEmail,
+                                onEmailModeToggle: _toggleEmailMode,
+                                onPasswordVisibilityToggle: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                                 onAnonymousTap: _signInAnonymously,
                               ),
                               const SizedBox(height: 20),
@@ -354,7 +471,56 @@ class _SignInScreenState extends State<SignInScreen> {
   );
 }
 
-enum _SignInMethod { google, anonymous }
+enum _SignInMethod { google, email, anonymous }
+
+String? _validateEmailAddress(String? value) {
+  final email = value?.trim() ?? '';
+  if (email.isEmpty) return 'Saisissez votre adresse e-mail.';
+  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+    return 'Saisissez une adresse e-mail valide.';
+  }
+  return null;
+}
+
+String? _validatePassword(String? value, {required bool createAccount}) {
+  if (value == null || value.isEmpty) return 'Saisissez votre mot de passe.';
+  if (createAccount && value.length < 6) {
+    return 'Utilisez au moins 6 caractères.';
+  }
+  return null;
+}
+
+String _emailAuthenticationError(
+  AuthException error, {
+  required bool createAccount,
+}) {
+  final details = '${error.code ?? ''} ${error.message}'.toLowerCase();
+  if (error.statusCode == '429' || details.contains('rate limit')) {
+    return 'Trop de tentatives. Patientez quelques minutes avant de réessayer.';
+  }
+  if (details.contains('invalid login credentials') ||
+      details.contains('invalid_credentials')) {
+    return 'Adresse e-mail ou mot de passe incorrect.';
+  }
+  if (details.contains('email not confirmed') ||
+      details.contains('email_not_confirmed')) {
+    return 'Confirmez d’abord votre adresse depuis l’e-mail envoyé par I-ENTIER.';
+  }
+  if (details.contains('already registered') ||
+      details.contains('user_already_exists')) {
+    return 'Un compte existe déjà avec cette adresse. Connectez-vous.';
+  }
+  if (details.contains('weak password') || details.contains('weak_password')) {
+    return 'Ce mot de passe est trop faible. Utilisez-en un plus sécurisé.';
+  }
+  if (details.contains('invalid email') ||
+      details.contains('validation_failed')) {
+    return 'Cette adresse e-mail n’est pas valide.';
+  }
+  return createAccount
+      ? 'Impossible de créer le compte avec cette adresse. Réessayez.'
+      : 'Impossible de vous connecter avec cette adresse. Réessayez.';
+}
 
 String _anonymousSignInError(AuthException error) {
   if (error.statusCode == '429') {
@@ -498,14 +664,32 @@ class _MobileSignInBrand extends StatelessWidget {
 }
 
 class _SignInCard extends StatelessWidget {
+  final GlobalKey<FormState> emailFormKey;
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
   final _SignInMethod? signingInWith;
   final String? error;
+  final String? notice;
+  final bool createEmailAccount;
+  final bool obscurePassword;
   final VoidCallback onGoogleTap;
+  final VoidCallback onEmailSubmit;
+  final VoidCallback onEmailModeToggle;
+  final VoidCallback onPasswordVisibilityToggle;
   final VoidCallback onAnonymousTap;
   const _SignInCard({
+    required this.emailFormKey,
+    required this.emailController,
+    required this.passwordController,
     required this.signingInWith,
     required this.error,
+    required this.notice,
+    required this.createEmailAccount,
+    required this.obscurePassword,
     required this.onGoogleTap,
+    required this.onEmailSubmit,
+    required this.onEmailModeToggle,
+    required this.onPasswordVisibilityToggle,
     required this.onAnonymousTap,
   });
 
@@ -594,6 +778,37 @@ class _SignInCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
+        if (notice != null) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF8F4),
+              border: Border.all(color: const Color(0xFFA7DDCD)),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.mark_email_read_outlined,
+                  color: AppColors.teal,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    notice!,
+                    style: const TextStyle(
+                      color: Color(0xFF176A58),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         SizedBox(
           height: 58,
           child: FilledButton.icon(
@@ -628,7 +843,131 @@ class _SignInCard extends StatelessWidget {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                'OU',
+                'OU AVEC VOTRE E-MAIL',
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: AppColors.border)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Form(
+          key: emailFormKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                key: const ValueKey('email-auth-email'),
+                controller: emailController,
+                enabled: signingInWith == null,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                autocorrect: false,
+                validator: _validateEmailAddress,
+                decoration: _emailAuthInputDecoration(
+                  label: 'Adresse e-mail',
+                  icon: Icons.email_outlined,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                key: const ValueKey('email-auth-password'),
+                controller: passwordController,
+                enabled: signingInWith == null,
+                obscureText: obscurePassword,
+                textInputAction: TextInputAction.done,
+                autofillHints: createEmailAccount
+                    ? const [AutofillHints.newPassword]
+                    : const [AutofillHints.password],
+                validator: (value) =>
+                    _validatePassword(value, createAccount: createEmailAccount),
+                onFieldSubmitted: signingInWith == null
+                    ? (_) => onEmailSubmit()
+                    : null,
+                decoration:
+                    _emailAuthInputDecoration(
+                      label: 'Mot de passe',
+                      icon: Icons.lock_outline_rounded,
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        tooltip: obscurePassword
+                            ? 'Afficher le mot de passe'
+                            : 'Masquer le mot de passe',
+                        onPressed: signingInWith == null
+                            ? onPasswordVisibilityToggle
+                            : null,
+                        icon: Icon(
+                          obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                      ),
+                    ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  key: const ValueKey('email-auth-submit'),
+                  onPressed: signingInWith == null ? onEmailSubmit : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    disabledBackgroundColor: const Color(0xFFB7C1D0),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: signingInWith == _SignInMethod.email
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(
+                          createEmailAccount
+                              ? Icons.person_add_alt_1_rounded
+                              : Icons.login_rounded,
+                        ),
+                  label: Text(
+                    signingInWith == _SignInMethod.email
+                        ? createEmailAccount
+                              ? 'Création du compte...'
+                              : 'Connexion par e-mail...'
+                        : createEmailAccount
+                        ? 'Créer mon compte'
+                        : 'Se connecter par e-mail',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 7),
+              TextButton(
+                key: const ValueKey('email-auth-mode-toggle'),
+                onPressed: signingInWith == null ? onEmailModeToggle : null,
+                child: Text(
+                  createEmailAccount
+                      ? 'J’ai déjà un compte · Me connecter'
+                      : 'Pas encore de compte ? Créer un compte',
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Row(
+          children: [
+            Expanded(child: Divider(color: AppColors.border)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'OU SANS COMPTE',
                 style: TextStyle(
                   color: AppColors.muted,
                   fontSize: 11,
@@ -702,6 +1041,28 @@ class _SignInCard extends StatelessWidget {
     ),
   );
 }
+
+InputDecoration _emailAuthInputDecoration({
+  required String label,
+  required IconData icon,
+}) => InputDecoration(
+  labelText: label,
+  prefixIcon: Icon(icon),
+  filled: true,
+  fillColor: const Color(0xFFF7F9FC),
+  border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(15),
+    borderSide: const BorderSide(color: AppColors.border),
+  ),
+  enabledBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(15),
+    borderSide: const BorderSide(color: AppColors.border),
+  ),
+  focusedBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(15),
+    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+  ),
+);
 
 class _BrandLockup extends StatelessWidget {
   final bool light;
