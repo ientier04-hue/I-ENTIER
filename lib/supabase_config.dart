@@ -46,6 +46,11 @@ class SupabaseConfig {
 extension IEntierSupabaseUser on User {
   String get uid => id;
 
+  String? get emailOrNull {
+    final normalized = email?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+
   String get authProvider {
     if (isAnonymous) return 'anonymous';
     final provider = appMetadata['provider']?.toString().trim();

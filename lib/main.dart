@@ -139,12 +139,13 @@ class _AccountBootstrapState extends State<AccountBootstrap> {
     final existing = snapshot.data() ?? const <String, dynamic>{};
     final existingEmail = _profileText(existing, ['email']);
     final accountEmail =
-        widget.user.email ?? (existingEmail.isEmpty ? null : existingEmail);
+        widget.user.emailOrNull ??
+        (existingEmail.isEmpty ? null : existingEmail);
     await reference.set({
       'displayName': _profileText(existing, ['displayName']).isEmpty
           ? (widget.user.displayName ?? '')
           : _profileText(existing, ['displayName']),
-      'email': accountEmail,
+      'email': ?accountEmail,
       'photoUrl': widget.user.photoURL ?? _profileText(existing, ['photoUrl']),
       'provider': widget.user.authProvider,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -1110,7 +1111,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       await Future.wait([
         accountReference.set({
           'displayName': _nameController.text.trim(),
-          'email': widget.user.email,
+          'email': ?widget.user.emailOrNull,
           'photoUrl': widget.user.photoURL,
           'provider': widget.user.authProvider,
           'updatedAt': FieldValue.serverTimestamp(),

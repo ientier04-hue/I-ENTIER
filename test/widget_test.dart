@@ -195,11 +195,13 @@ void main() {
       appMetadata: {},
       userMetadata: {},
       aud: 'authenticated',
+      email: '',
       createdAt: '2026-08-20T00:00:00.000Z',
       isAnonymous: true,
     );
 
     expect(anonymousUser.authProvider, 'anonymous');
+    expect(anonymousUser.emailOrNull, isNull);
   });
 
   testWidgets('regroupe le profil en catégories et propose la déconnexion', (
