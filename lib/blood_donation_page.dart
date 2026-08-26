@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_theme.dart';
@@ -14,12 +15,9 @@ const _ink = Color(0xFF344054);
 const _muted = Color(0xFF667085);
 const _border = Color(0xFFE4EAF2);
 
-const _redCrossBloodUrl = 'https://www.croixrouge.ht/donnez-votre-sang';
-const _redCrossInformationUrl = 'https://www.croixrouge.ht/2-check-up/';
 const _whoBloodDonationUrl =
     'https://www.who.int/news-room/questions-and-answers/item/'
     'blood-products-why-should-i-donate-blood';
-const _redCrossPhone = '+50928110010';
 
 typedef BloodUriLauncher = Future<bool> Function(Uri uri);
 
@@ -29,6 +27,12 @@ Future<bool> _launchBloodUri(Uri uri) =>
 enum BloodRequestUrgency { standard, urgent, critical }
 
 extension BloodRequestUrgencyDetails on BloodRequestUrgency {
+  String get databaseValue => switch (this) {
+    BloodRequestUrgency.standard => 'standard',
+    BloodRequestUrgency.urgent => 'urgent',
+    BloodRequestUrgency.critical => 'critical',
+  };
+
   String get label => switch (this) {
     BloodRequestUrgency.standard => 'Besoin actuel',
     BloodRequestUrgency.urgent => 'Urgent',
@@ -47,6 +51,80 @@ extension BloodRequestUrgencyDetails on BloodRequestUrgency {
         'urgent' => BloodRequestUrgency.urgent,
         _ => BloodRequestUrgency.standard,
       };
+}
+
+class BloodDonationRequestDraft {
+  final String requesterId;
+  final String personName;
+  final String bloodGroup;
+  final int donorCount;
+  final String facilityName;
+  final DateTime neededBy;
+  final BloodRequestUrgency urgency;
+  final String contactPhone;
+
+  const BloodDonationRequestDraft({
+    required this.requesterId,
+    required this.personName,
+    required this.bloodGroup,
+    required this.donorCount,
+    required this.facilityName,
+    required this.neededBy,
+    required this.urgency,
+    required this.contactPhone,
+  });
+}
+
+abstract class BloodDonationRepository {
+  Future<String> publishRequest(BloodDonationRequestDraft request);
+}
+
+class SupabaseBloodDonationRepository implements BloodDonationRepository {
+  final SupabaseClient client;
+
+  SupabaseBloodDonationRepository({SupabaseClient? client})
+    : client = client ?? SupabaseConfig.client;
+
+  @override
+  Future<String> publishRequest(BloodDonationRequestDraft request) async {
+    final neededDate = DateTime(
+      request.neededBy.year,
+      request.neededBy.month,
+      request.neededBy.day,
+      12,
+    );
+    final expiresAt = DateTime(
+      request.neededBy.year,
+      request.neededBy.month,
+      request.neededBy.day,
+      23,
+      59,
+      59,
+    );
+    final publishedAt = DateTime.now().toUtc();
+    final row = await client
+        .schema('ientier')
+        .from('blood_donation_requests')
+        .insert({
+          'created_by': request.requesterId,
+          'person_display_name': request.personName.trim(),
+          'blood_group': request.bloodGroup,
+          'units_needed': request.donorCount,
+          'facility_name': request.facilityName.trim(),
+          'contact_name': request.personName.trim(),
+          'contact_phone': request.contactPhone.trim(),
+          'urgency': request.urgency.databaseValue,
+          'status': 'active',
+          'verification_status': 'pending',
+          'consent_to_publish': true,
+          'needed_by': neededDate.toUtc().toIso8601String(),
+          'expires_at': expiresAt.toUtc().toIso8601String(),
+          'published_at': publishedAt.toIso8601String(),
+        })
+        .select('blood_request_id')
+        .single();
+    return row['blood_request_id'].toString();
+  }
 }
 
 class BloodRequest {
@@ -129,8 +207,7 @@ class BloodRequest {
     );
   }
 
-  bool isCurrent(DateTime now) =>
-      verified && status == 'active' && expiresAt.isAfter(now);
+  bool isCurrent(DateTime now) => status == 'active' && expiresAt.isAfter(now);
 
   String get location =>
       [commune, department].where((part) => part.isNotEmpty).join(', ');
@@ -175,16 +252,22 @@ extension on _BloodSection {
 }
 
 class BloodDonationPage extends StatefulWidget {
+  final String patientId;
+  final String patientName;
   final Map<String, dynamic> patientProfile;
   final Stream<List<BloodRequest>>? requestStream;
   final DateTime? now;
+  final BloodDonationRepository? repository;
   final BloodUriLauncher uriLauncher;
 
   const BloodDonationPage({
     super.key,
+    this.patientId = '',
+    this.patientName = '',
     this.patientProfile = const {},
     this.requestStream,
     this.now,
+    this.repository,
     this.uriLauncher = _launchBloodUri,
   });
 
@@ -198,6 +281,24 @@ class _BloodDonationPageState extends State<BloodDonationPage> {
   late Stream<List<BloodRequest>> _requestStream = _resolveRequestStream();
 
   DateTime get _now => widget.now ?? DateTime.now();
+
+  String get _requesterId {
+    if (widget.patientId.trim().isNotEmpty) return widget.patientId.trim();
+    if (!SupabaseConfig.isInitialized) return '';
+    return SupabaseConfig.client.auth.currentUser?.id ?? '';
+  }
+
+  String get _requesterName {
+    if (widget.patientName.trim().isNotEmpty) return widget.patientName.trim();
+    for (final key in const ['displayName', 'fullName', 'name', 'nomComplet']) {
+      final value = widget.patientProfile[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  BloodDonationRepository get _repository =>
+      widget.repository ?? SupabaseBloodDonationRepository();
 
   @override
   void didUpdateWidget(covariant BloodDonationPage oldWidget) {
@@ -249,21 +350,7 @@ class _BloodDonationPageState extends State<BloodDonationPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.canvas,
-    appBar: AppBar(
-      title: const Text('Don de sang'),
-      centerTitle: false,
-      actions: [
-        IconButton(
-          tooltip: 'Site de la Croix-Rouge Haïtienne',
-          onPressed: () => _openUri(
-            Uri.parse(_redCrossBloodUrl),
-            failureMessage: 'Impossible d’ouvrir le site de la Croix-Rouge.',
-          ),
-          icon: const Icon(Icons.open_in_new_rounded),
-        ),
-        const SizedBox(width: 4),
-      ],
-    ),
+    appBar: AppBar(title: const Text('Don de sang'), centerTitle: false),
     body: SafeArea(
       top: false,
       child: Column(
@@ -297,12 +384,9 @@ class _BloodDonationPageState extends State<BloodDonationPage> {
       selectedGroup: _bloodGroupFilter,
       onGroupChanged: (value) => setState(() => _bloodGroupFilter = value),
       onHelp: _showRequestContact,
+      onPublish: _openRequestForm,
     ),
     _BloodSection.process => _DonationProcessSection(
-      onOpenRedCross: () => _openUri(
-        Uri.parse(_redCrossInformationUrl),
-        failureMessage: 'Impossible d’ouvrir les informations demandées.',
-      ),
       onOpenWho: () => _openUri(
         Uri.parse(_whoBloodDonationUrl),
         failureMessage: 'Impossible d’ouvrir les informations demandées.',
@@ -310,18 +394,37 @@ class _BloodDonationPageState extends State<BloodDonationPage> {
     ),
     _BloodSection.eligibility => const _EligibilitySection(),
     _BloodSection.compatibility => const _CompatibilitySection(),
-    _BloodSection.centers => _CentersSection(
-      onCall: () => _openUri(
-        Uri(scheme: 'tel', path: _redCrossPhone),
-        failureMessage: 'Impossible de lancer l’appel.',
-      ),
-      onWebsite: () => _openUri(
-        Uri.parse('https://www.croixrouge.ht/'),
-        failureMessage: 'Impossible d’ouvrir le site de la Croix-Rouge.',
-      ),
-    ),
+    _BloodSection.centers => const _CentersSection(),
     _BloodSection.questions => const _QuestionsSection(),
   };
+
+  Future<void> _openRequestForm() async {
+    final requesterId = _requesterId;
+    if (requesterId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connectez-vous pour publier une demande de sang.'),
+        ),
+      );
+      return;
+    }
+    final published = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => BloodDonationRequestFormPage(
+          requesterId: requesterId,
+          initialPersonName: _requesterName,
+          initialContactPhone: _profilePhone(widget.patientProfile),
+          repository: _repository,
+          now: _now,
+        ),
+      ),
+    );
+    if (published == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Votre demande de sang est publiée.')),
+      );
+    }
+  }
 
   Future<void> _showRequestContact(BloodRequest request) async {
     await showModalBottomSheet<void>(
@@ -340,6 +443,338 @@ class _BloodDonationPageState extends State<BloodDonationPage> {
       ),
     );
   }
+}
+
+class BloodDonationRequestFormPage extends StatefulWidget {
+  final String requesterId;
+  final String initialPersonName;
+  final String initialContactPhone;
+  final BloodDonationRepository repository;
+  final DateTime? now;
+
+  const BloodDonationRequestFormPage({
+    super.key,
+    required this.requesterId,
+    required this.repository,
+    this.initialPersonName = '',
+    this.initialContactPhone = '',
+    this.now,
+  });
+
+  @override
+  State<BloodDonationRequestFormPage> createState() =>
+      _BloodDonationRequestFormPageState();
+}
+
+class _BloodDonationRequestFormPageState
+    extends State<BloodDonationRequestFormPage> {
+  static const _bloodGroups = [
+    'O-',
+    'O+',
+    'A-',
+    'A+',
+    'B-',
+    'B+',
+    'AB-',
+    'AB+',
+  ];
+
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _personController;
+  late final TextEditingController _donorCountController;
+  late final TextEditingController _facilityController;
+  late final TextEditingController _dateController;
+  late final TextEditingController _phoneController;
+  late DateTime _neededBy;
+  String? _bloodGroup;
+  BloodRequestUrgency _urgency = BloodRequestUrgency.standard;
+  bool _submitting = false;
+
+  DateTime get _today => widget.now ?? DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    final tomorrow = _today.add(const Duration(days: 1));
+    _neededBy = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
+    _personController = TextEditingController(text: widget.initialPersonName);
+    _donorCountController = TextEditingController(text: '1');
+    _facilityController = TextEditingController();
+    _dateController = TextEditingController(text: _bloodFormDate(_neededBy));
+    _phoneController = TextEditingController(text: widget.initialContactPhone);
+  }
+
+  @override
+  void dispose() {
+    _personController.dispose();
+    _donorCountController.dispose();
+    _facilityController.dispose();
+    _dateController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _chooseDate() async {
+    final today = DateTime(_today.year, _today.month, _today.day);
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _neededBy.isBefore(today) ? today : _neededBy,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      helpText: 'Date du besoin',
+      confirmText: 'Choisir',
+      cancelText: 'Annuler',
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _neededBy = selected;
+      _dateController.text = _bloodFormDate(selected);
+    });
+  }
+
+  Future<void> _submit() async {
+    if (_submitting || !_formKey.currentState!.validate()) return;
+    final donorCount = int.parse(_donorCountController.text.trim());
+    setState(() => _submitting = true);
+    try {
+      await widget.repository.publishRequest(
+        BloodDonationRequestDraft(
+          requesterId: widget.requesterId,
+          personName: _personController.text.trim(),
+          bloodGroup: _bloodGroup!,
+          donorCount: donorCount,
+          facilityName: _facilityController.text.trim(),
+          neededBy: _neededBy,
+          urgency: _urgency,
+          contactPhone: _phoneController.text.trim(),
+        ),
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La demande n’a pas pu être publiée. Vérifiez votre connexion et réessayez.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.canvas,
+    appBar: AppBar(title: const Text('Publier une demande')),
+    body: SafeArea(
+      top: false,
+      child: Form(
+        key: _formKey,
+        child: ListView(
+          key: const Key('blood-request-form-scroll'),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+          children: [
+            const _FormHeader(),
+            const SizedBox(height: 22),
+            TextFormField(
+              key: const Key('blood-request-person-name'),
+              controller: _personController,
+              textCapitalization: TextCapitalization.words,
+              autofillHints: const [AutofillHints.name],
+              decoration: const InputDecoration(
+                labelText: 'Nom de la personne *',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+              validator: (value) => _requiredText(value, 'Indiquez le nom.'),
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              key: const Key('blood-request-blood-group'),
+              initialValue: _bloodGroup,
+              decoration: const InputDecoration(
+                labelText: 'Groupe sanguin *',
+                prefixIcon: Icon(Icons.bloodtype_outlined),
+              ),
+              items: [
+                for (final group in _bloodGroups)
+                  DropdownMenuItem(value: group, child: Text(group)),
+              ],
+              onChanged: _submitting
+                  ? null
+                  : (value) => setState(() => _bloodGroup = value),
+              validator: (value) =>
+                  value == null ? 'Choisissez un groupe.' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              key: const Key('blood-request-donor-count'),
+              controller: _donorCountController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Nombre de donneurs recherchés *',
+                prefixIcon: Icon(Icons.groups_outlined),
+              ),
+              validator: (value) {
+                final count = int.tryParse(value?.trim() ?? '');
+                if (count == null || count < 1 || count > 50) {
+                  return 'Entrez un nombre entre 1 et 50.';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              key: const Key('blood-request-facility'),
+              controller: _facilityController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Établissement de santé concerné *',
+                prefixIcon: Icon(Icons.local_hospital_outlined),
+              ),
+              validator: (value) =>
+                  _requiredText(value, 'Indiquez l’établissement de santé.'),
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              key: const Key('blood-request-needed-date'),
+              controller: _dateController,
+              readOnly: true,
+              onTap: _submitting ? null : _chooseDate,
+              decoration: const InputDecoration(
+                labelText: 'Date du besoin *',
+                prefixIcon: Icon(Icons.event_outlined),
+                suffixIcon: Icon(Icons.calendar_month_outlined),
+              ),
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<BloodRequestUrgency>(
+              key: const Key('blood-request-urgency'),
+              initialValue: _urgency,
+              decoration: const InputDecoration(
+                labelText: 'Niveau d’urgence *',
+                prefixIcon: Icon(Icons.priority_high_rounded),
+              ),
+              items: [
+                for (final urgency in BloodRequestUrgency.values)
+                  DropdownMenuItem(value: urgency, child: Text(urgency.label)),
+              ],
+              onChanged: _submitting
+                  ? null
+                  : (value) => setState(
+                      () => _urgency = value ?? BloodRequestUrgency.standard,
+                    ),
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              key: const Key('blood-request-contact-phone'),
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              autofillHints: const [AutofillHints.telephoneNumber],
+              decoration: const InputDecoration(
+                labelText: 'Numéro de contact *',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+              validator: (value) {
+                final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+                return digits.length < 8 ? 'Entrez un numéro valide.' : null;
+              },
+            ),
+            const SizedBox(height: 16),
+            const _PublicationNotice(),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              key: const Key('blood-request-submit'),
+              onPressed: _submitting ? null : _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: _bloodRed,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+              icon: _submitting
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.campaign_outlined),
+              label: Text(_submitting ? 'Publication…' : 'Publier la demande'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _FormHeader extends StatelessWidget {
+  const _FormHeader();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: _bloodBorder),
+    ),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.favorite_rounded, color: _bloodRed, size: 30),
+        SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Mobilisez des donneurs rapidement',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              SizedBox(height: 5),
+              Text(
+                'Renseignez les informations que les volontaires doivent confirmer avant de se déplacer.',
+                style: TextStyle(color: _muted, fontSize: 12.5, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PublicationNotice extends StatelessWidget {
+  const _PublicationNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF5F6),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _bloodBorder),
+    ),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.visibility_outlined, color: _bloodRed, size: 20),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'En publiant, le nom, l’établissement et le numéro de contact seront visibles par les utilisateurs. La demande expirera à la fin du jour indiqué.',
+            style: TextStyle(color: _ink, fontSize: 12, height: 1.4),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BloodHero extends StatelessWidget {
@@ -394,7 +829,7 @@ class _BloodHero extends StatelessWidget {
                     ),
                     SizedBox(height: 5),
                     Text(
-                      'Consultez les besoins vérifiés et préparez votre don en toute confiance.',
+                      'Publiez un besoin et mobilisez des donneurs autour de vous.',
                       style: TextStyle(
                         color: Color(0xFFFFE8EA),
                         fontSize: 13,
@@ -506,6 +941,7 @@ class _RequestsSection extends StatelessWidget {
   final String selectedGroup;
   final ValueChanged<String> onGroupChanged;
   final ValueChanged<BloodRequest> onHelp;
+  final VoidCallback onPublish;
 
   const _RequestsSection({
     required this.stream,
@@ -513,6 +949,7 @@ class _RequestsSection extends StatelessWidget {
     required this.selectedGroup,
     required this.onGroupChanged,
     required this.onHelp,
+    required this.onPublish,
   });
 
   @override
@@ -540,14 +977,28 @@ class _RequestsSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SectionIntro(
-              eyebrow: 'SOLIDARITÉ EN TEMPS RÉEL',
+              eyebrow: 'ENTRAIDE EN TEMPS RÉEL',
               title: 'Demandes de sang actuelles',
               description:
-                  'Seules les demandes actives et vérifiées par i-ENTIER sont publiées ici. Appelez toujours le contact avant de vous déplacer.',
+                  'Publiez un besoin ou répondez à une demande. Appelez toujours le contact avant de vous déplacer.',
               trailing: _CountPill(
                 count: current.length,
                 singular: 'demande',
                 plural: 'demandes',
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const Key('blood-publish-request'),
+                onPressed: onPublish,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _bloodRed,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                icon: const Icon(Icons.add_circle_outline_rounded),
+                label: const Text('Publier une demande de sang'),
               ),
             ),
             if (current.isNotEmpty) ...[
@@ -665,9 +1116,9 @@ class _EmptyRequests extends StatelessWidget {
   Widget build(BuildContext context) => const _StateCard(
     key: Key('blood-requests-empty'),
     icon: Icons.favorite_outline_rounded,
-    title: 'Aucune demande vérifiée pour le moment',
+    title: 'Aucune demande pour le moment',
     message:
-        'C’est une bonne nouvelle. Revenez plus tard ou consultez « Où donner » pour faire un don volontaire.',
+        'C’est une bonne nouvelle. Vous pouvez publier un besoin avec le bouton ci-dessus.',
     color: Color(0xFF079A7B),
   );
 }
@@ -834,7 +1285,7 @@ class _BloodRequestCard extends StatelessWidget {
           _RequestInfoRow(
             icon: Icons.water_drop_outlined,
             label:
-                '${request.unitsNeeded} ${request.unitsNeeded == 1 ? 'pochette recherchée' : 'pochettes recherchées'}',
+                '${request.unitsNeeded} ${request.unitsNeeded == 1 ? 'donneur recherché' : 'donneurs recherchés'}',
           ),
           _RequestInfoRow(
             icon: Icons.event_outlined,
@@ -868,7 +1319,7 @@ class _BloodRequestCard extends StatelessWidget {
               onPressed: onHelp,
               style: FilledButton.styleFrom(backgroundColor: _bloodRed),
               icon: const Icon(Icons.volunteer_activism_outlined),
-              label: const Text('Je peux aider'),
+              label: const Text('Je veux donner'),
             ),
           ),
           const SizedBox(height: 9),
@@ -876,14 +1327,14 @@ class _BloodRequestCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(
-                Icons.verified_user_outlined,
+                Icons.schedule_outlined,
                 color: Color(0xFF079A7B),
                 size: 15,
               ),
               const SizedBox(width: 5),
               Flexible(
                 child: Text(
-                  'Demande vérifiée · expire ${_relativeExpiry(request.expiresAt, now)}',
+                  'Demande publiée · expire ${_relativeExpiry(request.expiresAt, now)}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: _muted,
@@ -1147,13 +1598,9 @@ class _SheetAdvice extends StatelessWidget {
 }
 
 class _DonationProcessSection extends StatelessWidget {
-  final VoidCallback onOpenRedCross;
   final VoidCallback onOpenWho;
 
-  const _DonationProcessSection({
-    required this.onOpenRedCross,
-    required this.onOpenWho,
-  });
+  const _DonationProcessSection({required this.onOpenWho});
 
   @override
   Widget build(BuildContext context) => _SectionScrollView(
@@ -1169,16 +1616,6 @@ class _DonationProcessSection extends StatelessWidget {
         const SizedBox(height: 22),
         const _ProcessTimeline(),
         const SizedBox(height: 20),
-        _OfficialSourceCard(
-          title: 'Croix-Rouge Haïtienne',
-          description:
-              'Consultez les étapes et les informations locales avant votre déplacement.',
-          icon: Icons.add_box_outlined,
-          actionLabel: 'Voir les informations',
-          color: _bloodRed,
-          onPressed: onOpenRedCross,
-        ),
-        const SizedBox(height: 12),
         _OfficialSourceCard(
           title: 'Organisation mondiale de la Santé',
           description:
@@ -1476,7 +1913,7 @@ class _EligibilitySummary extends StatelessWidget {
             SizedBox(width: 9),
             Expanded(
               child: Text(
-                'Repères publiés par la Croix-Rouge Haïtienne',
+                'Repères généraux avant un don',
                 style: TextStyle(
                   color: AppColors.navy,
                   fontWeight: FontWeight.w900,
@@ -1864,10 +2301,7 @@ class _ComponentNotice extends StatelessWidget {
 }
 
 class _CentersSection extends StatelessWidget {
-  final VoidCallback onCall;
-  final VoidCallback onWebsite;
-
-  const _CentersSection({required this.onCall, required this.onWebsite});
+  const _CentersSection();
 
   @override
   Widget build(BuildContext context) => _SectionScrollView(
@@ -1878,124 +2312,14 @@ class _CentersSection extends StatelessWidget {
           eyebrow: 'AVANT DE VOUS DÉPLACER',
           title: 'Trouver où donner',
           description:
-              'Les lieux et horaires de collecte peuvent changer. Confirmez toujours par téléphone avant votre départ.',
+              'Chaque demande précise l’établissement de santé concerné et fournit un numéro de contact.',
         ),
         const SizedBox(height: 22),
-        Container(
-          key: const Key('blood-center-red-cross'),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: _bloodSoft,
-                      borderRadius: BorderRadius.circular(17),
-                    ),
-                    child: const Icon(
-                      Icons.add_box_rounded,
-                      color: _bloodRed,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 13),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Croix-Rouge Haïtienne',
-                          style: TextStyle(
-                            color: AppColors.navy,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          'Information et orientation pour le don de sang',
-                          style: TextStyle(color: _muted, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: _StatusPill(
-                  label: 'Source officielle',
-                  color: Color(0xFF079A7B),
-                ),
-              ),
-              const SizedBox(height: 18),
-              const _RequestInfoRow(
-                icon: Icons.location_on_outlined,
-                label: 'Avenue Maïs Gaté, en face de Avis, Port-au-Prince',
-              ),
-              const _RequestInfoRow(
-                icon: Icons.phone_outlined,
-                label: '+509 28 11 00 10',
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Appelez pour connaître le point de collecte adapté, ses horaires et les besoins du jour.',
-                style: TextStyle(color: _muted, fontSize: 12.5, height: 1.45),
-              ),
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final stacked = constraints.maxWidth < 460;
-                  final callButton = FilledButton.icon(
-                    key: const Key('blood-center-call'),
-                    onPressed: onCall,
-                    style: FilledButton.styleFrom(backgroundColor: _bloodRed),
-                    icon: const Icon(Icons.call_outlined),
-                    label: const Text('Appeler'),
-                  );
-                  final webButton = OutlinedButton.icon(
-                    onPressed: onWebsite,
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: const Text('Site officiel'),
-                  );
-                  if (stacked) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        callButton,
-                        const SizedBox(height: 10),
-                        webButton,
-                      ],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: callButton),
-                      const SizedBox(width: 10),
-                      Expanded(child: webButton),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
         const _StateCard(
           icon: Icons.local_hospital_outlined,
-          title: 'Une demande précise ?',
+          title: 'Choisissez une demande',
           message:
-              'Utilisez le bouton « Je peux aider » dans la demande : le contact vous indiquera l’établissement et le point de collecte à utiliser.',
+              'Utilisez le bouton « Je veux donner » : le contact vous confirmera l’établissement, l’horaire et le point de collecte.',
           color: Color(0xFF176BFF),
         ),
       ],
@@ -2203,6 +2527,26 @@ String _bloodShortDate(DateTime date) {
     'déc.',
   ];
   return '${date.day} ${months[date.month - 1]} ${date.year}';
+}
+
+String _bloodFormDate(DateTime date) =>
+    '${date.day.toString().padLeft(2, '0')}/'
+    '${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+String? _requiredText(String? value, String message) =>
+    (value?.trim().isEmpty ?? true) ? message : null;
+
+String _profilePhone(Map<String, dynamic> profile) {
+  for (final key in const [
+    'phone',
+    'phoneNumber',
+    'telephone',
+    'contactPhone',
+  ]) {
+    final value = profile[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return '';
 }
 
 String _relativeExpiry(DateTime expiry, DateTime now) {

@@ -6,6 +6,16 @@ import 'package:i_entier/main.dart';
 import 'package:i_entier/notification_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+class _FakeBloodDonationRepository implements BloodDonationRepository {
+  BloodDonationRequestDraft? lastRequest;
+
+  @override
+  Future<String> publishRequest(BloodDonationRequestDraft request) async {
+    lastRequest = request;
+    return 'blood-request-new';
+  }
+}
+
 void main() {
   final now = DateTime(2026, 7, 29, 10);
   final requests = [
@@ -53,11 +63,15 @@ void main() {
   Widget buildPage({
     Stream<List<BloodRequest>>? stream,
     BloodUriLauncher? launcher,
+    BloodDonationRepository? repository,
   }) => MaterialApp(
     theme: AppTheme.light,
     home: BloodDonationPage(
+      patientId: 'patient-1',
+      patientName: 'Marie Jean',
       now: now,
       requestStream: stream ?? Stream.value(requests),
+      repository: repository,
       uriLauncher: launcher ?? (uri) async => true,
     ),
   );
@@ -147,7 +161,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(const Key('blood-request-request-o-negative')),
-        matching: find.text('Je peux aider'),
+        matching: find.text('Je veux donner'),
       ),
     );
     await tester.pumpAndSettle();
@@ -170,12 +184,10 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('blood-requests-empty')), findsOneWidget);
-    expect(find.text('Aucune demande vérifiée pour le moment'), findsOneWidget);
+    expect(find.text('Aucune demande pour le moment'), findsOneWidget);
   });
 
-  testWidgets('navigue vers le guide et ouvre le lien Croix-Rouge', (
-    tester,
-  ) async {
+  testWidgets('navigue vers le guide et ouvre la source OMS', (tester) async {
     Uri? launchedUri;
     await tester.binding.setSurfaceSize(const Size(900, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -193,11 +205,76 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Comment se passe un don de sang ?'), findsOneWidget);
-    expect(find.text('Croix-Rouge Haïtienne'), findsOneWidget);
-    await tester.tap(find.text('Voir les informations'));
+    expect(find.text('Organisation mondiale de la Santé'), findsOneWidget);
+    await tester.tap(find.text('Consulter la source'));
     await tester.pump();
 
-    expect(launchedUri, Uri.parse('https://www.croixrouge.ht/2-check-up/'));
+    expect(
+      launchedUri,
+      Uri.parse(
+        'https://www.who.int/news-room/questions-and-answers/item/'
+        'blood-products-why-should-i-donate-blood',
+      ),
+    );
+  });
+
+  testWidgets('publie une demande avec tous les champs demandés', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeBloodDonationRepository();
+    await tester.pumpWidget(buildPage(repository: repository));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('blood-publish-request')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Publier une demande'), findsOneWidget);
+    expect(find.text('Marie Jean'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('blood-request-blood-group')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('O-').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('blood-request-donor-count')),
+      '3',
+    );
+    await tester.enterText(
+      find.byKey(const Key('blood-request-facility')),
+      'Hôpital Saint-Louis',
+    );
+    await tester.tap(find.byKey(const Key('blood-request-urgency')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Très urgent').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('blood-request-contact-phone')),
+      '+509 3700 0000',
+    );
+
+    final submit = find.byKey(const Key('blood-request-submit'));
+    final formScroll = find
+        .descendant(
+          of: find.byKey(const Key('blood-request-form-scroll')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(submit, 300, scrollable: formScroll);
+    await tester.pumpAndSettle();
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(repository.lastRequest, isNotNull);
+    expect(repository.lastRequest!.personName, 'Marie Jean');
+    expect(repository.lastRequest!.bloodGroup, 'O-');
+    expect(repository.lastRequest!.donorCount, 3);
+    expect(repository.lastRequest!.facilityName, 'Hôpital Saint-Louis');
+    expect(repository.lastRequest!.neededBy, DateTime(2026, 7, 30));
+    expect(repository.lastRequest!.urgency, BloodRequestUrgency.critical);
+    expect(repository.lastRequest!.contactPhone, '+509 3700 0000');
+    expect(find.text('Votre demande de sang est publiée.'), findsOneWidget);
   });
 
   testWidgets('reste navigable sur un petit écran', (tester) async {

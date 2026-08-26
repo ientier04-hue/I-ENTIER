@@ -2271,12 +2271,12 @@ VALUES
   (
     'don-de-sang',
     'Don de sang',
-    'Trouvez un centre et sauvez des vies',
+    'Consultez les besoins ou publiez une demande de sang',
     'sang.png',
     '#FFA2A8',
     '#F01924',
-    'Accéder',
-    'https://www.croixrouge.ht/2-check-up/',
+    'Voir les demandes',
+    NULL,
     20
   ),
   (

@@ -2909,8 +2909,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (service.id == 'don-de-sang') {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) =>
-              BloodDonationPage(patientProfile: widget.patientProfile),
+          builder: (_) => BloodDonationPage(
+            patientId: widget.user.uid,
+            patientName: _patientName,
+            patientProfile: widget.patientProfile,
+          ),
         ),
       );
       return;
