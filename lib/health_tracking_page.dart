@@ -1,12 +1,14 @@
-import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-const _primary = Color(0xFF176BFF);
-const _primarySoft = Color(0xFFEAF1FF);
-const _navy = Color(0xFF102A56);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
+import 'app_theme.dart';
+import 'supabase_data.dart';
+
+const _primary = AppColors.primary;
+const _primarySoft = AppColors.primarySoft;
+const _navy = AppColors.navy;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
 
 enum HealthMetric { bloodPressure, bloodGlucose, weight, temperature, oxygen }
 
@@ -86,7 +88,7 @@ extension HealthMetricDetails on HealthMetric {
   Color get color => switch (this) {
     HealthMetric.bloodPressure => const Color(0xFFE94C65),
     HealthMetric.bloodGlucose => const Color(0xFF8B5CF6),
-    HealthMetric.weight => const Color(0xFF176BFF),
+    HealthMetric.weight => AppColors.primary,
     HealthMetric.temperature => const Color(0xFFF79009),
     HealthMetric.oxygen => const Color(0xFF0A9F8F),
   };
@@ -401,11 +403,7 @@ class _LatestMeasurementCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     constraints: const BoxConstraints(minHeight: 142),
     padding: const EdgeInsets.all(15),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: _border),
-      borderRadius: BorderRadius.circular(20),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -590,11 +588,7 @@ class _TrackingFeedback extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(26),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         Icon(icon, color: _primary, size: 38),
@@ -785,7 +779,7 @@ class _MeasurementFormState extends State<_MeasurementForm> {
     return Container(
       constraints: const BoxConstraints(maxWidth: 720),
       decoration: const BoxDecoration(
-        color: Color(0xFFF8FAFD),
+        color: AppColors.surfaceMuted,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SingleChildScrollView(

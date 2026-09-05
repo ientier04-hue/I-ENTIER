@@ -1,16 +1,18 @@
-import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const _primary = Color(0xFF176BFF);
+import 'app_theme.dart';
+import 'supabase_data.dart';
+
+const _primary = AppColors.primary;
 const _teal = Color(0xFF009B88);
-const _tealSoft = Color(0xFFE5F7F3);
-const _navy = Color(0xFF102A56);
-const _ink = Color(0xFF344054);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
-const _canvas = Color(0xFFF5F8FC);
+const _tealSoft = AppColors.tealSoft;
+const _navy = AppColors.navy;
+const _ink = AppColors.ink;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
+const _canvas = AppColors.canvas;
 
 class LaboratoryPage extends StatefulWidget {
   final String patientId;
@@ -255,7 +257,7 @@ class _LaboratorySectionSwitch extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(5),
     decoration: BoxDecoration(
-      color: const Color(0xFFE9EEF6),
+      color: AppColors.surfaceMuted,
       borderRadius: BorderRadius.circular(18),
     ),
     child: Row(
@@ -825,7 +827,7 @@ class _FeaturePill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     decoration: BoxDecoration(
-      color: const Color(0xFFF7F9FC),
+      color: AppColors.surfaceMuted,
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: _border),
     ),
@@ -857,11 +859,7 @@ class _EmptyResult extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(28),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         const Icon(Icons.science_outlined, color: _teal, size: 42),
@@ -1047,7 +1045,7 @@ class _ExaminationHero extends StatelessWidget {
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFFEAF1FF), Color(0xFFE2FAF6)],
+        colors: [AppColors.primarySoft, Color(0xFFE2FAF6)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -1548,7 +1546,7 @@ class _ResultsHero extends StatelessWidget {
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFFE8F8F4), Color(0xFFEAF1FF)],
+        colors: [Color(0xFFE8F8F4), AppColors.primarySoft],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -1929,11 +1927,7 @@ class _SimpleEmptyState extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(28),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         Icon(icon, color: _teal, size: 42),
@@ -2169,11 +2163,7 @@ class _DetailSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

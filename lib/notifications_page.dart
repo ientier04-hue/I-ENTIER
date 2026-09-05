@@ -2,18 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
 import 'notification_service.dart';
 
 export 'notification_service.dart'
     show AppNotification, AppNotificationType, defaultAppNotifications;
 
-const _primary = Color(0xFF176BFF);
-const _primarySoft = Color(0xFFEAF1FF);
-const _navy = Color(0xFF102A56);
-const _ink = Color(0xFF344054);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
-const _canvas = Color(0xFFF5F8FC);
+const _primary = AppColors.primary;
+const _primarySoft = AppColors.primarySoft;
+const _navy = AppColors.navy;
+const _ink = AppColors.ink;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
+const _canvas = AppColors.canvas;
 
 extension on AppNotificationType {
   IconData get icon => switch (this) {
@@ -24,7 +25,7 @@ extension on AppNotificationType {
   };
 
   Color get color => switch (this) {
-    AppNotificationType.appointment => const Color(0xFF176BFF),
+    AppNotificationType.appointment => AppColors.primary,
     AppNotificationType.result => const Color(0xFF079A7B),
     AppNotificationType.reminder => const Color(0xFFE77C22),
     AppNotificationType.security => const Color(0xFF7257D9),
@@ -403,7 +404,7 @@ class _NotificationStorageError extends StatelessWidget {
     ),
     child: const Row(
       children: [
-        Icon(Icons.cloud_off_rounded, color: Color(0xFFD92D20)),
+        Icon(Icons.cloud_off_rounded, color: AppColors.error),
         SizedBox(width: 12),
         Expanded(
           child: Text(
@@ -430,7 +431,7 @@ class _NotificationSummary extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF176BFF), Color(0xFF0A9FD6)],
+          colors: [AppColors.primary, Color(0xFF0A9FD6)],
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [
@@ -555,7 +556,7 @@ class _NotificationTile extends StatelessWidget {
       alignment: Alignment.centerRight,
       padding: const EdgeInsets.only(right: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFFD92D20),
+        color: AppColors.error,
         borderRadius: BorderRadius.circular(20),
       ),
       child: const Icon(Icons.delete_outline_rounded, color: Colors.white),

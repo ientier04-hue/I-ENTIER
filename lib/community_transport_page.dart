@@ -10,7 +10,7 @@ const _transportBlue = Color(0xFF0C5F9C);
 const _transportBlueDark = Color(0xFF083D6B);
 const _transportBlueSoft = Color(0xFFE7F4FC);
 const _transportGreen = Color(0xFF087A5B);
-const _transportRed = Color(0xFFD92D20);
+const _transportRed = AppColors.error;
 
 const haitianDepartments = <String>[
   'Artibonite',

@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_theme.dart';
 import 'supabase_config.dart';
 
-const _rescueRed = Color(0xFFD92D20);
+const _rescueRed = AppColors.error;
 const _rescueRedDark = Color(0xFF9D2018);
 const _rescueRedSoft = Color(0xFFFFEAE8);
 const _rescueOrange = Color(0xFFF79009);
@@ -843,11 +843,7 @@ class _CapabilityGrid extends StatelessWidget {
           final item = items[index];
           return Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
-            ),
+            decoration: AppDecorations.card,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -879,11 +875,7 @@ class _VolunteerStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: AppColors.border),
-    ),
+    decoration: AppDecorations.card,
     child: Row(
       children: [
         CircleAvatar(

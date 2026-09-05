@@ -1,15 +1,16 @@
-import 'supabase_data.dart';
 import 'package:flutter/material.dart';
-
-import 'notification_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const _primary = Color(0xFF176BFF);
-const _navy = Color(0xFF102A56);
-const _ink = Color(0xFF344054);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
-const _canvas = Color(0xFFF5F8FC);
+import 'app_theme.dart';
+import 'notification_service.dart';
+import 'supabase_data.dart';
+
+const _primary = AppColors.primary;
+const _navy = AppColors.navy;
+const _ink = AppColors.ink;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
+const _canvas = AppColors.canvas;
 const _green = Color(0xFF079A7B);
 
 enum PreventiveCareCategory {
@@ -50,7 +51,7 @@ extension PreventiveCareCategoryDetails on PreventiveCareCategory {
   };
 
   Color get color => switch (this) {
-    PreventiveCareCategory.checkup => const Color(0xFF176BFF),
+    PreventiveCareCategory.checkup => AppColors.primary,
     PreventiveCareCategory.vaccine => const Color(0xFF7257D9),
     PreventiveCareCategory.screening => const Color(0xFF0A9F8F),
     PreventiveCareCategory.dental => const Color(0xFFE77C22),
@@ -778,18 +779,7 @@ class _PreventiveLoadingState extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 430),
           margin: const EdgeInsets.all(24),
           padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _border),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14102A56),
-                blurRadius: 24,
-                offset: Offset(0, 10),
-              ),
-            ],
-          ),
+          decoration: AppDecorations.raisedCard,
           child: const Row(
             children: [
               SizedBox(
@@ -1472,7 +1462,7 @@ class _ReminderPanel extends StatelessWidget {
         ),
         child: const Row(
           children: [
-            Icon(Icons.notifications_off_outlined, color: Color(0xFFD92D20)),
+            Icon(Icons.notifications_off_outlined, color: AppColors.error),
             SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -1544,11 +1534,7 @@ class _ReminderPanel extends StatelessWidget {
       );
     }
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _border),
-      ),
+      decoration: AppDecorations.card,
       child: Column(
         children: [
           for (var index = 0; index < reminders.length; index++) ...[
@@ -1593,7 +1579,7 @@ class _ReminderTile extends StatelessWidget {
         : dayDifference > 1
         ? 'Dans $dayDifference jours'
         : 'En retard de ${-dayDifference} jour${dayDifference < -1 ? 's' : ''}';
-    final statusColor = overdue ? const Color(0xFFD92D20) : _primary;
+    final statusColor = overdue ? AppColors.error : _primary;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       child: Row(
@@ -1728,11 +1714,7 @@ class _CancerWarningSigns extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         ExpansionTile(
@@ -2092,7 +2074,7 @@ class _DueDateStrip extends StatelessWidget {
                   const Spacer(),
                   _StatusPill(
                     label: overdue ? 'À replanifier' : 'À venir',
-                    color: overdue ? const Color(0xFFD92D20) : _primary,
+                    color: overdue ? AppColors.error : _primary,
                   ),
                 ],
               ),
@@ -2110,7 +2092,7 @@ class _DueDateStrip extends StatelessWidget {
               Text(
                 _longDate(due),
                 style: TextStyle(
-                  color: overdue ? const Color(0xFFD92D20) : _ink,
+                  color: overdue ? AppColors.error : _ink,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -2131,7 +2113,7 @@ class _ProtectiveHabits extends StatelessWidget {
       Icons.directions_walk_rounded,
       'Bouger',
       'Viser au moins 150 minutes d’activité physique modérée par semaine.',
-      Color(0xFF176BFF),
+      AppColors.primary,
     ),
     (
       Icons.smoke_free_rounded,
@@ -2171,11 +2153,7 @@ class _ProtectiveHabits extends StatelessWidget {
           final habit = _habits[index];
           return Container(
             padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _border),
-            ),
+            decoration: AppDecorations.card,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2645,11 +2623,7 @@ class _RecordList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         for (var index = 0; index < records.length; index++) ...[
@@ -2828,11 +2802,7 @@ class _PreventiveFeedback extends StatelessWidget {
     child: Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 34),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _border),
-      ),
+      decoration: AppDecorations.card,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -3245,7 +3215,7 @@ class _PreventiveReminderFormState extends State<_PreventiveReminderForm> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF1FF),
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(Icons.add_alarm_rounded, color: _primary),

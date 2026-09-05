@@ -1,8 +1,10 @@
 import 'dart:async';
 
-import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'app_theme.dart';
+import 'supabase_data.dart';
 
 const _primary = Color(0xFF7656D8);
 const _primaryDark = Color(0xFF4E369B);
@@ -11,11 +13,11 @@ const _rose = Color(0xFFDB5F88);
 const _roseSoft = Color(0xFFFFECF2);
 const _teal = Color(0xFF078C83);
 const _tealSoft = Color(0xFFE4F7F3);
-const _navy = Color(0xFF102A56);
-const _ink = Color(0xFF344054);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
-const _canvas = Color(0xFFF7F7FC);
+const _navy = AppColors.navy;
+const _ink = AppColors.ink;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
+const _canvas = AppColors.canvas;
 
 /// Contact public du Centre Haïtien de Réhabilitation Psychosociale et
 /// d'Épanouissement (PSYCREPH): https://psycreph.org/nos-actions-et-services/
@@ -2330,14 +2332,7 @@ class _ExerciseSheetFrame extends StatelessWidget {
   );
 }
 
-BoxDecoration get _cardDecoration => BoxDecoration(
-  color: Colors.white,
-  borderRadius: BorderRadius.circular(22),
-  border: Border.all(color: _border),
-  boxShadow: const [
-    BoxShadow(color: Color(0x0D102A56), blurRadius: 22, offset: Offset(0, 8)),
-  ],
-);
+BoxDecoration get _cardDecoration => AppDecorations.raisedCard;
 
 String _firstText(Map data, List<String> keys) {
   for (final key in keys) {

@@ -1,22 +1,24 @@
 import 'dart:async';
 
-import 'pharmacy_repository.dart';
-import 'supabase_config.dart';
-import 'supabase_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
-const _primary = Color(0xFF176BFF);
-const _primarySoft = Color(0xFFEAF1FF);
+import 'app_theme.dart';
+import 'pharmacy_repository.dart';
+import 'supabase_config.dart';
+import 'supabase_data.dart';
+
+const _primary = AppColors.primary;
+const _primarySoft = AppColors.primarySoft;
 const _green = Color(0xFF009B88);
-const _greenSoft = Color(0xFFE5F7F3);
-const _navy = Color(0xFF102A56);
-const _ink = Color(0xFF344054);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
-const _canvas = Color(0xFFF5F8FC);
+const _greenSoft = AppColors.tealSoft;
+const _navy = AppColors.navy;
+const _ink = AppColors.ink;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
+const _canvas = AppColors.canvas;
 
 class PharmacyPage extends StatefulWidget {
   final String patientId;
@@ -629,7 +631,7 @@ class _PharmacySectionSwitch extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(5),
     decoration: BoxDecoration(
-      color: const Color(0xFFE9EEF6),
+      color: AppColors.surfaceMuted,
       borderRadius: BorderRadius.circular(18),
     ),
     child: Row(
@@ -715,7 +717,7 @@ class _PharmacyDirectoryIntro extends StatelessWidget {
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFFE5F7F3), Color(0xFFEDF5FF)],
+        colors: [AppColors.tealSoft, Color(0xFFEDF5FF)],
       ),
       borderRadius: BorderRadius.circular(26),
     ),
@@ -794,7 +796,7 @@ class _PrescriptionHubHeader extends StatelessWidget {
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFFEAF1FF), Color(0xFFF1ECFF)],
+        colors: [AppColors.primarySoft, Color(0xFFF1ECFF)],
       ),
       borderRadius: BorderRadius.circular(26),
     ),
@@ -1013,11 +1015,7 @@ class _PrescriptionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(21),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Row(
       children: [
         _PrescriptionThumbnail(prescription: prescription),
@@ -1535,18 +1533,7 @@ class _MedicationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _border),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0A173B66),
-          blurRadius: 18,
-          offset: Offset(0, 7),
-        ),
-      ],
-    ),
+    decoration: AppDecorations.raisedCard,
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1854,11 +1841,7 @@ class _NearbyPharmacyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(17),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2025,11 +2008,7 @@ class _FeedbackCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         Icon(icon, color: _green, size: 34),
@@ -2121,7 +2100,7 @@ class _SourceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
     onTap: onTap,
-    tileColor: const Color(0xFFF7F9FC),
+    tileColor: AppColors.surfaceMuted,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     leading: Container(
       width: 45,
@@ -2921,7 +2900,7 @@ const _medications = <_Medication>[
     requiresPrescription: false,
     available: true,
     icon: Icons.medication_liquid_rounded,
-    color: Color(0xFFEAF1FF),
+    color: AppColors.primarySoft,
     accent: _primary,
   ),
   _Medication(

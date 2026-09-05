@@ -9,7 +9,7 @@ import 'supabase_config.dart';
 const _traditionalGreen = Color(0xFF18794E);
 const _traditionalGreenDark = Color(0xFF0D5635);
 const _traditionalGreenSoft = Color(0xFFE7F5EC);
-const _traditionalRed = Color(0xFFD92D20);
+const _traditionalRed = AppColors.error;
 
 enum NaturalJournalEntryType {
   consultation,
@@ -633,7 +633,7 @@ class _TraditionalMedicinePageState extends State<TraditionalMedicinePage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF7FAF8),
+    backgroundColor: AppColors.canvas,
     appBar: AppBar(
       title: const Text(
         'Médecine Traditionnelle',

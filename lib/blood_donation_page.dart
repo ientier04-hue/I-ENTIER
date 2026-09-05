@@ -11,9 +11,9 @@ const _bloodRed = Color(0xFFD92D3A);
 const _bloodRedDark = Color(0xFFA71927);
 const _bloodSoft = Color(0xFFFFEDEF);
 const _bloodBorder = Color(0xFFF4C7CC);
-const _ink = Color(0xFF344054);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
+const _ink = AppColors.ink;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
 
 const _whoBloodDonationUrl =
     'https://www.who.int/news-room/questions-and-answers/item/'
@@ -40,7 +40,7 @@ extension BloodRequestUrgencyDetails on BloodRequestUrgency {
   };
 
   Color get color => switch (this) {
-    BloodRequestUrgency.standard => const Color(0xFF176BFF),
+    BloodRequestUrgency.standard => AppColors.primary,
     BloodRequestUrgency.urgent => const Color(0xFFE77817),
     BloodRequestUrgency.critical => _bloodRed,
   };
@@ -1154,11 +1154,7 @@ class _StateCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         Container(
@@ -1419,7 +1415,7 @@ class _PrivacyNotice extends StatelessWidget {
     child: const Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.shield_outlined, color: Color(0xFF176BFF), size: 20),
+        Icon(Icons.shield_outlined, color: AppColors.primary, size: 20),
         SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -1622,7 +1618,7 @@ class _DonationProcessSection extends StatelessWidget {
               'Comprendre le déroulement, la sécurité et les précautions générales.',
           icon: Icons.public_rounded,
           actionLabel: 'Consulter la source',
-          color: const Color(0xFF176BFF),
+          color: AppColors.primary,
           onPressed: onOpenWho,
         ),
       ],
@@ -1669,11 +1665,7 @@ class _ProcessTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _border),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         for (var index = 0; index < _steps.length; index++)
@@ -1993,7 +1985,7 @@ class _EligibilityGrid extends StatelessWidget {
       Icons.medication_outlined,
       'Médicaments et soins récents',
       'Signalez tout traitement, vaccination, chirurgie, tatouage ou perçage récent.',
-      Color(0xFF176BFF),
+      AppColors.primary,
     ),
     (
       Icons.pregnant_woman_outlined,
@@ -2157,11 +2149,7 @@ class _CompatibilitySection extends StatelessWidget {
         const SizedBox(height: 22),
         Container(
           padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _border),
-          ),
+          decoration: AppDecorations.card,
           child: Column(
             children: [
               const _CompatibilityHeader(),
@@ -2287,7 +2275,7 @@ class _ComponentNotice extends StatelessWidget {
     child: const Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.science_outlined, color: Color(0xFF176BFF)),
+        Icon(Icons.science_outlined, color: AppColors.primary),
         SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -2320,7 +2308,7 @@ class _CentersSection extends StatelessWidget {
           title: 'Choisissez une demande',
           message:
               'Utilisez le bouton « Je veux donner » : le contact vous confirmera l’établissement, l’horaire et le point de collecte.',
-          color: Color(0xFF176BFF),
+          color: AppColors.primary,
         ),
       ],
     ),
@@ -2366,11 +2354,7 @@ class _QuestionsSection extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _border),
-          ),
+          decoration: AppDecorations.card,
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [

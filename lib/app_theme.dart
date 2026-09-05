@@ -17,8 +17,27 @@ abstract final class AppColors {
   static const border = Color(0xFFE1E8F0);
   static const canvas = Color(0xFFF5F8FC);
   static const surface = Color(0xFFFFFFFF);
+  static const surfaceMuted = Color(0xFFF3F6FA);
+  static const tealSoft = Color(0xFFE5F7F3);
+  static const disabled = Color(0xFFD5DDE8);
+  static const error = Color(0xFFD92D20);
   static const success = Color(0xFF087A5B);
   static const warning = Color(0xFFB54708);
+}
+
+/// Même finition pour les cartes, qu’elles utilisent Material ou Container.
+abstract final class AppDecorations {
+  static const controlRadius = BorderRadius.all(Radius.circular(16));
+  static const cardRadius = BorderRadius.all(Radius.circular(22));
+  static const card = BoxDecoration(
+    color: AppColors.surface,
+    borderRadius: cardRadius,
+    border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
+  );
+  static const cardShadow = [
+    BoxShadow(color: Color(0x08102A56), blurRadius: 18, offset: Offset(0, 5)),
+  ];
+  static final raisedCard = card.copyWith(boxShadow: cardShadow);
 }
 
 /// Fondation Material 3 commune à tous les écrans.
@@ -30,15 +49,21 @@ abstract final class AppTheme {
           brightness: Brightness.light,
           primary: AppColors.primary,
           secondary: AppColors.teal,
-          error: const Color(0xFFD92D20),
+          error: AppColors.error,
           surface: AppColors.surface,
         ).copyWith(
+          onPrimary: AppColors.surface,
+          primaryContainer: AppColors.primarySoft,
+          onPrimaryContainer: AppColors.primaryDark,
+          secondaryContainer: AppColors.tealSoft,
+          onSecondaryContainer: AppColors.success,
           onSurface: AppColors.ink,
+          onSurfaceVariant: AppColors.muted,
           outline: AppColors.border,
           outlineVariant: const Color(0xFFEDF1F6),
           surfaceContainerLowest: AppColors.surface,
           surfaceContainerLow: const Color(0xFFFAFCFE),
-          surfaceContainer: const Color(0xFFF3F6FA),
+          surfaceContainer: AppColors.surfaceMuted,
           surfaceContainerHigh: const Color(0xFFEDF2F7),
           surfaceContainerHighest: const Color(0xFFE7EDF4),
         );
@@ -53,44 +78,58 @@ abstract final class AppTheme {
     );
 
     return base.copyWith(
+      // Conserve les tailles et métriques de la typographie Material.
       textTheme: base.textTheme.copyWith(
-        displaySmall: const TextStyle(
+        displaySmall: base.textTheme.displaySmall!.copyWith(
           color: AppColors.navy,
           fontWeight: FontWeight.w800,
           letterSpacing: -1,
         ),
-        headlineLarge: const TextStyle(
+        headlineLarge: base.textTheme.headlineLarge!.copyWith(
           color: AppColors.navy,
           fontWeight: FontWeight.w800,
           letterSpacing: -.8,
         ),
-        headlineMedium: const TextStyle(
+        headlineMedium: base.textTheme.headlineMedium!.copyWith(
           color: AppColors.navy,
           fontWeight: FontWeight.w800,
           letterSpacing: -.5,
         ),
-        headlineSmall: const TextStyle(
+        headlineSmall: base.textTheme.headlineSmall!.copyWith(
           color: AppColors.navy,
           fontWeight: FontWeight.w800,
           letterSpacing: -.25,
         ),
-        titleLarge: const TextStyle(
+        titleLarge: base.textTheme.titleLarge!.copyWith(
           color: AppColors.navy,
           fontWeight: FontWeight.w800,
         ),
-        titleMedium: const TextStyle(
+        titleMedium: base.textTheme.titleMedium!.copyWith(
           color: AppColors.navy,
           fontWeight: FontWeight.w700,
         ),
-        titleSmall: const TextStyle(
+        titleSmall: base.textTheme.titleSmall!.copyWith(
           color: AppColors.navy,
           fontWeight: FontWeight.w700,
         ),
-        bodyLarge: const TextStyle(color: AppColors.ink, height: 1.45),
-        bodyMedium: const TextStyle(color: AppColors.ink, height: 1.4),
-        bodySmall: const TextStyle(color: AppColors.muted, height: 1.35),
-        labelLarge: const TextStyle(fontWeight: FontWeight.w700),
-        labelMedium: const TextStyle(fontWeight: FontWeight.w700),
+        bodyLarge: base.textTheme.bodyLarge!.copyWith(
+          color: AppColors.ink,
+          height: 1.45,
+        ),
+        bodyMedium: base.textTheme.bodyMedium!.copyWith(
+          color: AppColors.ink,
+          height: 1.4,
+        ),
+        bodySmall: base.textTheme.bodySmall!.copyWith(
+          color: AppColors.muted,
+          height: 1.35,
+        ),
+        labelLarge: base.textTheme.labelLarge!.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        labelMedium: base.textTheme.labelMedium!.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.canvas,
@@ -116,7 +155,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: AppDecorations.cardRadius,
           side: const BorderSide(color: AppColors.border),
         ),
       ),
@@ -129,29 +168,35 @@ abstract final class AppTheme {
         ),
         hintStyle: const TextStyle(color: AppColors.muted),
         labelStyle: const TextStyle(color: AppColors.muted),
+        prefixIconColor: WidgetStateColor.resolveWith(_inputIconColor),
+        suffixIconColor: WidgetStateColor.resolveWith(_inputIconColor),
         floatingLabelStyle: const TextStyle(
           color: AppColors.primary,
           fontWeight: FontWeight.w700,
         ),
         errorMaxLines: 2,
+        disabledBorder: const OutlineInputBorder(
+          borderRadius: AppDecorations.controlRadius,
+          borderSide: BorderSide(color: AppColors.border),
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppDecorations.controlRadius,
           borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppDecorations.controlRadius,
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppDecorations.controlRadius,
           borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppDecorations.controlRadius,
           borderSide: BorderSide(color: scheme.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppDecorations.controlRadius,
           borderSide: BorderSide(color: scheme.error, width: 1.8),
         ),
       ),
@@ -159,14 +204,14 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFFD5DDE8),
+          disabledBackgroundColor: AppColors.disabled,
           disabledForegroundColor: AppColors.muted,
           elevation: 0,
           minimumSize: const Size(48, 50),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppDecorations.controlRadius,
           ),
         ),
       ),
@@ -178,7 +223,7 @@ abstract final class AppTheme {
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
           side: const BorderSide(color: AppColors.border),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppDecorations.controlRadius,
           ),
         ),
       ),
@@ -234,6 +279,27 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w700,
         ),
       ),
+      tabBarTheme: const TabBarThemeData(
+        labelColor: AppColors.primaryDark,
+        unselectedLabelColor: AppColors.muted,
+        labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        indicatorColor: AppColors.primary,
+        dividerColor: AppColors.border,
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 4,
+        shadowColor: Color(0x24102A56),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppDecorations.controlRadius,
+          side: BorderSide(color: AppColors.border),
+        ),
+      ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
@@ -273,7 +339,9 @@ abstract final class AppTheme {
         ),
         actionTextColor: const Color(0xFF9FD8FF),
         insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppDecorations.controlRadius,
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
@@ -281,7 +349,7 @@ abstract final class AppTheme {
         space: 1,
       ),
       chipTheme: base.chipTheme.copyWith(
-        backgroundColor: const Color(0xFFF3F6FA),
+        backgroundColor: AppColors.surfaceMuted,
         selectedColor: AppColors.primarySoft,
         disabledColor: const Color(0xFFF1F3F6),
         side: const BorderSide(color: AppColors.border),
@@ -332,6 +400,13 @@ abstract final class AppTheme {
         },
       ),
     );
+  }
+
+  static Color _inputIconColor(Set<WidgetState> states) {
+    if (states.contains(WidgetState.disabled)) return AppColors.muted;
+    if (states.contains(WidgetState.error)) return AppColors.error;
+    if (states.contains(WidgetState.focused)) return AppColors.primary;
+    return AppColors.muted;
   }
 }
 

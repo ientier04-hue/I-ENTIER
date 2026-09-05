@@ -760,7 +760,7 @@ class _SignInCard extends StatelessWidget {
               children: [
                 const Icon(
                   Icons.error_outline_rounded,
-                  color: Color(0xFFD92D20),
+                  color: AppColors.error,
                   size: 20,
                 ),
                 const SizedBox(width: 10),
@@ -1048,20 +1048,7 @@ InputDecoration _emailAuthInputDecoration({
 }) => InputDecoration(
   labelText: label,
   prefixIcon: Icon(icon),
-  filled: true,
-  fillColor: const Color(0xFFF7F9FC),
-  border: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(15),
-    borderSide: const BorderSide(color: AppColors.border),
-  ),
-  enabledBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(15),
-    borderSide: const BorderSide(color: AppColors.border),
-  ),
-  focusedBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(15),
-    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-  ),
+  fillColor: AppColors.surfaceMuted,
 );
 
 class _BrandLockup extends StatelessWidget {
@@ -2124,18 +2111,7 @@ class _ProfileCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: AppColors.border),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0A102A43),
-          blurRadius: 18,
-          offset: Offset(0, 7),
-        ),
-      ],
-    ),
+    decoration: AppDecorations.raisedCard,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2185,19 +2161,8 @@ class _ProfileCategoryCard extends StatelessWidget {
   );
 }
 
-InputDecoration _profileDecoration(String hint) => InputDecoration(
-  hintText: hint,
-  filled: true,
-  fillColor: const Color(0xFFF8FAFD),
-  border: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(14),
-    borderSide: const BorderSide(color: AppColors.border),
-  ),
-  enabledBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(14),
-    borderSide: const BorderSide(color: AppColors.border),
-  ),
-);
+InputDecoration _profileDecoration(String hint) =>
+    InputDecoration(hintText: hint, fillColor: AppColors.surfaceMuted);
 
 String _profileText(Map<String, dynamic> data, List<String> keys) =>
     _field(data, keys);
@@ -4017,7 +3982,7 @@ class _DirectoryCardTapTarget extends StatelessWidget {
       cursor: SystemMouseCursors.click,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppDecorations.cardRadius,
         child: child,
       ),
     ),
@@ -4049,18 +4014,7 @@ class _ProfessionalCard extends StatelessWidget {
     ),
     child: Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D173B66),
-            blurRadius: 22,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: AppDecorations.raisedCard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4193,9 +4147,7 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = available
-        ? const Color(0xFF13795B)
-        : const Color(0xFF667085);
+    final foreground = available ? const Color(0xFF13795B) : AppColors.muted;
     final background = available
         ? const Color(0xFFE7F7F0)
         : const Color(0xFFF0F2F5);
@@ -4270,7 +4222,7 @@ class _DetailPill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     decoration: BoxDecoration(
-      color: const Color(0xFFF7F9FC),
+      color: AppColors.surfaceMuted,
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: AppColors.border),
     ),
@@ -4815,18 +4767,7 @@ class _InstitutionCard extends StatelessWidget {
     ),
     child: Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D173B66),
-            blurRadius: 22,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: AppDecorations.raisedCard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -5471,18 +5412,7 @@ class _AppointmentBookingAction extends StatelessWidget {
     return Container(
       key: const ValueKey('directory-profile-actions'),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A173B66),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: AppDecorations.raisedCard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -5990,18 +5920,7 @@ class _ProfileAboutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(19),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: AppColors.border),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x08173B66),
-          blurRadius: 16,
-          offset: Offset(0, 6),
-        ),
-      ],
-    ),
+    decoration: AppDecorations.raisedCard,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -6034,18 +5953,7 @@ class _DetailSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.fromLTRB(18, 18, 18, 7),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: AppColors.border),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x08173B66),
-          blurRadius: 16,
-          offset: Offset(0, 6),
-        ),
-      ],
-    ),
+    decoration: AppDecorations.raisedCard,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -6250,7 +6158,7 @@ class _Header extends StatelessWidget {
               label: 'Ouvrir le profil de $profileName',
               excludeSemantics: true,
               child: Material(
-                color: const Color(0xFFE8E2F8),
+                color: AppColors.primarySoft,
                 shape: const CircleBorder(),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
@@ -6298,7 +6206,7 @@ class _GoogleAvatar extends StatelessWidget {
         .join();
     return CircleAvatar(
       radius: radius,
-      backgroundColor: const Color(0xFFE3EEFF),
+      backgroundColor: AppColors.primarySoft,
       foregroundImage: photoUrl == null || photoUrl.isEmpty
           ? null
           : NetworkImage(photoUrl),
@@ -6327,7 +6235,7 @@ class _RoundIcon extends StatelessWidget {
       Tooltip(
         message: tooltip ?? '',
         child: Material(
-          color: const Color(0xFFDDEFF3),
+          color: AppColors.primarySoft,
           shape: const CircleBorder(),
           child: InkWell(
             onTap: onTap,
@@ -6335,7 +6243,7 @@ class _RoundIcon extends StatelessWidget {
             child: SizedBox(
               width: 48,
               height: 48,
-              child: Icon(icon, color: AppColors.navy, size: 21),
+              child: Icon(icon, color: AppColors.primaryDark, size: 21),
             ),
           ),
         ),
@@ -6349,7 +6257,7 @@ class _RoundIcon extends StatelessWidget {
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: const BoxDecoration(
-              color: Color(0xFF6750A4),
+              color: AppColors.primary,
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -6401,7 +6309,7 @@ class _SearchField extends StatelessWidget {
                   icon: const Icon(Icons.tune_rounded),
                 ),
           filled: true,
-          fillColor: const Color(0xFFF0F3FA),
+          fillColor: AppColors.surfaceMuted,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(28),
             borderSide: BorderSide.none,
@@ -6423,7 +6331,7 @@ class _SearchField extends StatelessWidget {
       label: hint,
       child: Material(
         key: const ValueKey('home-search-bar'),
-        color: const Color(0xFFF0F3FA),
+        color: AppColors.surfaceMuted,
         borderRadius: BorderRadius.circular(28),
         child: InkWell(
           onTap: onTap,
@@ -6454,7 +6362,7 @@ class _SearchField extends StatelessWidget {
                   if (onFilterTap != null) ...[
                     const SizedBox(width: 6),
                     Material(
-                      color: const Color(0xFFDDECF7),
+                      color: AppColors.primarySoft,
                       shape: const CircleBorder(),
                       child: IconButton(
                         tooltip: 'Filtrer',
@@ -6489,7 +6397,7 @@ class _ProfileCompletionCard extends StatelessWidget {
         'Complétez votre profil. Quelques informations suffisent pour personnaliser votre expérience.',
     child: Material(
       key: const ValueKey('profile-completion-card'),
-      color: const Color(0xFFEAF5FF),
+      color: AppColors.primarySoft,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
@@ -6915,7 +6823,7 @@ extension on _UniversalSearchCategory {
 
   Color get color => switch (this) {
     _UniversalSearchCategory.all => AppColors.primary,
-    _UniversalSearchCategory.institutions => const Color(0xFF176BFF),
+    _UniversalSearchCategory.institutions => AppColors.primary,
     _UniversalSearchCategory.personnel => const Color(0xFF087A6B),
     _UniversalSearchCategory.symptoms => const Color(0xFFD66B16),
     _UniversalSearchCategory.medications => const Color(0xFF7656D8),

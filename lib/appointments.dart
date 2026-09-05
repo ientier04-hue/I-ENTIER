@@ -1,12 +1,14 @@
-import 'supabase_data.dart';
-import 'supabase_config.dart';
 import 'package:flutter/material.dart';
 
-const _appointmentPrimary = Color(0xFF176BFF);
-const _appointmentNavy = Color(0xFF102A56);
-const _appointmentMuted = Color(0xFF667085);
-const _appointmentBorder = Color(0xFFE4EAF2);
-const _appointmentCanvas = Color(0xFFF5F8FC);
+import 'app_theme.dart';
+import 'supabase_config.dart';
+import 'supabase_data.dart';
+
+const _appointmentPrimary = AppColors.primary;
+const _appointmentNavy = AppColors.navy;
+const _appointmentMuted = AppColors.muted;
+const _appointmentBorder = AppColors.border;
+const _appointmentCanvas = AppColors.canvas;
 
 enum AppointmentStatus { pending, confirmed, cancelled }
 
@@ -961,18 +963,14 @@ class _BookingProviderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: _appointmentBorder),
-    ),
+    decoration: AppDecorations.card,
     child: Row(
       children: [
         Container(
           width: 52,
           height: 52,
           decoration: BoxDecoration(
-            color: const Color(0xFFEAF1FF),
+            color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Icon(
@@ -1094,7 +1092,7 @@ class _AppointmentModeOption extends StatelessWidget {
     selected: selected,
     label: mode.label,
     child: Material(
-      color: selected ? const Color(0xFFEAF1FF) : Colors.white,
+      color: selected ? AppColors.primarySoft : Colors.white,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         key: ValueKey('appointment-mode-${mode.storageValue}'),
@@ -1811,11 +1809,7 @@ class _PatientAppointmentCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _appointmentBorder),
-      ),
+      decoration: AppDecorations.card,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1826,7 +1820,7 @@ class _PatientAppointmentCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEAF1FF),
+                  color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
@@ -2014,11 +2008,7 @@ class _AppointmentMessage extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(25),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: _appointmentBorder),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       children: [
         Icon(icon, size: 38, color: _appointmentPrimary),

@@ -748,11 +748,7 @@ class _InsurancePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: AppColors.border),
-    ),
+    decoration: AppDecorations.card,
     child: child,
   );
 }

@@ -10,9 +10,9 @@ import 'app_theme.dart';
 import 'supabase_config.dart';
 
 const _mobileClinicGreen = Color(0xFF087F5B);
-const _mobileClinicNavy = Color(0xFF102A43);
-const _mobileClinicMuted = Color(0xFF667085);
-const _mobileClinicBorder = Color(0xFFE1E8ED);
+const _mobileClinicNavy = AppColors.navy;
+const _mobileClinicMuted = AppColors.muted;
+const _mobileClinicBorder = AppColors.border;
 
 class MobileClinic {
   final String id;
@@ -842,11 +842,7 @@ class _ClinicProfilePanel extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(22),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: _mobileClinicBorder),
-    ),
+    decoration: AppDecorations.card,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

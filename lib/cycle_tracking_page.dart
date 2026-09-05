@@ -1,17 +1,19 @@
-import 'supabase_data.dart';
 import 'package:flutter/material.dart';
+
+import 'app_theme.dart';
+import 'supabase_data.dart';
 
 const _rose = Color(0xFFE94C85);
 const _roseSoft = Color(0xFFFFE8F1);
 const _purple = Color(0xFF7C5CE5);
 const _purpleSoft = Color(0xFFF0EBFF);
 const _teal = Color(0xFF0A9F8F);
-const _tealSoft = Color(0xFFE5F7F3);
-const _navy = Color(0xFF102A56);
-const _ink = Color(0xFF344054);
-const _muted = Color(0xFF667085);
-const _border = Color(0xFFE4EAF2);
-const _canvas = Color(0xFFF8F7FC);
+const _tealSoft = AppColors.tealSoft;
+const _navy = AppColors.navy;
+const _ink = AppColors.ink;
+const _muted = AppColors.muted;
+const _border = AppColors.border;
+const _canvas = AppColors.canvas;
 
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
@@ -1135,11 +1137,7 @@ class _CycleStatusCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
-      ),
+      decoration: AppDecorations.card,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1468,11 +1466,7 @@ class _CycleCalendar extends StatelessWidget {
     return Container(
       key: const Key('cycle-calendar'),
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
-      ),
+      decoration: AppDecorations.card,
       child: Column(
         children: [
           Row(
@@ -2249,9 +2243,7 @@ class _PeriodRangeFormState extends State<_PeriodRangeForm> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFD92D20),
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Supprimer'),
           ),
         ],
@@ -2391,7 +2383,7 @@ class _PeriodRangeFormState extends State<_PeriodRangeForm> {
               Text(
                 _error!,
                 style: const TextStyle(
-                  color: Color(0xFFD92D20),
+                  color: AppColors.error,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -2416,9 +2408,7 @@ class _PeriodRangeFormState extends State<_PeriodRangeForm> {
               TextButton.icon(
                 key: const Key('cycle-delete-period'),
                 onPressed: _delete,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFD92D20),
-                ),
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
                 icon: const Icon(Icons.delete_outline_rounded),
                 label: const Text('Supprimer cette période'),
               ),
@@ -2575,9 +2565,7 @@ class _CycleEntryFormState extends State<_CycleEntryForm> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFD92D20),
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Supprimer'),
           ),
         ],
@@ -2788,7 +2776,7 @@ class _CycleEntryFormState extends State<_CycleEntryForm> {
                     icon: const Icon(Icons.delete_outline_rounded),
                     label: const Text('Supprimer cette journée'),
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFD92D20),
+                      foregroundColor: AppColors.error,
                     ),
                   ),
                 ],

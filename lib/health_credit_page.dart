@@ -6,7 +6,7 @@ import 'health_credit_models.dart';
 import 'health_credit_repository.dart';
 
 const _creditBlue = Color(0xFF155EEF);
-const _creditNavy = Color(0xFF12315F);
+const _creditNavy = AppColors.navy;
 const _creditMint = Color(0xFFE9F8F3);
 
 class HealthCreditPage extends StatefulWidget {
@@ -225,7 +225,7 @@ class _CreditOverview extends StatelessWidget {
           const SizedBox(height: 16),
           _CreditNotice(
             icon: Icons.lock_clock_outlined,
-            color: const Color(0xFFD92D20),
+            color: AppColors.error,
             title: 'Accès temporairement suspendu',
             message: credit!.suspendedUntil == null
                 ? 'Des retards répétés nécessitent une régularisation avec l’équipe Crédit Santé.'
@@ -1926,7 +1926,7 @@ class _ApplicationStatusCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             application.decisionReason,
-            style: const TextStyle(color: Color(0xFFD92D20)),
+            style: const TextStyle(color: AppColors.error),
           ),
         ],
       ],
@@ -1972,7 +1972,7 @@ class _InstallmentTile extends StatelessWidget {
             (paid
                     ? AppColors.success
                     : late
-                    ? const Color(0xFFD92D20)
+                    ? AppColors.error
                     : _creditBlue)
                 .withValues(alpha: .1),
         child: Icon(
@@ -1984,7 +1984,7 @@ class _InstallmentTile extends StatelessWidget {
           color: paid
               ? AppColors.success
               : late
-              ? const Color(0xFFD92D20)
+              ? AppColors.error
               : _creditBlue,
         ),
       ),
@@ -2134,15 +2134,13 @@ class _MiniStatus extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
     decoration: BoxDecoration(
-      color: (danger ? const Color(0xFFD92D20) : _creditBlue).withValues(
-        alpha: .08,
-      ),
+      color: (danger ? AppColors.error : _creditBlue).withValues(alpha: .08),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Text(
       text,
       style: TextStyle(
-        color: danger ? const Color(0xFFD92D20) : _creditBlue,
+        color: danger ? AppColors.error : _creditBlue,
         fontSize: 11,
         fontWeight: FontWeight.w800,
       ),
