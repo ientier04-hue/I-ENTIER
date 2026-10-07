@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Pharmacie I-ENTIER",
+    "slug": "ientier-pharmacy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ientier.pharmacy"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ientier.pharmacy"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "scheme": "ientier-pharmacy",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ajouter une ordonnance depuis vos photos.",
+          "cameraPermission": "Photographier une ordonnance pour la retranscrire.",
+          "microphonePermission": false
+        }
+      ]
+    ]
+  }
+}

@@ -12,7 +12,11 @@ gérés directement par Supabase Auth.
    Pour activer les opérations Pharmacie sur une base déjà initialisée,
    appliquer `20260810172603_add_pharmacy_operations.sql` après les migrations
    précédentes.
-2. Dans **Project Settings > API**, ajouter `ientier` aux schémas exposés.
+2. Vérifier que `ientier` figure parmi les schémas exposés dans **Project Settings > Data API**.
+   La migration `20260926020347_expose_ientier_schema_to_data_api.sql` configure
+   aussi ce schéma sur le rôle `authenticator`. Cette configuration SQL prime sur
+   les changements ultérieurs faits dans le tableau de bord tant qu'elle n'est
+   pas réinitialisée.
 3. La clé publique est déjà configurée dans les quatre clients. Elle peut être
    remplacée au build avec `SUPABASE_PUBLISHABLE_KEY`. Ne jamais placer la clé
    `service_role` dans une application Flutter.

@@ -27,6 +27,7 @@ import 'notification_service.dart';
 import 'notifications_page.dart';
 import 'onboarding_page.dart';
 import 'pharmacy_page.dart';
+import 'pharmacy_web_page.dart';
 import 'preventive_medicine_page.dart';
 import 'rescue_page.dart';
 import 'service_personalization.dart';
@@ -2710,7 +2711,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (payload is PharmacySearchEntry) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => PharmacyPage(
+          builder: (_) => PharmacyWebPage(
             patientId: widget.user.uid,
             initialQuery: payload.name,
           ),
@@ -2866,7 +2867,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (service.id == 'pharmacie') {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => PharmacyPage(patientId: widget.user.uid),
+          builder: (_) => PharmacyWebPage(patientId: widget.user.uid),
         ),
       );
       return;

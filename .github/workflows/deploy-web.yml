@@ -30,8 +30,29 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: pharmacy/package-lock.json
+
+      - name: Build independent pharmacy
+        working-directory: pharmacy
+        env:
+          PHARMACY_BASE_PATH: /I-ENTIER/pharmacy
+        run: |
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run build:web
+
       - name: Build the Web app
-        run: flutter build web --release --base-href /I-ENTIER/
+        run: flutter build web --release --base-href /I-ENTIER/ --dart-define=PHARMACY_WEB_URL=https://ientier04-hue.github.io/I-ENTIER/pharmacy/
+
+      - name: Include pharmacy web app
+        run: cp -R pharmacy/dist build/web/pharmacy
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
