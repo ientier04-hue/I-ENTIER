@@ -6,16 +6,23 @@ const ink = '#1C2028';
 const lime = '#00BFA9';
 const palette = ['#00BFA9', '#7EA6D3', '#ADBACF', '#78C5BE', '#A5B5C4'];
 type Destination = 'Pharmacies' | 'Ordonnances' | 'Commandes';
-type IconName = 'store' | 'document' | 'bag' | 'pill' | 'scan';
-export function Icon({ name, color = ink, size = 22 }: { name: IconName; color?: string; size?: number }) {
+type IconName = 'store' | 'document' | 'bag' | 'pill' | 'scan' | 'heart' | 'chevron' | 'close' | 'pin' | 'star' | 'truck' | 'truckOff';
+export function Icon({ name, color = ink, size = 22, filled = false }: { name: IconName; color?: string; size?: number; filled?: boolean }) {
   const paths = {
+    pin: 'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1116 0ZM15 10a3 3 0 11-6 0 3 3 0 016 0',
+    star: 'm12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3L12 17.4l-5.6 3 1.1-6.3L3 9.6l6.2-.9L12 3Z',
+    truck: 'M3 5h11v12H8M3 5v12h1M14 9h4l3 4v4h-2M14 17h1M5 17a2 2 0 114 0 2 2 0 01-4 0M15 17a2 2 0 114 0 2 2 0 01-4 0M14 13h7',
+    truckOff: 'M3 3l18 18M7 5h7v6M3 7v10h2M14 9h4l3 4v4h-2M9 17h6M5 17a2 2 0 114 0 2 2 0 01-4 0M15 17a2 2 0 114 0 2 2 0 01-4 0',
+    heart: 'M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 00-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 000-7.8',
+    chevron: 'M6 9l6 6 6-6',
+    close: 'M6 6l12 12M18 6L6 18',
     scan: 'M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5M7 8h10M7 12h10M7 16h6',
     store: 'M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 4 5 4 5 0 0 4 4 4 4 0 0 4 4 4 4 0 0 4 5 4 5 0M9 20v-6h6v6',
     document: 'M14 3H5v18h14V8L14 3v5h5M8 12h8M8 16h5',
     bag: 'M5 7h14l2 14H3L5 7M8 8V6a4 4 0 018 0v2',
     pill: 'M9 4a6 6 0 018 8l-6 7a6 6 0 01-8-8l6-7M7 8l9 8',
   };
-  return <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}><Path d={paths[name]} fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"/></Svg>;
+  return <Svg width={size} height={size} viewBox="0 0 24 24"><Path d={paths[name]} fill={filled ? color : 'none'} stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"/></Svg>;
 }
 export function QuickAccess({ pharmacies, prescriptions, orders, onOpen }: { pharmacies: number; prescriptions: number; orders: number; onOpen: (tab: Destination) => void }) {
   const items: { title: Destination; count: number; icon: IconName; color: string }[] = [

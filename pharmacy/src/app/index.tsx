@@ -14,13 +14,18 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
+import * as Location from "expo-location";
 import { Session } from "@supabase/supabase-js";
 import { db, supabase, ensureGuestSession } from "../api";
 import { router, useLocalSearchParams } from "expo-router";
 import { Cart, Product, changeQuantity, orderLines } from "../cart";
 import { styles as s } from "../theme";
-import { MedicalArtwork } from "../components/MedicalArtwork";
-import { QuickAccess, CatalogCharts, OrderProgress, StockBadge, Icon } from "../components/Overview";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MedicineCard } from "../components/MedicineCard";
+import { groupMedicineOffers, medicineKey, medicineOfferKey } from "../catalog";
+import { compareDistance, distanceKm, type Coordinates, type Pharmacy } from "../pharmacies";
+import { PharmacyIdentity } from "../components/PharmacyIdentity";
+import { OrderProgress, Icon } from "../components/Overview";
 
 type Prescription = {
   prescription_id: string;
@@ -28,13 +33,6 @@ type Prescription = {
   storage_path: string;
   transcription?: string;
   doctor_name_snapshot: string;
-};
-type Pharmacy = {
-  pharmacy_id: string;
-  display_name: string;
-  address: string;
-  phone: string;
-  opening_hours: string;
 };
 type Order = {
   order_id: string;
@@ -44,6 +42,7 @@ type Order = {
 };
 const tabs = [
   "Médicaments",
+  "Favoris",
   "Pharmacies",
   "Ordonnances",
   "Panier",
@@ -78,17 +77,6 @@ function Button({
 function Emblem() {
   return <View accessible={false} style={s.emblem}><View style={s.crossH}/><View style={s.crossV}/></View>;
 }
-function Capsule({ compact = false }: { compact?: boolean }) {
-  const { width } = useWindowDimensions();
-  return <View pointerEvents="none" accessible={false} style={[compact ? s.smallArt : s.art, !compact && width < 380 && s.narrowArt]}>
-    <View style={[s.orbit, compact && s.smallOrbit]} />
-    <View style={[s.capsule, compact && s.smallCapsule]}>
-      <View style={s.capsuleTop}><View style={s.capsuleShine}/></View>
-      <View style={s.capsuleBottom}><View style={s.capsuleMark}/></View>
-    </View>
-    {!compact && <View style={s.artSpark}><Text style={s.artSparkText}>✳</Text></View>}
-  </View>;
-}
 export default function App() {
   const { width } = useWindowDimensions();
   const desktop = width >= 850;
@@ -113,14 +101,20 @@ export default function App() {
   const [query, setQuery] = useState(params.q || "");
   const [pharmacyQuery, setPharmacyQuery] = useState('');
   const [pharmacyFilter, setPharmacyFilter] = useState<string | null>(null);
-  const [showCharts, setShowCharts] = useState(false);
+  const [pharmacyMode, setPharmacyMode] = useState<'all' | 'nearby' | 'favorites'>('all');
+  const [position, setPosition] = useState<Coordinates | null>(null);
+  const [locating, setLocating] = useState(false);
+  const locationRequest = useRef(false);
+  const [pharmacyFavorites, setPharmacyFavorites] = useState<string[]>([]);
+  const [pharmacyFavoritesOwner, setPharmacyFavoritesOwner] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [favoritesOwner, setFavoritesOwner] = useState<string | null>(null);
   const [category, setCategory] = useState("Tous");
   const [products, setProducts] = useState<Product[]>([]);
   const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<Cart>({});
-  const [prescriptionId, setPrescriptionId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [message, setMessage] = useState("");
@@ -129,6 +123,67 @@ export default function App() {
   const lock = useRef(false);
   const previousUser = useRef<string | undefined>(undefined);
   const uid = session?.user.id;
+  useEffect(() => {
+    let active = true;
+    if (uid) AsyncStorage.getItem(`medicine-favorites:${uid}`).then(value => {
+      if (!active) return;
+      const parsed: unknown = value ? JSON.parse(value) : [];
+      setFavorites(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
+      setFavoritesOwner(uid);
+    }).catch(() => { if (active) setFavoritesOwner(uid); });
+    return () => { active = false; };
+  }, [uid]);
+  useEffect(() => {
+    if (uid && favoritesOwner === uid) AsyncStorage.setItem(`medicine-favorites:${uid}`, JSON.stringify(favorites)).catch(() => setMessage('Impossible de conserver les favoris.'));
+  }, [favorites, favoritesOwner, uid]);
+  const toggleFavorite = (variants: Product[]) => {
+    if (favoritesOwner !== uid) return;
+    const keys = products.filter(p => medicineOfferKey(p) === medicineOfferKey(variants[0])).map(medicineKey);
+    setFavorites(current => keys.some(key => current.includes(key))
+      ? current.filter(id => !keys.includes(id)) : [...current, ...new Set(keys)]);
+  };
+  useEffect(() => {
+    let active = true;
+    if (uid) AsyncStorage.getItem(`pharmacy-favorites:${uid}`).then(value => {
+      if (!active) return;
+      const parsed: unknown = value ? JSON.parse(value) : [];
+      setPharmacyFavorites(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
+      setPharmacyFavoritesOwner(uid);
+    }).catch(() => { if (active) { setPharmacyFavorites([]); setPharmacyFavoritesOwner(uid); } });
+    return () => { active = false; };
+  }, [uid]);
+  useEffect(() => {
+    if (uid && pharmacyFavoritesOwner === uid) AsyncStorage.setItem(`pharmacy-favorites:${uid}`, JSON.stringify(pharmacyFavorites)).catch(() => setMessage('Impossible de conserver les pharmacies favorites.'));
+  }, [pharmacyFavorites, pharmacyFavoritesOwner, uid]);
+  const togglePharmacyFavorite = (id: string) => {
+    if (!uid || pharmacyFavoritesOwner !== uid) return;
+    setPharmacyFavorites(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
+  };
+  async function locate() {
+    if (locationRequest.current) return;
+    locationRequest.current = true;
+    setLocating(true);
+    setMessage('');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') throw new Error('Localisation non autorisée. Vous pouvez choisir une pharmacie ou vos favoris.');
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const current = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Position indisponible. Réessayez.')), 15000); }),
+        ]);
+        setPosition(current.coords);
+        setPharmacyMode('nearby');
+        setPharmacyFilter(null);
+      } finally { clearTimeout(timeout); }
+    } catch (error) {
+      setMessage(error instanceof Error && /Localisation non autorisée|Position indisponible/.test(error.message) ? error.message : 'Position indisponible. Réessayez.');
+    } finally {
+      locationRequest.current = false;
+      setLocating(false);
+    }
+  }
   async function run(task: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -148,10 +203,10 @@ export default function App() {
   async function refresh() {
     try {
       const [catalog, locations] = await Promise.all([
-        db.from("v_public_pharmacy_products").select("*").order("name"),
+        db.from("v_public_medicine_products").select("*").order("name"),
         db
           .from("pharmacies")
-          .select("pharmacy_id,display_name,address,phone,opening_hours")
+          .select("pharmacy_id,display_name,address,phone,opening_hours,latitude,longitude,delivery_available")
           .eq("public_enabled", true)
           .eq("operational_status", "active")
           .order("display_name"),
@@ -167,7 +222,10 @@ export default function App() {
   useEffect(() => {
     const updateSession = (value: Session | null) => {
       if (previousUser.current !== value?.user.id) {
-        setCart({}); setPrescriptionId(null); setPrescriptions([]); setOrders([]);
+        setFavorites([]); setFavoritesOwner(null);
+        setPharmacyFavorites([]); setPharmacyFavoritesOwner(null);
+        setPharmacyMode('all'); setPharmacyFilter(null); setPosition(null);
+        setCart({}); setPrescriptions([]); setOrders([]);
         setProducts([]); setPharmacies([]); setNote(''); setMessage('');
         setLoading(Boolean(value));
         previousUser.current = value?.user.id;
@@ -296,14 +354,44 @@ export default function App() {
     0,
   );
   const normalized = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().trim();
-  const visiblePharmacies = pharmacies.filter(p => normalized(`${p.display_name} ${p.address}`).includes(normalized(pharmacyQuery)));
+  const pharmacyById = new Map(pharmacies.map(p => [p.pharmacy_id, p]));
+  const distances = new Map(pharmacies.map(p => [p.pharmacy_id, distanceKm(position, p)]));
+  const comparePharmacies = (a: string, b: string) => pharmacyMode === 'nearby'
+    ? compareDistance(distances.get(a) ?? null, distances.get(b) ?? null) : 0;
+  const matchesPharmacyMode = (id: string) => pharmacyMode !== 'favorites' || pharmacyFavorites.includes(id);
+  const visiblePharmacies = pharmacies.filter(p => matchesPharmacyMode(p.pharmacy_id)).sort((a, b) => comparePharmacies(a.pharmacy_id, b.pharmacy_id)).filter(p => normalized(`${p.display_name} ${p.address}`).includes(normalized(pharmacyQuery)));
   const filteredPharmacy = pharmacies.find(p => p.pharmacy_id === pharmacyFilter);
   const visible = products.filter(
     (p) =>
+      matchesPharmacyMode(p.pharmacy_id) &&
       (!pharmacyFilter || p.pharmacy_id === pharmacyFilter) &&
       (category === "Tous" || (p.category || "Autres") === category) &&
-      normalized(`${p.name} ${p.active_ingredient} ${p.pharmacy_name}`).includes(normalized(query)),
+      normalized(`${p.name} ${p.active_ingredient} ${p.pharmacy_name} ${p.laboratory || ""} ${p.strength || ""} ${p.dosage_form || ""}`).includes(normalized(query)),
   );
+  const groups = groupMedicineOffers([...visible].sort((a, b) => comparePharmacies(a.pharmacy_id, b.pharmacy_id)));
+  const favoriteGroups = groupMedicineOffers(products).filter(group => group.some(p => favorites.includes(medicineKey(p))));
+  const renderMedicine = (variants: Product[], inCart = false) => <MedicineCard
+    key={inCart ? variants[0].product_id : medicineOfferKey(variants[0])}
+    pharmacies={pharmacyById}
+    distances={distances}
+    pharmacyFavorites={pharmacyFavorites}
+    pharmacyFavoritesReady={!!uid && pharmacyFavoritesOwner === uid}
+    onPharmacyFavorite={togglePharmacyFavorite}
+    variants={variants} cart={cart} busy={busy} inCart={inCart}
+    favorite={products.some(p => medicineOfferKey(p) === medicineOfferKey(variants[0]) && favorites.includes(medicineKey(p)))}
+    onFavorite={() => toggleFavorite(variants)} onAdjust={adjust}
+  />;
+  const pharmacyFilters = <View style={s.pharmacyFilters}>{([
+    { value: 'all', label: 'Toutes', icon: 'store' },
+    { value: 'nearby', label: locating ? 'Localisation…' : 'À proximité', icon: 'pin' },
+    { value: 'favorites', label: 'Mes pharmacies', icon: 'star' },
+  ] as const).map(item => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: pharmacyMode === item.value, disabled: locating }} disabled={locating} onPress={() => {
+    if (item.value === 'nearby') { void locate(); return; }
+    setPharmacyMode(item.value); setPharmacyFilter(null); setMessage('');
+  }} style={[s.pharmacyChip, pharmacyMode === item.value && s.pharmacyChipActive]}>
+    <Icon name={item.icon} size={16} color={pharmacyMode === item.value ? '#F5F8EF' : '#63764D'}/>
+    <Text style={[s.pharmacyChipText, pharmacyMode === item.value && s.pharmacyChipTextActive]}>{item.label}</Text>
+  </Pressable>)}</View>;
   return (
     <SafeAreaView style={s.root}>
       <StatusBar style="dark" />
@@ -355,21 +443,20 @@ export default function App() {
         <>
             {tab === "Médicaments" && (
               <>
-                <View style={s.hero}>
-                  <Text style={s.eyebrow}>VOTRE PHARMACIE</Text>
-                  <Text style={s.heroTitle}>Prenez soin de vous.</Text>
-                  <View style={s.heroArt}><MedicalArtwork/></View>
-                  <View style={{flexDirection:"row",alignItems:"center",gap:10}}><View style={[s.searchRow,{flex:1}]}><TextInput
-                    accessibilityLabel="Rechercher un médicament"
-                    placeholder="Rechercher un médicament"
-                    value={query}
-                    onChangeText={setQuery}
-                    style={[s.input, s.searchInput]}
-                    returnKeyType="search"
-                  />{!!query && <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => setQuery('')} style={s.clearSearch}><Text style={s.clearText}>×</Text></Pressable>}</View><Pressable accessibilityRole="button" accessibilityLabel="Scanner une ordonnance" onPress={() => router.push('/scan')} style={({pressed}) => [{width:52,height:52,borderRadius:12,backgroundColor:'#1C2028',alignItems:'center',justifyContent:'center'},pressed && s.pressed]}><Icon name="scan" color="#00BFA9" size={25}/></Pressable></View>
+                <View style={{flexDirection:"row",alignItems:"center",gap:10}}><View style={[s.searchRow,{flex:1}]}><TextInput
+                  accessibilityLabel="Rechercher un médicament" placeholder="Rechercher un médicament…"
+                  value={query} onChangeText={setQuery} style={[s.input, s.searchInput]} returnKeyType="search"
+                />{!!query && <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => setQuery('')} style={s.clearSearch}><Text style={s.clearText}>×</Text></Pressable>}</View>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Scanner une ordonnance" onPress={() => router.push('/scan')} style={s.scanButton}><Icon name="scan" color="#4F6D2D" size={25}/></Pressable>
                 </View>
+                {pharmacyFilters}
+                {!query && !pharmacyFilter && pharmacyMode === 'all' && <Pressable accessibilityRole="button" accessibilityLabel="Voir les médicaments Laboratoires 4C" onPress={() => {setQuery('Laboratoires 4C');setCategory('Tous');}} style={s.catalogBanner}>
+                  <View style={{flex:1,gap:12}}><Text style={s.eyebrow}>LABORATOIRES 4C</Text><Text style={s.heroTitle}>Votre santé,
+à portée de main.</Text><View style={s.bannerAction}><Text style={s.bannerActionText}>Découvrir  ↗</Text></View></View>
+                  <View style={s.bannerIcon}><Icon name="pill" color="#709645" size={72}/></View>
+                </Pressable>}
                 {!!filteredPharmacy && <Button title={`${filteredPharmacy.display_name}  ×`} secondary onPress={() => setPharmacyFilter(null)}/>}
-                <QuickAccess pharmacies={pharmacies.length} prescriptions={prescriptions.length} orders={orders.length} onOpen={setTab}/>
+                <Text style={s.heading}>Catégories</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -388,7 +475,7 @@ export default function App() {
                   ))}
                 </ScrollView>
                 <View style={s.header}>
-                  <Text style={s.heading}>{visible.length} produit{visible.length > 1 ? "s" : ""}</Text>
+                  <Text style={s.heading}>{groups.length} médicament{groups.length > 1 ? "s" : ""}</Text>
                   <Button
                     title="Actualiser"
                     secondary
@@ -400,54 +487,30 @@ export default function App() {
                   <ActivityIndicator color="#242C26" />
                 ) : (
                   <View style={s.grid}>
-                    {visible.map((p) => (
-                      <View key={p.product_id} style={[s.card, s.product]}>
-                        <View style={s.productArt}>
-                          <StockBadge quantity={Number(p.stock_quantity)}/>
-                          <Capsule compact/>
-                        </View>
-                        <Text style={s.muted}>{p.pharmacy_name}</Text>
-                        <Text style={s.heading}>{p.name}</Text>
-                        <Text style={s.muted}>
-                          {p.active_ingredient} {p.pack_size}
-                        </Text>
-                        {p.requires_prescription && (
-                          <Text style={s.badge}>Sur ordonnance</Text>
-                        )}
-                        <Text style={s.price}>
-                          {money(p.selling_price, p.currency)}
-                        </Text>
-                        <Button
-                          title={
-                            cart[p.product_id]
-                              ? `Ajouter · ${cart[p.product_id]}`
-                              : "Ajouter"
-                          }
-                          disabled={busy}
-                          onPress={() => adjust(p, 1)}
-                        />
-                      </View>
-                    ))}
+                    {groups.map(group => renderMedicine(group))}
                   </View>
                 )}
-                {!loading && !query && !pharmacyFilter && <><Pressable accessibilityRole="button" accessibilityState={{expanded:showCharts}} onPress={() => setShowCharts(!showCharts)} style={s.chartToggle}><Text style={s.heading}>Explorer le catalogue</Text><Text style={s.clearText}>{showCharts ? '−' : '+'}</Text></Pressable>{showCharts && <CatalogCharts products={products} category={category} onCategory={value => {setCategory(value); scroll.current?.scrollTo({y:0,animated:true}); }}/>}</>}
                 {!loading && !visible.length && (
-                  <View style={s.card}><Text style={s.heading}>{query || pharmacyFilter || category !== 'Tous' ? 'Aucun résultat' : 'Aucun médicament disponible'}</Text>{(!!query || !!pharmacyFilter || category !== 'Tous') && <Button title="Réinitialiser les filtres" secondary onPress={() => {setQuery('');setCategory('Tous');setPharmacyFilter(null);}}/>}</View>
+                  <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucun médicament dans vos pharmacies favorites' : query || pharmacyFilter || category !== 'Tous' ? 'Aucun résultat' : 'Aucun médicament disponible'}</Text>{(!!query || !!pharmacyFilter || category !== 'Tous' || pharmacyMode !== 'all') && <Button title="Réinitialiser les filtres" secondary onPress={() => {setQuery('');setCategory('Tous');setPharmacyFilter(null);setPharmacyMode('all');}}/>}</View>
                 )}
               </>
             )}
+            {tab === "Favoris" && <>
+              <Text style={s.heading}>Mes favoris</Text>
+              <View style={s.grid}>{favoriteGroups.map(group => renderMedicine(group))}</View>
+              {!favoriteGroups.length && <Text style={s.empty}>Aucun favori pour le moment.</Text>}
+            </>}
             {tab === "Pharmacies" && (
               <>
                 <View style={s.header}><Text style={s.heading}>Les pharmacies</Text><Text style={s.muted}>{loading ? '…' : visiblePharmacies.length}</Text></View>
                 <View style={s.searchRow}><TextInput style={[s.input,s.searchInput]} accessibilityLabel="Rechercher une pharmacie" placeholder="Nom, ville ou quartier" value={pharmacyQuery} onChangeText={setPharmacyQuery} returnKeyType="search"/>{!!pharmacyQuery && <Pressable style={s.clearSearch} accessibilityRole="button" accessibilityLabel="Effacer la recherche de pharmacie" onPress={() => setPharmacyQuery('')}><Text style={s.clearText}>×</Text></Pressable>}</View>
+                {pharmacyFilters}
                 {loading && <ActivityIndicator color="#202923"/>}
                 {visiblePharmacies.map((p) => (
                   <View key={p.pharmacy_id} style={s.card}>
-                    <View style={s.header}><View style={s.facilityIcon}><Icon name="store" size={26}/></View><Text style={s.facilityInitial}>{p.display_name.slice(0,2).toUpperCase()}</Text></View>
-                    <Text style={s.heading}>{p.display_name}</Text>
-                    <Text>{p.address}</Text>
+                    <PharmacyIdentity name={p.display_name} address={p.address} distance={distances.get(p.pharmacy_id) ?? null} delivery={p.delivery_available} favorite={pharmacyFavorites.includes(p.pharmacy_id)} onFavorite={() => togglePharmacyFavorite(p.pharmacy_id)} disabled={!uid || pharmacyFavoritesOwner !== uid}/>
                     <Text style={s.muted}>{p.opening_hours}</Text>
-                    <Button title="Voir les médicaments" onPress={() => {setPharmacyFilter(p.pharmacy_id);setQuery('');setCategory('Tous');setTab('Médicaments');}}/>
+                    <Button title="Voir les médicaments" onPress={() => {setPharmacyFilter(p.pharmacy_id);setPharmacyMode('all');setQuery('');setCategory('Tous');setTab('Médicaments');}}/>
                     {!!p.address && <Button title="Itinéraire ↗" secondary onPress={() => run(async () => {await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address + ' ' + p.display_name)}`);})}/>}
                     <Button
                       title="Appeler"
@@ -463,7 +526,7 @@ export default function App() {
                     />
                   </View>
                 ))}
-                {!loading && !visiblePharmacies.length && <View style={s.card}><Text style={s.heading}>{pharmacyQuery ? 'Aucune pharmacie trouvée' : 'Aucune pharmacie disponible'}</Text>{!!pharmacyQuery && <Button title="Effacer la recherche" secondary onPress={() => setPharmacyQuery('')}/>}</View>}
+                {!loading && !visiblePharmacies.length && <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucune pharmacie favorite' : pharmacyQuery ? 'Aucune pharmacie trouvée' : 'Aucune pharmacie disponible'}</Text>{!!pharmacyQuery && <Button title="Effacer la recherche" secondary onPress={() => setPharmacyQuery('')}/>}</View>}
               </>
             )}
             {tab === "Ordonnances" && (
@@ -544,27 +607,7 @@ export default function App() {
             {tab === "Panier" && purchaseView === "cart" && (
               <>
                 <Text style={s.heading}>Mon panier</Text>
-                {selected.map((p) => (
-                  <View style={s.card} key={p.product_id}>
-                    <Text style={s.heading}>{p.name}</Text>
-                    <Text>{money(p.selling_price, p.currency)}</Text>
-                    <View style={s.row}>
-                      <Button
-                        title="−"
-                        secondary
-                        disabled={busy}
-                        onPress={() => adjust(p, -1)}
-                      />
-                      <Text>{cart[p.product_id]}</Text>
-                      <Button
-                        title="+"
-                        secondary
-                        disabled={busy}
-                        onPress={() => adjust(p, 1)}
-                      />
-                    </View>
-                  </View>
-                ))}
+                {selected.map(p => renderMedicine([p], true))}
                 {!selected.length ? (
                   <View style={s.card}><Text style={s.heading}>Votre panier est vide.</Text><Button title="Parcourir les médicaments" onPress={() => setTab('Médicaments')}/></View>
                 ) : (
@@ -572,25 +615,6 @@ export default function App() {
                     <Text style={s.price}>
                       {money(total, selected[0]?.currency)}
                     </Text>
-                    {selected.some((p) => p.requires_prescription) && (
-                      <>
-                        <Text style={s.heading}>Ordonnance</Text>
-                        {prescriptions.map((p) => (
-                          <Button
-                            key={p.prescription_id}
-                            title={`${p.prescription_id === prescriptionId ? "✓ " : ""}${p.file_name || "Ordonnance"}`}
-                            secondary
-                            onPress={() => setPrescriptionId(p.prescription_id)}
-                          />
-                        ))}
-                        <Button
-                          title="Ajouter une ordonnance"
-                          secondary
-                          disabled={busy}
-                          onPress={() => run(upload)}
-                        />
-                      </>
-                    )}
                     <TextInput
                       placeholder="Note à la pharmacie"
                       accessibilityLabel="Note à la pharmacie"
@@ -613,14 +637,13 @@ export default function App() {
                           const lines = orderLines(
                             cart,
                             products,
-                            prescriptionId,
                           );
                           const { data, error } = await db.rpc(
                             "place_pharmacy_order",
                             {
                               p_pharmacy_id: selected[0].pharmacy_id,
                               p_items: lines,
-                              p_prescription_id: prescriptionId,
+                              p_prescription_id: null,
                               p_customer_name: "",
                               p_customer_phone: "",
                               p_note: note.trim(),
@@ -628,11 +651,10 @@ export default function App() {
                           );
                           if (error)
                             throw new Error(
-                              "Commande refusée. Vérifiez le stock et l’ordonnance.",
+                              "Commande refusée. Vérifiez la disponibilité des produits.",
                             );
                           setCart({});
                           setNote("");
-                          setPrescriptionId(null);
                           setTab("Commandes");
                           setMessage(`Commande ${data || ""} transmise.`);
                         });
@@ -647,7 +669,7 @@ export default function App() {
       {!desktop && <View style={s.mobileDock}>
         {Object.values(cart).some(q => q > 0) && tab !== 'Panier' && <Pressable accessibilityRole="button" onPress={() => setTab('Panier')} style={s.cartDock}><Text style={s.cartDockText}>Voir mon panier · {Object.values(cart).reduce((a,b) => a+b,0)}</Text><Text style={s.cartDockText}>→</Text></Pressable>}
         <View style={s.bottomNav}>{tabs.map((t,i) => <Pressable key={t} accessibilityRole="tab" accessibilityState={{selected:tab === t}} accessibilityLabel={t} onPress={() => setTab(t)} style={({pressed}) => [s.navItem,pressed && s.pressed]}>
-          <View style={[s.navIcon,tab === t && s.navIconActive]}><Icon name={(['pill','store','document','bag'] as const)[i]} size={21} color={tab === t ? '#00BFA9' : '#1C2028'}/>{t === 'Panier' && Object.keys(cart).length > 0 && <View style={s.cartDot}/>}</View>
+          <View style={[s.navIcon,tab === t && s.navIconActive]}><Icon name={(['pill','heart','store','document','bag'] as const)[i]} size={21} color={tab === t ? '#FFFFFF' : '#59634E'}/>{t === 'Panier' && Object.keys(cart).length > 0 && <View style={s.cartDot}/>}</View>
         </Pressable>)}</View>
       </View>}
     </SafeAreaView>

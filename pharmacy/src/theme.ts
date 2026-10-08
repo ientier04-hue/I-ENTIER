@@ -1,16 +1,21 @@
 import { StyleSheet } from 'react-native';
 
 const ink = '#1C2028';
-const lime = '#00BFA9';
+const lime = '#B6D87A';
 const muted = '#747781';
 export const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F7F9F9' },
-  page: { padding: 20, paddingTop: 28, gap: 26, width: '100%', maxWidth: 1360, alignSelf: 'center', paddingBottom: 150 },
+  pharmacyFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pharmacyChip: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, paddingHorizontal: 13, borderRadius: 22, borderWidth: 1, borderColor: '#DDE5D2', backgroundColor: '#FFFFFF' },
+  pharmacyChipActive: { backgroundColor: '#526D34', borderColor: '#526D34' },
+  pharmacyChipText: { fontSize: 12, fontWeight: '600', color: '#63764D' },
+  pharmacyChipTextActive: { color: '#F5F8EF' },
+  root: { flex: 1, backgroundColor: '#F5F7EF' },
+  page: { padding: 18, paddingTop: 22, gap: 22, width: '100%', maxWidth: 1360, alignSelf: 'center', paddingBottom: 150 },
   mobileDock: { position:'absolute', left:14, right:14, bottom:16, gap:8 },
-  bottomNav: {flexDirection:'row',justifyContent:'space-around',backgroundColor:'#FFFFFF',padding:9,borderRadius: 12,borderWidth: 1,borderColor: '#E0E5E7'},
+  bottomNav: {flexDirection:'row',justifyContent:'space-around',backgroundColor:'#FFFFFF',padding:9,borderRadius: 30,borderWidth: 1,borderColor: '#E5E9DD'},
   navItem: {flex:1,minHeight:56,alignItems:'center',justifyContent:'center',gap:4},
   navIcon: {width:46,height:38,alignItems:'center',justifyContent:'center',borderRadius: 12},
-  navIconActive: {backgroundColor:'#1C2028'},
+  navIconActive: {backgroundColor:'#7B9D47'},
   purchaseSwitch: { flexDirection:'row', padding:5, gap:4, borderRadius: 12, backgroundColor:'#FFFFFF', borderWidth: 1, borderColor: '#E0E5E7' },
   purchaseTab: { flex:1, minHeight:48, alignItems:'center', justifyContent:'center', paddingHorizontal:10, borderRadius: 12 },
   purchaseTabActive: { backgroundColor:'#1C2028' },
@@ -70,6 +75,11 @@ export const styles = StyleSheet.create({
   authHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   authTitle: { color: ink, fontSize: 35, fontWeight: '600', letterSpacing: -1.7 },
   authArrow: { fontSize: 35, color: '#89927C', fontWeight: '300' },
+  scanButton: {width:54,height:54,borderRadius:19,backgroundColor:'#E8EEDC',alignItems:'center',justifyContent:'center'},
+  catalogBanner: {padding:24,borderRadius:28,backgroundColor:'#E4EECD',flexDirection:'row',alignItems:'center',overflow:'hidden',minHeight:185},
+  bannerAction: {alignSelf:'flex-start',paddingHorizontal:18,paddingVertical:11,backgroundColor:'#FFFFFF',borderRadius:24},
+  bannerActionText: {fontSize:12,fontWeight:'600',color:'#4F6D2D'},
+  bannerIcon: {width:94,height:120,borderRadius:48,backgroundColor:'#D3E4AD',alignItems:'center',justifyContent:'center',transform:[{rotate:'-22deg'}]},
   hero: { padding: 24, gap: 12, backgroundColor: '#E8F5F2', borderRadius: 12, borderWidth:1, borderColor:'#D5EAE5' },
   eyebrow: { letterSpacing: 2.2, fontSize: 10, fontWeight: '600', color: '#717680' },
   heroTitle: { fontSize: 27, lineHeight: 33, letterSpacing: -.8, fontWeight: '500', color: '#20232A', zIndex: 1 },

@@ -24,15 +24,14 @@ test("limite le stock et interdit deux pharmacies", () => {
   );
   assert.deepEqual(changeQuantity({ a: 1 }, product, -1, [product]), {});
 });
-test("revalide ordonnance, stock et produits disparus avant envoi", () => {
-  assert.throws(
-    () =>
-      orderLines({ a: 1 }, [{ ...product, requires_prescription: true }], null),
-    /ordonnance/,
+test("ne bloque pas sur le statut ordonnance et revalide le stock", () => {
+  assert.deepEqual(
+    orderLines({ a: 1 }, [{ ...product, requires_prescription: true }]),
+    [{ product_id: "a", quantity: 1 }],
   );
-  assert.throws(() => orderLines({ a: 3 }, [product], null), /stock/);
-  assert.throws(() => orderLines({ unknown: 1 }, [product], null), /stock/);
-  assert.deepEqual(orderLines({ a: 2 }, [product], null), [
+  assert.throws(() => orderLines({ a: 3 }, [product]), /stock/);
+  assert.throws(() => orderLines({ unknown: 1 }, [product]), /stock/);
+  assert.deepEqual(orderLines({ a: 2 }, [product]), [
     { product_id: "a", quantity: 2 },
   ]);
 });

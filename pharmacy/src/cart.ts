@@ -1,4 +1,12 @@
 export type Product = {
+  medicine_id?: string | null;
+  variant_id?: string | null;
+  medicine_slug?: string | null;
+  laboratory?: string | null;
+  image_url?: string | null;
+  source_url?: string | null;
+  strength?: string;
+  dosage_form?: string;
   product_id: string;
   pharmacy_id: string;
   pharmacy_name: string;
@@ -37,7 +45,6 @@ export function changeQuantity(
 export function orderLines(
   cart: Cart,
   products: Product[],
-  prescriptionId: string | null,
 ) {
   const entries = Object.entries(cart);
   if (!entries.length) throw new Error("Votre panier est vide.");
@@ -50,8 +57,6 @@ export function orderLines(
       quantity > Number(p.stock_quantity)
     )
       throw new Error("Le stock a changé. Actualisez votre panier.");
-    if (p.requires_prescription && !prescriptionId)
-      throw new Error("Sélectionnez une ordonnance.");
     return p;
   });
   if (new Set(selected.map((p) => p.pharmacy_id)).size !== 1)

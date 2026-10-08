@@ -28,6 +28,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Afficher les pharmacies les plus proches de vous."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Ajouter une ordonnance depuis vos photos.",
