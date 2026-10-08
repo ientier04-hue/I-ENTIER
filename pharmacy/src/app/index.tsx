@@ -315,8 +315,10 @@ export default function App() {
     try {
       setCart(changeQuantity(cart, p, delta, products));
       setMessage("");
+      return null;
     } catch (e) {
       setMessage((e as Error).message);
+      return (e as Error).message;
     }
   }
   async function upload() {

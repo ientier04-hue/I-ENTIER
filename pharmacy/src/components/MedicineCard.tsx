@@ -1,25 +1,13 @@
-import React, { useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ProductPhoto } from './ProductPhoto';
+import { MedicineDetails, type HeroRect } from './MedicineDetails';
 import type { Cart, Product } from '../cart';
 import { chooseVariant, formatPrice, matchingPharmacyOffers, preferredPharmacyOffer } from '../catalog';
 import { Icon } from './Overview';
 import { PharmacyIdentity } from './PharmacyIdentity';
 import { formatDistance, type Pharmacy } from '../pharmacies';
 
-const photos: Record<string, number> = {
-  '4c-analgine': require('../../assets/medicines/analgine.jpg'),
-  '4c-pediaphen': require('../../assets/medicines/pediaphen.jpg'),
-  '4c-flaxan': require('../../assets/medicines/flaxan.jpg'),
-  '4c-paracetamol': require('../../assets/medicines/paracetamol.jpg'),
-};
-function ProductPhoto({ product, large = false }: { product: Product; large?: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const source = photos[product.medicine_slug || ''] || (product.image_url ? { uri: product.image_url } : undefined);
-  return <View style={[st.photo, large && st.largePhoto]}>
-    {source && !failed ? <Image source={source} resizeMode="contain" style={st.image} accessibilityLabel={product.name} onError={() => setFailed(true)}/>
-      : <Icon name="pill" size={large ? 72 : 34} color="#749257"/>}
-  </View>;
-}
 function Quantity({ product, quantity, busy, onAdjust }: { product: Product; quantity: number; busy: boolean; onAdjust: (p: Product, delta: number) => void }) {
   return <View style={st.quantity}>
     <Pressable accessibilityRole="button" accessibilityLabel={`Retirer un ${product.name}`} disabled={busy || quantity === 0} onPress={() => onAdjust(product, -1)} style={[st.step, (busy || quantity === 0) && st.disabled]}><Text style={st.stepText}>−</Text></Pressable>
@@ -29,12 +17,16 @@ function Quantity({ product, quantity, busy, onAdjust }: { product: Product; qua
 }
 export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onAdjust, inCart = false, pharmacies, distances, pharmacyFavorites, onPharmacyFavorite, pharmacyFavoritesReady }: {
   variants: Product[]; cart: Cart; busy: boolean; favorite: boolean;
-  onFavorite: () => void; onAdjust: (product: Product, delta: number) => void; inCart?: boolean;
+  onFavorite: () => void; onAdjust: (product: Product, delta: number) => string | null; inCart?: boolean;
   pharmacies: Map<string, Pharmacy>; distances: Map<string, number | null>; pharmacyFavorites: string[]; onPharmacyFavorite: (id: string) => void; pharmacyFavoritesReady: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [picker, setPicker] = useState<'dosage_form' | 'strength' | 'pack_size' | null>(null);
-  const [details, setDetails] = useState(false);
+  const [details, setDetails] = useState<HeroRect | null>(null);
+  const photoRef = useRef<View>(null);
+  const openDetails = () => photoRef.current?.measureInWindow((x, y, width, height) => {
+    setDetails({ x, y, width, height });
+  });
   const [allOffers, setAllOffers] = useState(false);
   const p = variants.find(v => v.product_id === selectedId)
     || preferredPharmacyOffer(matchingPharmacyOffers(variants, variants[0]), distances) || variants[0];
@@ -59,9 +51,9 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onAdj
   const heart = <Pressable accessibilityRole="button" accessibilityLabel={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} accessibilityState={{selected: favorite}} onPress={onFavorite} style={st.iconButton}><Icon name="heart" color={favorite ? '#D85B73' : '#8D958B'} size={24}/>{favorite && <View style={st.favoriteDot}/>}</Pressable>;
   return <View style={[st.card, inCart && st.cartCard]}>
     <View style={st.cardHeader}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Voir ${p.name}`} onPress={() => setDetails(true)}><ProductPhoto product={p}/></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Voir ${p.name}`} onPress={openDetails}><View ref={photoRef} collapsable={false}><ProductPhoto product={p}/></View></Pressable>
       <View style={st.content}>
-        <View style={st.between}><Pressable accessibilityRole="button" style={st.nameLink} onPress={() => setDetails(true)}><Text style={st.name}>{p.name}</Text></Pressable>{heart}</View>
+        <View style={st.between}><Pressable accessibilityRole="button" style={st.nameLink} onPress={openDetails}><Text style={st.name}>{p.name}</Text></Pressable>{heart}</View>
         {!!p.laboratory && <Text style={st.laboratory}>{p.laboratory}</Text>}
       </View>
     </View>
@@ -84,23 +76,20 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onAdj
       {Number(p.stock_quantity) <= 0 && <Text style={st.availability}>Indisponible</Text>}
       {inCart && <Pressable accessibilityRole="button" accessibilityLabel={`Supprimer ${p.name} du panier`} onPress={() => onAdjust(p, -(cart[p.product_id] || 0))} disabled={busy} style={[st.iconButton, st.removeButton]}><Icon name="close" size={20} color="#8D958B"/></Pressable>}
     </View>}
-    <Modal visible={details || picker !== null} transparent animationType="slide" onRequestClose={() => { setPicker(null); setDetails(false); }}>
+    {details && <MedicineDetails product={p} variants={variants} origin={details}
+      cart={cart} busy={busy} favorite={favorite} onFavorite={onFavorite}
+      onAdjust={onAdjust} onSelect={setSelectedId} onClose={() => setDetails(null)}
+      inCart={inCart} pharmacies={pharmacies} distances={distances}
+      pharmacyFavorites={pharmacyFavorites} onPharmacyFavorite={onPharmacyFavorite}
+      pharmacyFavoritesReady={pharmacyFavoritesReady}/>}
+    <Modal visible={picker !== null} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
       <View style={st.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Fermer" onPress={() => { setPicker(null); setDetails(false); }}/>
+        <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Fermer" onPress={() => setPicker(null)}/>
         <View style={st.sheet} accessibilityViewIsModal>
           <View style={st.handle}/>
-          <View style={st.sheetHeader}><Text style={st.sheetTitle}>{picker ? labels[picker] : 'Détails du médicament'}</Text><Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={() => picker ? setPicker(null) : setDetails(false)} style={st.iconButton}><Icon name="close"/></Pressable></View>
+          <View style={st.sheetHeader}><Text style={st.sheetTitle}>{picker ? labels[picker] : ''}</Text><Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={() => setPicker(null)} style={st.iconButton}><Icon name="close"/></Pressable></View>
           <ScrollView contentContainerStyle={st.sheetBody}>
-            {picker ? options(picker).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{checked: p[picker] === value}} onPress={() => { setSelectedId(chooseVariant(variants, p, picker, value).product_id); setPicker(null); }} style={[st.option, p[picker] === value && st.selectedOption]}><Text style={st.selectorText}>{value}</Text>{p[picker] === value && <Text style={st.check}>✓</Text>}</Pressable>) : details ? <>
-              <ProductPhoto product={p} large/>
-              <View style={st.between}><Text style={st.detailName}>{p.name}</Text>{heart}</View>
-              <Text style={st.laboratory}>{p.laboratory || p.pharmacy_name}</Text>
-              <Text style={st.ingredient}>{p.active_ingredient}</Text>
-              {selectors}
-              {pharmacyIdentity(p)}
-              <View style={st.infoRow}><Text style={st.infoLabel}>Disponibilité</Text><Text style={st.infoValue}>{Number(p.stock_quantity) > 0 ? `${p.stock_quantity} en stock` : 'Indisponible'}</Text></View>
-              <View style={st.detailBottom}><Text style={st.price}>{formatPrice(p)}</Text><Quantity product={p} quantity={cart[p.product_id] || 0} busy={busy} onAdjust={onAdjust}/></View>
-            </> : null}
+            {picker && options(picker).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{checked: p[picker] === value}} onPress={() => { setSelectedId(chooseVariant(variants, p, picker, value).product_id); setPicker(null); }} style={[st.option, p[picker] === value && st.selectedOption]}><Text style={st.selectorText}>{value}</Text>{p[picker] === value && <Text style={st.check}>✓</Text>}</Pressable>)}
           </ScrollView>
         </View>
       </View>
@@ -125,9 +114,7 @@ const st = StyleSheet.create({
   nameLink: {flex:1,minWidth:0},
   removeButton: {marginLeft:'auto'},
   cartCard: {flexBasis:'auto',maxWidth:'100%'},
-  photo: {width:52,height:60,borderRadius:14,borderWidth:1,borderColor:'#E5E8DF',padding:5,backgroundColor:'#FAFBF8',alignItems:'center',justifyContent:'center',overflow:'hidden'},
-  largePhoto: {width:'100%',height:220,borderWidth:0,borderRadius:24,backgroundColor:'#F5F8EC',padding:22},
-  image: {width:'100%',height:'100%'}, content:{flex:1,minWidth:0,gap:0},
+  content:{flex:1,minWidth:0,gap:0},
   between:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8},
   name:{fontSize:17,fontWeight:'600',color:'#22291F',lineHeight:23},
   laboratory:{fontSize:11,color:'#868D80'},price:{flexShrink:1,fontSize:23,fontWeight:'700',color:'#283126',letterSpacing:-.8},
@@ -139,5 +126,5 @@ const st = StyleSheet.create({
   overlay:{flex:1,backgroundColor:'rgba(29,37,25,.32)',justifyContent:'flex-end',alignItems:'center'},
   sheet:{width:'100%',maxWidth:560,maxHeight:'90%',backgroundColor:'#FFF',borderTopLeftRadius:30,borderTopRightRadius:30,paddingTop:10,paddingBottom:26},handle:{width:36,height:4,borderRadius:4,backgroundColor:'#DDE2D5',alignSelf:'center'},
   sheetHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:22,paddingVertical:6},sheetTitle:{fontSize:16,fontWeight:'600',color:'#293223'},sheetBody:{padding:22,paddingTop:8,gap:16},
-  option:{minHeight:54,paddingHorizontal:16,borderRadius:14,flexDirection:'row',justifyContent:'space-between',alignItems:'center',backgroundColor:'#F7F8F3'},selectedOption:{backgroundColor:'#EDF6D8',borderWidth:1,borderColor:'#ADCB75'},check:{color:'#6C932E'},detailName:{fontSize:26,fontWeight:'600',color:'#263020',flex:1},ingredient:{fontSize:14,color:'#6F7768'},infoRow:{flexDirection:'row',gap:14,paddingVertical:10,borderBottomWidth:1,borderColor:'#EFF1EA'},infoLabel:{fontSize:13,color:'#818976',flex:1},infoValue:{fontSize:13,color:'#323C2A',flex:1,textAlign:'right'},detailBottom:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:12,paddingTop:8},
+  option:{minHeight:54,paddingHorizontal:16,borderRadius:14,flexDirection:'row',justifyContent:'space-between',alignItems:'center',backgroundColor:'#F7F8F3'},selectedOption:{backgroundColor:'#EDF6D8',borderWidth:1,borderColor:'#ADCB75'},check:{color:'#6C932E'},
 });
