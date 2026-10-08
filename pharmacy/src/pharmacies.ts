@@ -5,6 +5,7 @@ export type Pharmacy = {
   address: string;
   phone: string;
   opening_hours: string;
+  photo_url?: string | null;
   latitude: number | null;
   longitude: number | null;
   delivery_available: boolean | null;
@@ -32,3 +33,10 @@ export function compareDistance(a: number | null, b: number | null) {
   if (a == null) return b == null ? 0 : 1;
   return b == null ? -1 : a - b;
 }
+
+export type PharmacyRating = {
+  pharmacy_id: string;
+  average_rating: number | null;
+  rating_count: number;
+  my_rating: number | null;
+};

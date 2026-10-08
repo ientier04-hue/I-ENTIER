@@ -6,9 +6,13 @@ const ink = '#1C2028';
 const lime = '#00BFA9';
 const palette = ['#00BFA9', '#7EA6D3', '#ADBACF', '#78C5BE', '#A5B5C4'];
 type Destination = 'Pharmacies' | 'Ordonnances' | 'Commandes';
-type IconName = 'store' | 'document' | 'bag' | 'pill' | 'scan' | 'heart' | 'chevron' | 'close' | 'pin' | 'star' | 'truck' | 'truckOff';
+type IconName = 'store' | 'document' | 'bag' | 'pill' | 'scan' | 'heart' | 'chevron' | 'close' | 'pin' | 'star' | 'truck' | 'truckOff' | 'bookmark' | 'phone' | 'directions';
 export function Icon({ name, color = ink, size = 22, filled = false }: { name: IconName; color?: string; size?: number; filled?: boolean }) {
   const paths = {
+    bookmark: 'M6 3h12v18l-6-4-6 4V3Z',
+    phone: 'M7 3H3c0 10 8 18 18 18v-4l-5-2-2 2a17 17 0 01-7-7l2-2-2-5Z',
+    directions: 'm12 2 10 10-10 10L2 12 10 2ZM7 15v-4h9M13 8l3 3-3 3',
+
     pin: 'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1116 0ZM15 10a3 3 0 11-6 0 3 3 0 016 0',
     star: 'm12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3L12 17.4l-5.6 3 1.1-6.3L3 9.6l6.2-.9L12 3Z',
     truck: 'M3 5h11v12H8M3 5v12h1M14 9h4l3 4v4h-2M14 17h1M5 17a2 2 0 114 0 2 2 0 01-4 0M15 17a2 2 0 114 0 2 2 0 01-4 0M14 13h7',

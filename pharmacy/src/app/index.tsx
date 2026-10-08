@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -23,8 +23,8 @@ import { styles as s } from "../theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MedicineCard } from "../components/MedicineCard";
 import { groupMedicineOffers, medicineKey, medicineOfferKey } from "../catalog";
-import { compareDistance, distanceKm, type Coordinates, type Pharmacy } from "../pharmacies";
-import { PharmacyIdentity } from "../components/PharmacyIdentity";
+import { compareDistance, distanceKm, type Coordinates, type Pharmacy, type PharmacyRating } from "../pharmacies";
+import { PharmacyCard } from "../components/PharmacyCard";
 import { OrderProgress, Icon } from "../components/Overview";
 
 type Prescription = {
@@ -112,6 +112,7 @@ export default function App() {
   const [category, setCategory] = useState("Tous");
   const [products, setProducts] = useState<Product[]>([]);
   const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
+  const [ratings, setRatings] = useState<Record<string, PharmacyRating>>({});
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<Cart>({});
@@ -200,25 +201,41 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function refresh() {
+  const loadRatings = useCallback(async (ids: string[]) => {
+    if (!ids.length || !uid) return;
+    const { data, error } = await db.rpc('pharmacy_rating_summaries', { p_pharmacy_ids: ids });
+    if (error) throw new Error('Impossible de charger les notes des pharmacies.');
+    if (previousUser.current !== uid) return;
+    setRatings(current => ({ ...current, ...Object.fromEntries((data as PharmacyRating[] || []).map(rating => [rating.pharmacy_id, rating])) }));
+  }, [uid, setRatings]);
+  async function ratePharmacy(pharmacyId: string, rating: number) {
+    if (!uid || !Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error('Choisissez une note de 1 à 5.');
+    const { error } = await db.from('pharmacy_ratings').upsert({ pharmacy_id: pharmacyId, user_id: uid, rating }, { onConflict: 'pharmacy_id,user_id' });
+    if (error) throw new Error('Impossible d’enregistrer la note. Réessayez.');
+    try { await loadRatings([pharmacyId]); }
+    catch { setMessage('Note enregistrée. Actualisez pour voir la moyenne.'); }
+  }
+  const refresh = useCallback(async () => {
     try {
       const [catalog, locations] = await Promise.all([
         db.from("v_public_medicine_products").select("*").order("name"),
         db
           .from("pharmacies")
-          .select("pharmacy_id,display_name,address,phone,opening_hours,latitude,longitude,delivery_available")
+          .select("pharmacy_id,display_name,address,phone,opening_hours,latitude,longitude,delivery_available,photo_url")
           .eq("public_enabled", true)
           .eq("operational_status", "active")
           .order("display_name"),
       ]);
       if (catalog.error || locations.error)
         throw new Error("Impossible de charger la pharmacie.");
+      if (previousUser.current !== uid) return;
       setProducts(catalog.data || []);
       setPharmacies(locations.data || []);
+      await loadRatings((locations.data || []).map(p => p.pharmacy_id));
     } finally {
       setLoading(false);
     }
-  }
+  }, [loadRatings, uid, setProducts, setPharmacies, setLoading]);
   useEffect(() => {
     const updateSession = (value: Session | null) => {
       if (previousUser.current !== value?.user.id) {
@@ -226,7 +243,7 @@ export default function App() {
         setPharmacyFavorites([]); setPharmacyFavoritesOwner(null);
         setPharmacyMode('all'); setPharmacyFilter(null); setPosition(null);
         setCart({}); setPrescriptions([]); setOrders([]);
-        setProducts([]); setPharmacies([]); setNote(''); setMessage('');
+        setProducts([]); setPharmacies([]); setRatings({}); setNote(''); setMessage('');
         setLoading(Boolean(value));
         previousUser.current = value?.user.id;
       }
@@ -248,8 +265,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (uid) refresh().catch((e) => setMessage(e.message));
-
-  }, [uid]);
+  }, [uid, refresh]);
   useEffect(() => {
     let active = true;
     if (uid)
@@ -506,26 +522,15 @@ export default function App() {
                 <View style={s.searchRow}><TextInput style={[s.input,s.searchInput]} accessibilityLabel="Rechercher une pharmacie" placeholder="Nom, ville ou quartier" value={pharmacyQuery} onChangeText={setPharmacyQuery} returnKeyType="search"/>{!!pharmacyQuery && <Pressable style={s.clearSearch} accessibilityRole="button" accessibilityLabel="Effacer la recherche de pharmacie" onPress={() => setPharmacyQuery('')}><Text style={s.clearText}>×</Text></Pressable>}</View>
                 {pharmacyFilters}
                 {loading && <ActivityIndicator color="#202923"/>}
-                {visiblePharmacies.map((p) => (
-                  <View key={p.pharmacy_id} style={s.card}>
-                    <PharmacyIdentity name={p.display_name} address={p.address} distance={distances.get(p.pharmacy_id) ?? null} delivery={p.delivery_available} favorite={pharmacyFavorites.includes(p.pharmacy_id)} onFavorite={() => togglePharmacyFavorite(p.pharmacy_id)} disabled={!uid || pharmacyFavoritesOwner !== uid}/>
-                    <Text style={s.muted}>{p.opening_hours}</Text>
-                    <Button title="Voir les médicaments" onPress={() => {setPharmacyFilter(p.pharmacy_id);setPharmacyMode('all');setQuery('');setCategory('Tous');setTab('Médicaments');}}/>
-                    {!!p.address && <Button title="Itinéraire ↗" secondary onPress={() => run(async () => {await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address + ' ' + p.display_name)}`);})}/>}
-                    <Button
-                      title="Appeler"
-                      disabled={!p.phone || busy}
-                      secondary
-                      onPress={() =>
-                        run(async () => {
-                          await Linking.openURL(
-                            `tel:${p.phone.replace(/[^+0-9]/g, "")}`,
-                          );
-                        })
-                      }
-                    />
-                  </View>
-                ))}
+                <View style={s.grid}>{visiblePharmacies.map((p) => <PharmacyCard key={p.pharmacy_id}
+                  pharmacy={p} distance={distances.get(p.pharmacy_id) ?? null}
+                  favorite={pharmacyFavorites.includes(p.pharmacy_id)} favoriteReady={!!uid && pharmacyFavoritesOwner === uid}
+                  onFavorite={() => togglePharmacyFavorite(p.pharmacy_id)} rating={ratings[p.pharmacy_id]}
+                  onRate={value => ratePharmacy(p.pharmacy_id, value)} busy={busy}
+                  onOpen={() => {setPharmacyFilter(p.pharmacy_id);setPharmacyMode('all');setQuery('');setCategory('Tous');setTab('Médicaments');}}
+                  onDirections={() => run(async () => {await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address + ' ' + p.display_name)}`);})}
+                  onCall={() => run(async () => {await Linking.openURL(`tel:${p.phone.replace(/[^+0-9]/g, '')}`);})}
+                />)}</View>
                 {!loading && !visiblePharmacies.length && <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucune pharmacie favorite' : pharmacyQuery ? 'Aucune pharmacie trouvée' : 'Aucune pharmacie disponible'}</Text>{!!pharmacyQuery && <Button title="Effacer la recherche" secondary onPress={() => setPharmacyQuery('')}/>}</View>}
               </>
             )}
