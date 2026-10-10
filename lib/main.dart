@@ -34,6 +34,8 @@ import 'service_personalization.dart';
 import 'supabase_config.dart';
 import 'supabase_data.dart';
 import 'traditional_medicine_page.dart';
+import 'video_calls/video_call_repository.dart';
+import 'video_calls/video_calls_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -216,10 +218,16 @@ class PatientProfileGate extends StatelessWidget {
             return const _LoadingScreen();
           }
           final profile = snapshot.data?.data() ?? const <String, dynamic>{};
-          return HomeScreen(
-            user: user,
-            account: account,
-            patientProfile: profile,
+          return VideoCallHost(
+            key: ValueKey('video-${user.uid}'),
+            client: SupabaseConfig.client,
+            userId: user.uid,
+            role: VideoCallRole.patient,
+            child: HomeScreen(
+              user: user,
+              account: account,
+              patientProfile: profile,
+            ),
           );
         },
       );
@@ -3108,6 +3116,7 @@ class _HomeScreenState extends State<HomeScreen> {
     unreadNotificationCount: _unreadNotificationCount,
     onNotificationsTap: _openNotifications,
     onProfileTap: _openPatientProfile,
+    onVideoCallsTap: () => VideoCallHost.open(context),
   );
 
   Widget _scrollablePage(int index, {required bool wide}) => SafeArea(
@@ -6082,12 +6091,14 @@ class _Header extends StatelessWidget {
   final int unreadNotificationCount;
   final VoidCallback onNotificationsTap;
   final VoidCallback onProfileTap;
+  final VoidCallback onVideoCallsTap;
   const _Header({
     required this.user,
     required this.profileName,
     required this.unreadNotificationCount,
     required this.onNotificationsTap,
     required this.onProfileTap,
+    required this.onVideoCallsTap,
   });
 
   @override
@@ -6143,6 +6154,12 @@ class _Header extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          _RoundIcon(
+            icon: Icons.videocam_outlined,
+            tooltip: 'Appels vidéo',
+            onTap: onVideoCallsTap,
+          ),
+          const SizedBox(width: 4),
           _RoundIcon(
             icon: Icons.notifications_none_rounded,
             badge: unreadNotificationCount == 0

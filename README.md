@@ -18,6 +18,9 @@ Le parcours de financement solidaire et le raccordement du prestataire de
 paiement sont documentés dans
 [docs/CROWDFUNDING_SETUP.md](docs/CROWDFUNDING_SETUP.md).
 
+L’activation des appels vidéo Patient–Professionnel avec LiveKit est décrite
+dans [docs/VIDEO_CALLS_SETUP.md](docs/VIDEO_CALLS_SETUP.md).
+
 ## Base de données
 
 Le schéma relationnel partagé par Patient, Professionnel, Pharmacie et

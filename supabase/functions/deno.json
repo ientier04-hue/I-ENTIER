@@ -1,0 +1,8 @@
+{
+  "nodeModulesDir": "auto",
+  "compilerOptions": { "strict": true },
+  "tasks": {
+    "check": "deno check video-call/index.ts video-call-cleanup/index.ts livekit-webhook/index.ts",
+    "test": "deno test video-call/handler_test.ts"
+  }
+}

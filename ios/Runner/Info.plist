@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>UIBackgroundModes</key>
+	<array><string>audio</string></array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>I-ENTIER utilise le microphone pendant vos appels vidéo.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -38,7 +42,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>I-ENTIER utilise la caméra pour numériser votre ordonnance.</string>
+	<string>I-ENTIER utilise la caméra pour les appels vidéo et les ordonnances.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>I-ENTIER utilise votre position pour afficher les pharmacies les plus proches.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

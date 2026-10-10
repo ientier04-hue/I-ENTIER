@@ -4,7 +4,7 @@ import 'package:i_entier/app_theme.dart';
 import 'package:i_entier/crowdfunding_page.dart';
 
 void main() {
-  final now = DateTime(2026, 7, 29, 10);
+  final now = DateTime.now();
   final campaigns = [
     CrowdfundingCampaign(
       id: 'campaign-surgery',
@@ -21,7 +21,7 @@ void main() {
       raisedAmount: 100000,
       contributorCount: 18,
       currency: 'HTG',
-      deadline: DateTime(2026, 8, 28),
+      deadline: now.add(const Duration(days: 30)),
       status: 'active',
       verificationStatus: 'approved',
       featured: true,
@@ -41,7 +41,7 @@ void main() {
       raisedAmount: 12000,
       contributorCount: 4,
       currency: 'HTG',
-      deadline: DateTime(2026, 9, 10),
+      deadline: now.add(const Duration(days: 43)),
       status: 'active',
       verificationStatus: 'approved',
     ),

@@ -4,6 +4,15 @@
 # working directory name when running `supabase init`.
 project_id = "ientier"
 
+# Authentication is enforced inside each function: Supabase getUser, a private
+# scheduler bearer secret, or LiveKit's signed webhook respectively.
+[functions.video-call]
+verify_jwt = false
+[functions.video-call-cleanup]
+verify_jwt = false
+[functions.livekit-webhook]
+verify_jwt = false
+
 [api]
 enabled = true
 # Port to use for the API URL.
