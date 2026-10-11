@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'consultations/consultation_documents_page.dart';
 import 'notification_service.dart';
 
 export 'notification_service.dart'
@@ -266,13 +267,34 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   void _openNotification(AppNotification notification) {
     unawaited(_setRead(notification, true));
-    if (_hasDestination(notification)) {
-      widget.onAppointmentTap!();
+    if (notification.source == 'appointment') {
+      widget.onAppointmentTap?.call();
+    } else if (_hasDestination(notification)) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ConsultationDocumentsPage(
+            patientId: widget.patientId!,
+            documentId: notification.source == 'app'
+                ? notification.sourceId.substring('consultation:'.length)
+                : null,
+            prescriptionId: notification.source == 'prescription'
+                ? notification.sourceId
+                : null,
+          ),
+        ),
+      );
     }
   }
 
   bool _hasDestination(AppNotification notification) =>
-      notification.source == 'appointment' && widget.onAppointmentTap != null;
+      (notification.source == 'appointment' &&
+          widget.onAppointmentTap != null) ||
+      (widget.patientId != null &&
+          widget.patientId!.isNotEmpty &&
+          ((notification.source == 'app' &&
+                  notification.sourceId.startsWith('consultation:')) ||
+              (notification.source == 'prescription' &&
+                  notification.sourceId.isNotEmpty)));
 
   void _showSyncError() {
     ScaffoldMessenger.of(context).showSnackBar(

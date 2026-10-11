@@ -66,7 +66,7 @@ export const dependencies: Dependencies = {
     });
     token.addGrant({
       roomJoin: true, room: call.room_name, canPublish: true, canSubscribe: true,
-      canPublishData: false, canUpdateOwnMetadata: false,
+      canPublishData: actor === call.provider_id, canUpdateOwnMetadata: false,
       canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE],
     });
     return { url: livekitUrl, token: await token.toJwt() };

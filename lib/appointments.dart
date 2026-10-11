@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'consultations/consultation_documents_page.dart';
 import 'supabase_config.dart';
 import 'supabase_data.dart';
 
@@ -1751,6 +1752,16 @@ class _PatientAppointmentsPageState extends State<PatientAppointmentsPage> {
                     _PatientAppointmentCard(
                       appointment: appointment,
                       processing: _processingId == appointment.id,
+                      onConsultation: appointment.mode == AppointmentMode.video
+                          ? () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ConsultationDocumentsPage(
+                                  patientId: widget.patientId,
+                                  appointmentId: appointment.id,
+                                ),
+                              ),
+                            )
+                          : null,
                       onEdit:
                           widget.repository != null &&
                               appointment.status == AppointmentStatus.pending &&
@@ -1780,6 +1791,7 @@ class _PatientAppointmentsPageState extends State<PatientAppointmentsPage> {
 }
 
 class _PatientAppointmentCard extends StatelessWidget {
+  final VoidCallback? onConsultation;
   final Appointment appointment;
   final bool processing;
   final VoidCallback? onEdit;
@@ -1787,6 +1799,7 @@ class _PatientAppointmentCard extends StatelessWidget {
   final VoidCallback? onDelete;
 
   const _PatientAppointmentCard({
+    this.onConsultation,
     required this.appointment,
     required this.processing,
     this.onEdit,
@@ -1906,6 +1919,15 @@ class _PatientAppointmentCard extends StatelessWidget {
               ),
             ),
           ],
+          if (onConsultation != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: OutlinedButton.icon(
+                onPressed: onConsultation,
+                icon: const Icon(Icons.assignment_outlined),
+                label: const Text('Documents de consultation'),
+              ),
+            ),
           if (appointment.cancellationNote.isNotEmpty) ...[
             const Divider(height: 26, color: _appointmentBorder),
             Text(

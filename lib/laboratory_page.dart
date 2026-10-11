@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_theme.dart';
+import 'consultations/consultation_documents_page.dart';
+import 'consultations/consultation_repository.dart';
 import 'supabase_data.dart';
 
 const _primary = AppColors.primary;
@@ -67,6 +69,21 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: _canvas,
     appBar: AppBar(
+      actions: [
+        if (widget.patientId.isNotEmpty)
+          IconButton(
+            tooltip: 'Examens prescrits',
+            icon: const Icon(Icons.assignment_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ConsultationDocumentsPage(
+                  patientId: widget.patientId,
+                  kind: ConsultationKind.exams,
+                ),
+              ),
+            ),
+          ),
+      ],
       backgroundColor: _canvas,
       surfaceTintColor: Colors.transparent,
       title: const Text(

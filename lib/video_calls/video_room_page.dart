@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:livekit_client/livekit_client.dart';
 
 import 'video_call_repository.dart';
+import 'camera_consent.dart';
 
 class VideoRoomPage extends StatefulWidget {
   final VideoCallController controller;
@@ -20,6 +21,7 @@ class VideoRoomPage extends StatefulWidget {
 
 class _VideoRoomPageState extends State<VideoRoomPage> {
   Room? _room;
+  late final CameraConsent _cameraConsent;
   EventsListener<RoomEvent>? _events;
   Timer? _clock, _heartbeat;
   bool _connecting = false,
@@ -39,6 +41,12 @@ class _VideoRoomPageState extends State<VideoRoomPage> {
   @override
   void initState() {
     super.initState();
+    _cameraConsent = CameraConsent(
+      callId: widget.initialCall.id,
+      patientId: widget.initialCall.patientId,
+      providerId: widget.initialCall.providerId,
+      userId: widget.controller.userId,
+    );
     widget.controller.addListener(_changed);
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _ended) return;
@@ -118,6 +126,17 @@ class _VideoRoomPageState extends State<VideoRoomPage> {
       _room = room;
       room.addListener(_roomChanged);
       _events = room.createListener()
+        ..on<DataReceivedEvent>((event) {
+          if (!mounted || _closing || _ended) return;
+          if (_cameraConsent.receive(
+            senderId: event.participant?.identity,
+            messageTopic: event.topic,
+            data: event.data,
+            now: DateTime.now(),
+          )) {
+            setState(() {});
+          }
+        })
         ..on<RoomDisconnectedEvent>((event) {
           if (mounted && !_closing && !_ended) {
             setState(() => _error = 'Connexion interrompue.');
@@ -137,12 +156,6 @@ class _VideoRoomPageState extends State<VideoRoomPage> {
       } catch (_) {
         _error = 'Microphone indisponible. Vérifiez son autorisation.';
       }
-      if (!mounted || _closing || _ended) return;
-      try {
-        await room.localParticipant?.setCameraEnabled(true);
-      } catch (_) {
-        _error = 'Caméra indisponible. Vérifiez son autorisation.';
-      }
       if (_closing || _ended) await room.dispose();
     } catch (error) {
       if (mounted && !_closing && !_ended) _error = videoCallError(error);
@@ -157,6 +170,7 @@ class _VideoRoomPageState extends State<VideoRoomPage> {
   }
 
   Future<void> _releaseRoom() async {
+    _cameraConsent.reset();
     final events = _events;
     final room = _room;
     _events = null;
@@ -331,7 +345,7 @@ class _VideoRoomPageState extends State<VideoRoomPage> {
                             ),
                           ),
                         ),
-                        if (!_ended && local != null)
+                        if (!_ended && local != null && camera)
                           Positioned(
                             right: 12,
                             top: 12,
@@ -363,6 +377,39 @@ class _VideoRoomPageState extends State<VideoRoomPage> {
                   ),
                 ),
               ),
+              if (!_ended &&
+                  connected &&
+                  !camera &&
+                  _cameraConsent.hasRequest(DateTime.now()))
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Wrap(
+                    spacing: 12,
+                    children: [
+                      TextButton(
+                        onPressed: _toggling
+                            ? null
+                            : () => setState(_cameraConsent.dismiss),
+                        child: const Text('Refuser'),
+                      ),
+                      FilledButton.icon(
+                        onPressed: _toggling
+                            ? null
+                            : () => _toggle(() async {
+                                if (!_cameraConsent.canEnableCamera(
+                                  DateTime.now(),
+                                )) {
+                                  return;
+                                }
+                                await local?.setCameraEnabled(true);
+                                _cameraConsent.dismiss();
+                              }),
+                        icon: const Icon(Icons.videocam_rounded),
+                        label: const Text('Activer ma caméra'),
+                      ),
+                    ],
+                  ),
+                ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
@@ -430,12 +477,50 @@ class _VideoRoomPageState extends State<VideoRoomPage> {
                             icon: camera
                                 ? Icons.videocam_rounded
                                 : Icons.videocam_off_rounded,
-                            onPressed: connected && !_toggling
+                            onPressed:
+                                connected &&
+                                    !_toggling &&
+                                    (camera ||
+                                        _cameraConsent.canEnableCamera(
+                                          DateTime.now(),
+                                        ))
                                 ? () => _toggle(() async {
+                                    if (!camera &&
+                                        !_cameraConsent.canEnableCamera(
+                                          DateTime.now(),
+                                        )) {
+                                      return;
+                                    }
                                     await local?.setCameraEnabled(!camera);
+                                    _cameraConsent.dismiss();
                                   })
                                 : null,
                           ),
+                          if (_cameraConsent.isProvider)
+                            _CallControl(
+                              tooltip: 'Demander la caméra du patient',
+                              icon: Icons.video_call_rounded,
+                              onPressed:
+                                  connected &&
+                                      !_toggling &&
+                                      room?.remoteParticipants.containsKey(
+                                            _call.patientId,
+                                          ) ==
+                                          true &&
+                                      remote?.isCameraEnabled() != true &&
+                                      _cameraConsent.canRequest(DateTime.now())
+                                  ? () => _toggle(() async {
+                                      await local!.publishData(
+                                        _cameraConsent.request(DateTime.now()),
+                                        reliable: true,
+                                        destinationIdentities: [
+                                          _call.patientId,
+                                        ],
+                                        topic: CameraConsent.topic,
+                                      );
+                                    })
+                                  : null,
+                            ),
                           if (!kIsWeb)
                             _CallControl(
                               tooltip: 'Retourner la caméra',
@@ -516,7 +601,7 @@ class _ParticipantVideo extends StatelessWidget {
         return track is VideoTrack
             ? VideoTrackRenderer(
                 track,
-                fit: VideoViewFit.cover,
+                fit: local ? VideoViewFit.cover : VideoViewFit.contain,
                 mirrorMode: local
                     ? VideoViewMirrorMode.auto
                     : VideoViewMirrorMode.off,

@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'app_theme.dart';
+import 'consultations/consultation_documents_page.dart';
 import 'pharmacy_repository.dart';
 import 'supabase_config.dart';
 import 'supabase_data.dart';
@@ -1066,9 +1067,27 @@ class _PrescriptionCard extends StatelessWidget {
           tooltip: 'Actions',
           onSelected: (value) {
             if (value == 'delete') onDelete();
+            if (value == 'consultation') {
+              final patientId = SupabaseConfig.client.auth.currentUser?.id;
+              if (patientId != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ConsultationDocumentsPage(
+                      patientId: patientId,
+                      prescriptionId: prescription.id,
+                    ),
+                  ),
+                );
+              }
+            }
           },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
+          itemBuilder: (context) => [
+            if (prescription.isFromDoctor)
+              const PopupMenuItem(
+                value: 'consultation',
+                child: Text('Consulter l’ordonnance'),
+              ),
+            const PopupMenuItem(
               value: 'delete',
               child: Row(
                 children: [
