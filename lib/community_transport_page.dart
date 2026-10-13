@@ -437,7 +437,7 @@ class _PartnerLanding extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 23,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   height: 1.15,
                 ),
               ),
@@ -927,7 +927,7 @@ class _CommunityTransportRequestFormPageState
               contentPadding: EdgeInsets.zero,
               title: const Text(
                 'Je confirme qu’il ne s’agit pas d’une urgence vitale.',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: const Text(
                 'En cas de danger immédiat, j’appelle le CAN au 116.',
@@ -1248,7 +1248,7 @@ class _CommunityTransportPartnerFormPageState
               contentPadding: EdgeInsets.zero,
               title: const Text(
                 'J’ai déjà un accompagnateur qualifié',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
                 _hasOwnCompanion
@@ -1399,7 +1399,7 @@ class _TransportHero extends StatelessWidget {
                   color: Colors.white,
                   fontSize: 22,
                   height: 1.15,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               SizedBox(height: 7),
@@ -1441,7 +1441,7 @@ class _EmergencyBoundaryCard extends StatelessWidget {
                 'Danger immédiat ? N’attendez pas un conducteur.',
                 style: TextStyle(
                   color: _transportRed,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1510,7 +1510,7 @@ class _ProcessSteps extends StatelessWidget {
                   step.$2,
                   style: const TextStyle(
                     color: AppColors.navy,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1610,7 +1610,7 @@ class _LocalRealityCard extends StatelessWidget {
           style: TextStyle(
             color: _transportBlueDark,
             fontSize: 17,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         SizedBox(height: 12),
@@ -1680,7 +1680,7 @@ class _RequirementTile extends StatelessWidget {
           title,
           style: const TextStyle(
             color: AppColors.navy,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         subtitle: Padding(
@@ -1779,7 +1779,7 @@ class _FormIntroCard extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: _transportBlueDark,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 4),
@@ -1808,7 +1808,7 @@ class _FormSectionTitle extends StatelessWidget {
           number,
           style: const TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -1864,7 +1864,7 @@ class _CareLevelTile extends StatelessWidget {
                       level.label,
                       style: const TextStyle(
                         color: AppColors.navy,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1934,7 +1934,7 @@ class _DepartureModeButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: selected ? _transportBlueDark : AppColors.ink,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
               ),

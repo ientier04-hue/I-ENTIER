@@ -235,7 +235,7 @@ class _HealthTrackingPageState extends State<HealthTrackingPage> {
                 'Dernières mesures',
                 style: TextStyle(
                   fontSize: 21,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: _navy,
                 ),
               ),
@@ -246,7 +246,7 @@ class _HealthTrackingPageState extends State<HealthTrackingPage> {
                 'Historique',
                 style: TextStyle(
                   fontSize: 21,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: _navy,
                 ),
               ),
@@ -294,7 +294,7 @@ class _TrackingHeader extends StatelessWidget {
             'Suivi santé',
             style: TextStyle(
               fontSize: 27,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: _navy,
             ),
           ),
@@ -435,7 +435,7 @@ class _LatestMeasurementCard extends StatelessWidget {
           style: const TextStyle(
             color: _navy,
             fontSize: 18,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         if (measurement != null) ...[
@@ -515,7 +515,7 @@ class _MeasurementTile extends StatelessWidget {
                   metric.label,
                   style: const TextStyle(
                     color: _navy,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -542,7 +542,7 @@ class _MeasurementTile extends StatelessWidget {
             style: const TextStyle(
               color: _navy,
               fontSize: 17,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           PopupMenuButton<String>(
@@ -599,7 +599,7 @@ class _TrackingFeedback extends StatelessWidget {
           style: const TextStyle(
             color: _navy,
             fontSize: 17,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 5),
@@ -808,7 +808,7 @@ class _MeasurementFormState extends State<_MeasurementForm> {
                       style: TextStyle(
                         color: _navy,
                         fontSize: 23,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -961,7 +961,7 @@ class _FormLabel extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(
       text,
-      style: const TextStyle(color: _navy, fontWeight: FontWeight.w800),
+      style: const TextStyle(color: _navy, fontWeight: FontWeight.w600),
     ),
   );
 }
@@ -1030,7 +1030,7 @@ class _MetricTypePicker extends StatelessWidget {
                             fontSize: 12,
                             height: 1.15,
                             fontWeight: selected == metric
-                                ? FontWeight.w800
+                                ? FontWeight.w600
                                 : FontWeight.w700,
                           ),
                         ),

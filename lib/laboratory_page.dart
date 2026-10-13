@@ -88,7 +88,7 @@ class _LaboratoryPageState extends State<LaboratoryPage> {
       surfaceTintColor: Colors.transparent,
       title: const Text(
         'Laboratoire',
-        style: TextStyle(fontWeight: FontWeight.w800, color: _navy),
+        style: TextStyle(fontWeight: FontWeight.w600, color: _navy),
       ),
     ),
     body: SafeArea(
@@ -329,7 +329,7 @@ class _LaboratorySectionSwitch extends StatelessWidget {
                             style: TextStyle(
                               color: selected == section ? _navy : _muted,
                               fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -417,7 +417,7 @@ class _LaboratoryHero extends StatelessWidget {
                   style: const TextStyle(
                     color: _teal,
                     fontSize: 11,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: .5,
                   ),
                 ),
@@ -429,7 +429,7 @@ class _LaboratoryHero extends StatelessWidget {
                   color: _navy,
                   fontSize: 27,
                   height: 1.12,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),
@@ -559,7 +559,7 @@ class _ResultHeader extends StatelessWidget {
           style: TextStyle(
             color: _navy,
             fontSize: 21,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -574,7 +574,7 @@ class _ResultHeader extends StatelessWidget {
           style: const TextStyle(
             color: Color(0xFF08776A),
             fontSize: 12,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -671,7 +671,7 @@ class _LaboratoryCard extends StatelessWidget {
                           color: _navy,
                           fontSize: 17,
                           height: 1.18,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 7),
@@ -794,7 +794,7 @@ class _AvailabilityBadge extends StatelessWidget {
             style: TextStyle(
               color: foreground,
               fontSize: 11.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -889,7 +889,7 @@ class _EmptyResult extends StatelessWidget {
           style: const TextStyle(
             color: _navy,
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 7),
@@ -939,7 +939,7 @@ class _PageFeedback extends StatelessWidget {
             style: const TextStyle(
               color: _navy,
               fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 7),
@@ -1080,7 +1080,7 @@ class _ExaminationHero extends StatelessWidget {
                 style: TextStyle(
                   color: _navy,
                   fontSize: 24,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               SizedBox(height: 10),
@@ -1162,7 +1162,7 @@ class _DirectoryTitle extends StatelessWidget {
           style: const TextStyle(
             color: _navy,
             fontSize: 21,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -1176,7 +1176,7 @@ class _DirectoryTitle extends StatelessWidget {
           '$count',
           style: const TextStyle(
             color: Color(0xFF08776A),
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -1257,7 +1257,7 @@ class _ExaminationCard extends StatelessWidget {
                         style: const TextStyle(
                           color: _navy,
                           fontSize: 16.5,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1266,7 +1266,7 @@ class _ExaminationCard extends StatelessWidget {
                         style: const TextStyle(
                           color: _teal,
                           fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -1360,7 +1360,7 @@ class LaboratoryExamDetailPage extends StatelessWidget {
                               style: const TextStyle(
                                 color: _navy,
                                 fontSize: 22,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                             const SizedBox(height: 6),
@@ -1368,7 +1368,7 @@ class LaboratoryExamDetailPage extends StatelessWidget {
                               examination.category,
                               style: const TextStyle(
                                 color: _teal,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -1581,7 +1581,7 @@ class _ResultsHero extends StatelessWidget {
                 style: TextStyle(
                   color: _navy,
                   fontSize: 25,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1603,7 +1603,7 @@ class _ResultsHero extends StatelessWidget {
                       style: TextStyle(
                         color: _teal,
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -1733,7 +1733,7 @@ class _ResultCard extends StatelessWidget {
                     style: const TextStyle(
                       color: _navy,
                       fontSize: 16.5,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   if (result.laboratoryName.isNotEmpty) ...[
@@ -1791,7 +1791,7 @@ class _ResultStatusBadge extends StatelessWidget {
             ? const Color(0xFF08776A)
             : const Color(0xFFB54708),
         fontSize: 11.5,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
     ),
   );
@@ -1849,7 +1849,7 @@ class LaboratoryResultDetailPage extends StatelessWidget {
                         style: const TextStyle(
                           color: _navy,
                           fontSize: 23,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       if (result.laboratoryName.isNotEmpty) ...[
@@ -1858,7 +1858,7 @@ class LaboratoryResultDetailPage extends StatelessWidget {
                           result.laboratoryName,
                           style: const TextStyle(
                             color: _teal,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -1955,7 +1955,7 @@ class _SimpleEmptyState extends StatelessWidget {
           style: const TextStyle(
             color: _navy,
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 7),
@@ -2158,7 +2158,7 @@ class _LaboratoryDetailHero extends StatelessWidget {
                   color: _navy,
                   fontSize: 23,
                   height: 1.15,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),
@@ -2189,7 +2189,7 @@ class _DetailSection extends StatelessWidget {
           style: const TextStyle(
             color: _navy,
             fontSize: 18,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 10),

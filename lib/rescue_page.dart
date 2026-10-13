@@ -803,7 +803,7 @@ class _MiniMetric extends StatelessWidget {
           style: const TextStyle(
             color: _rescueRed,
             fontSize: 20,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 4),
@@ -851,7 +851,7 @@ class _CapabilityGrid extends StatelessWidget {
                 const Spacer(),
                 Text(
                   item.$2,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -890,7 +890,7 @@ class _VolunteerStatusCard extends StatelessWidget {
             children: [
               Text(
                 profile.profession.label,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               if (profile.specialty.isNotEmpty)
                 Text(
@@ -1518,7 +1518,7 @@ class _LocationConsentCardState extends State<_LocationConsentCard> {
           : const Icon(Icons.my_location_rounded, color: _rescueRed),
       title: const Text(
         'Partager ma position',
-        style: TextStyle(fontWeight: FontWeight.w800),
+        style: TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: const Text(
         'Uniquement pendant votre disponibilité et avec votre consentement.',
@@ -1782,7 +1782,7 @@ class _VolunteerRegistrationFormState
         const SizedBox(height: 18),
         Text(
           'Rayon d’intervention : ${_radius.round()} km',
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         Slider(
           value: _radius,
@@ -1871,7 +1871,7 @@ class _DocumentPicker extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 if (fileName != null)
                   Text(
@@ -1889,7 +1889,7 @@ class _DocumentPicker extends StatelessWidget {
             fileName == null ? 'Ajouter' : 'Changer',
             style: const TextStyle(
               color: _rescueRed,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1943,7 +1943,7 @@ class _LivePill extends StatelessWidget {
           'RÉSEAU ACTIF',
           style: TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             fontSize: 10,
           ),
         ),
@@ -1967,7 +1967,7 @@ class _StatusPill extends StatelessWidget {
     ),
     child: Text(
       label,
-      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900),
+      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
     ),
   );
 }

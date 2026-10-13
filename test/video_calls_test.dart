@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:i_entier/app_theme.dart';
+import 'package:i_entier/appointments.dart';
 import 'package:i_entier/video_calls/video_call_repository.dart';
 import 'package:i_entier/video_calls/video_calls_page.dart';
 import 'package:i_entier/video_calls/video_room_page.dart';
@@ -76,6 +78,59 @@ class FakeCalls implements VideoCallRepository {
 }
 
 void main() {
+  testWidgets(
+    'opens video calls from appointments on a narrow screen with enlarged text',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.6)),
+            child: child!,
+          ),
+          home: VideoCallHost(
+            userId: 'patient',
+            role: VideoCallRole.patient,
+            repository: FakeCalls(),
+            child: Builder(
+              builder: (context) => Scaffold(
+                body: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: PatientAppointmentsPage(
+                    patientId: 'patient',
+                    onVideoCallsTap: () => VideoCallHost.open(context),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final callsButton = find.widgetWithText(OutlinedButton, 'Appels vidéo');
+      expect(callsButton, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(callsButton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(VideoCallsPage), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('patient-appointments-page')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets('incoming call appears over another page and can be declined', (
     tester,
   ) async {

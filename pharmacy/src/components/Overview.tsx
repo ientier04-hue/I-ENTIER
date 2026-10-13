@@ -2,9 +2,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { Product } from '../cart';
 
-const ink = '#1C2028';
-const lime = '#00BFA9';
-const palette = ['#00BFA9', '#7EA6D3', '#ADBACF', '#78C5BE', '#A5B5C4'];
+const ink = '#1D322A';
+const lime = '#477A68';
+const palette = ['#477A68', '#7EA6D3', '#ADBACF', '#78C5BE', '#A5B5C4'];
 type Destination = 'Pharmacies' | 'Ordonnances' | 'Commandes';
 type IconName = 'store' | 'document' | 'bag' | 'pill' | 'scan' | 'heart' | 'chevron' | 'close' | 'pin' | 'star' | 'truck' | 'truckOff' | 'bookmark' | 'phone' | 'directions';
 export function Icon({ name, color = ink, size = 22, filled = false }: { name: IconName; color?: string; size?: number; filled?: boolean }) {
@@ -30,9 +30,9 @@ export function Icon({ name, color = ink, size = 22, filled = false }: { name: I
 }
 export function QuickAccess({ pharmacies, prescriptions, orders, onOpen }: { pharmacies: number; prescriptions: number; orders: number; onOpen: (tab: Destination) => void }) {
   const items: { title: Destination; count: number; icon: IconName; color: string }[] = [
-    { title: 'Pharmacies', count: pharmacies, icon: 'store', color: '#F4F5F7' },
-    { title: 'Ordonnances', count: prescriptions, icon: 'document', color: '#F4F5F7' },
-    { title: 'Commandes', count: orders, icon: 'bag', color: '#F4F5F7' },
+    { title: 'Pharmacies', count: pharmacies, icon: 'store', color: '#EFEEE8' },
+    { title: 'Ordonnances', count: prescriptions, icon: 'document', color: '#EFEEE8' },
+    { title: 'Commandes', count: orders, icon: 'bag', color: '#EFEEE8' },
   ];
   return <View style={st.shortcuts}>{items.map(item => <Pressable key={item.title} accessibilityRole="button" accessibilityLabel={`${item.title}, ${item.count}`} onPress={() => onOpen(item.title)} style={({ pressed }) => [st.shortcut, { backgroundColor: item.color }, pressed && st.pressed]}>
     <View style={st.between}><Icon name={item.icon}/><Text style={st.tinyArrow}>↗</Text></View>
@@ -81,7 +81,7 @@ export function OrderProgress({ status }: { status: string }) {
   const index = orderSteps.indexOf(status);
   return <View style={st.progress}>
     <View style={st.between}><View style={[st.orderBadge, status === 'cancelled' && {backgroundColor:'#F8E3DE'}]}><View style={[st.dot,{backgroundColor:status === 'cancelled' ? '#A84632' : '#009B88'}]}/><Text style={st.barLabel}>{labels[status] || status}</Text></View><Icon name="bag"/></View>
-    {index >= 0 && <View accessible accessibilityLabel={`Étape ${index+1} sur 5 : ${labels[status]}`} style={st.steps}>{orderSteps.map((step,i) => <View key={step} style={[st.step,{backgroundColor:i <= index ? '#00BFA9' : '#E5E8EE'}]}/>)}</View>}
+    {index >= 0 && <View accessible accessibilityLabel={`Étape ${index+1} sur 5 : ${labels[status]}`} style={st.steps}>{orderSteps.map((step,i) => <View key={step} style={[st.step,{backgroundColor:i <= index ? '#477A68' : '#E5E8EE'}]}/>)}</View>}
   </View>;
 }
 export function StockBadge({ quantity }: { quantity: number }) {
@@ -89,18 +89,18 @@ export function StockBadge({ quantity }: { quantity: number }) {
 }
 const st = StyleSheet.create({
   shortcuts: { flexDirection:'row', flexWrap:'wrap', gap:10 },
-  shortcut: { flex:1, minWidth:86, padding:16, borderRadius: 12, gap:10,borderWidth: 1,borderColor: '#E0E5E7' },
+  shortcut: { flex:1, minWidth:86, padding:16, borderRadius: 12, gap:10,borderWidth: 1,borderColor: '#DDE2D9' },
   between: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:8 },
   shortcutNumber: { color:ink, fontSize:32, fontWeight:'500', letterSpacing:-1.6, marginTop:5 },
   shortcutLabel: { color:ink, fontSize:11, fontWeight:'600' },
   tinyArrow: {color:'#777C86', fontSize:18},
   pressed: { opacity:.72, transform:[{scale:.98}] },
   chartGrid: { flexDirection:'row', flexWrap:'wrap', gap:18 },
-  chartCard: { flex:1, flexBasis:320, minWidth:240, padding:24, borderRadius: 12, backgroundColor:'#FFFFFF', borderWidth: 1, borderColor: '#E0E5E7', gap:22 },
-  dark: {backgroundColor:'#F1F3F6', borderColor: '#E0E5E7'},
+  chartCard: { flex:1, flexBasis:320, minWidth:240, padding:24, borderRadius: 12, backgroundColor:'#FFFFFF', borderWidth: 1, borderColor: '#DDE2D9', gap:22 },
+  dark: {backgroundColor:'#EFEEE8', borderColor: '#DDE2D9'},
   heading: {fontSize:19, fontWeight:'600', color:ink, letterSpacing:-.6},
   white: {color:'#232832'},
-  smallBadge: {width:32,height:32,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor: '#E0E5E7',borderRadius:12},
+  smallBadge: {width:32,height:32,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor: '#DDE2D9',borderRadius:12},
   donutRow: {flexDirection:'row', flexWrap:'wrap', alignItems:'center', justifyContent:'center', gap:18},
   donut: {width:148,height:148},
   donutCenter: {position:'absolute',top:0,left:0,right:0,bottom:0,justifyContent:'center',alignItems:'center'},
@@ -118,7 +118,7 @@ const st = StyleSheet.create({
   barValue: {color:ink,fontSize:13,fontWeight:'700'},
   track: {height:12,backgroundColor:'#E5E8EE',borderRadius:8,overflow:'hidden'},
   bar: {height:12,borderRadius:8},
-  chartFooter: {fontSize:10,color:'#717985',borderTopWidth:1,borderColor: '#E0E5E7',paddingTop:16},
+  chartFooter: {fontSize:10,color:'#717985',borderTopWidth:1,borderColor: '#DDE2D9',paddingTop:16},
   noData: {color:'#717985',fontSize:13,paddingVertical:24},
   progress: {gap:18},
   orderBadge: {flexDirection:'row',alignItems:'center',gap:8,backgroundColor:'#E0F5F1',padding:10,borderRadius: 12},

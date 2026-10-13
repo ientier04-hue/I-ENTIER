@@ -415,7 +415,7 @@ class _MobileClinicPageState extends State<MobileClinicPage> {
                           style: TextStyle(
                             color: _mobileClinicNavy,
                             fontSize: 23,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -526,7 +526,7 @@ class _MobileClinicHero extends StatelessWidget {
                   color: Colors.white,
                   fontSize: 25,
                   height: 1.15,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 9),
@@ -614,7 +614,7 @@ class _MobileClinicCard extends StatelessWidget {
                         style: const TextStyle(
                           color: _mobileClinicNavy,
                           fontSize: 17,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const _CertifiedBadge(),
@@ -853,7 +853,7 @@ class _ClinicProfilePanel extends StatelessWidget {
           style: const TextStyle(
             color: _mobileClinicNavy,
             fontSize: 25,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 7),
@@ -903,7 +903,7 @@ class _TourCard extends StatelessWidget {
                 tour.zoneName,
                 style: const TextStyle(
                   color: _mobileClinicNavy,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 5),
@@ -958,7 +958,7 @@ class _ClinicBookingSelectionState extends State<_ClinicBookingSelection> {
           style: TextStyle(
             color: _mobileClinicNavy,
             fontSize: 21,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 16),
@@ -1021,7 +1021,7 @@ class _ServiceChip extends StatelessWidget {
           : '${service.name} · ${service.priceHtg!.toStringAsFixed(0)} HTG',
       style: const TextStyle(
         color: Color(0xFF075E4C),
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
     ),
   );
@@ -1043,7 +1043,7 @@ class _DetailHeading extends StatelessWidget {
         style: const TextStyle(
           color: _mobileClinicNavy,
           fontSize: 18,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     ],
@@ -1079,7 +1079,7 @@ class _CertifiedBadge extends StatelessWidget {
           style: TextStyle(
             color: const Color(0xFF075E4C),
             fontSize: large ? 12 : 10,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -1142,7 +1142,7 @@ class _ClinicMessage extends StatelessWidget {
       children: [
         Icon(icon, color: _mobileClinicGreen, size: 35),
         const SizedBox(height: 10),
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 5),
         Text(
           message,

@@ -574,7 +574,7 @@ class _CrowdfundingPageState extends State<CrowdfundingPage> {
                                 style: TextStyle(
                                   color: AppColors.navy,
                                   fontSize: 22,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   letterSpacing: -.4,
                                 ),
                               ),
@@ -583,7 +583,7 @@ class _CrowdfundingPageState extends State<CrowdfundingPage> {
                               '${campaigns.length}',
                               style: const TextStyle(
                                 color: AppColors.muted,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -681,7 +681,7 @@ class _CrowdfundingHero extends StatelessWidget {
                     style: TextStyle(
                       color: Color(0xFFA9F0D8),
                       fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: 1.6,
                     ),
                   ),
@@ -693,7 +693,7 @@ class _CrowdfundingHero extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 30,
                       height: 1.12,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -.8,
                     ),
                   ),
@@ -824,7 +824,7 @@ class _CampaignCard extends StatelessWidget {
                       color: AppColors.navy,
                       fontSize: 17,
                       height: 1.2,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -855,7 +855,7 @@ class _CampaignCard extends StatelessWidget {
                           _money(campaign.raisedAmount, campaign.currency),
                           style: const TextStyle(
                             color: AppColors.navy,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -975,7 +975,7 @@ class _CampaignPill extends StatelessWidget {
           style: TextStyle(
             color: color,
             fontSize: 10.5,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -1054,7 +1054,7 @@ class _CampaignDetailsPage extends StatelessWidget {
                   color: AppColors.navy,
                   fontSize: 29,
                   height: 1.13,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -.8,
                 ),
               ),
@@ -1086,7 +1086,7 @@ class _CampaignDetailsPage extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.navy,
                           fontSize: 24,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
@@ -1124,7 +1124,7 @@ class _CampaignDetailsPage extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.navy,
                   fontSize: 21,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),
@@ -1175,7 +1175,7 @@ class _Metric extends StatelessWidget {
         style: const TextStyle(
           color: AppColors.navy,
           fontSize: 18,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
       Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
@@ -1353,7 +1353,7 @@ class _CreateCampaignSheetState extends State<_CreateCampaignSheet> {
                   style: TextStyle(
                     color: AppColors.navy,
                     fontSize: 24,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1649,7 +1649,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
                   style: TextStyle(
                     color: AppColors.navy,
                     fontSize: 23,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1693,7 +1693,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
             'Mode de paiement',
             style: TextStyle(
               color: AppColors.navy,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
@@ -1773,7 +1773,7 @@ class _ContributionReceiptDialog extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.navy,
             fontSize: 25,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 8),
@@ -1819,7 +1819,7 @@ class _CrowdfundingError extends StatelessWidget {
             style: TextStyle(
               color: AppColors.navy,
               fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -1858,7 +1858,7 @@ class _EmptyCampaigns extends StatelessWidget {
               style: TextStyle(
                 color: AppColors.navy,
                 fontSize: 19,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 7),

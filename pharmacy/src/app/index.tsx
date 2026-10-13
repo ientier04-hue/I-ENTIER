@@ -407,7 +407,7 @@ export default function App() {
     if (item.value === 'nearby') { void locate(); return; }
     setPharmacyMode(item.value); setPharmacyFilter(null); setMessage('');
   }} style={[s.pharmacyChip, pharmacyMode === item.value && s.pharmacyChipActive]}>
-    <Icon name={item.icon} size={16} color={pharmacyMode === item.value ? '#F5F8EF' : '#63764D'}/>
+    <Icon name={item.icon} size={16} color={pharmacyMode === item.value ? '#F5F8EF' : '#52675A'}/>
     <Text style={[s.pharmacyChipText, pharmacyMode === item.value && s.pharmacyChipTextActive]}>{item.label}</Text>
   </Pressable>)}</View>;
   return (
@@ -465,14 +465,9 @@ export default function App() {
                   accessibilityLabel="Rechercher un médicament" placeholder="Rechercher un médicament…"
                   value={query} onChangeText={setQuery} style={[s.input, s.searchInput]} returnKeyType="search"
                 />{!!query && <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => setQuery('')} style={s.clearSearch}><Text style={s.clearText}>×</Text></Pressable>}</View>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Scanner une ordonnance" onPress={() => router.push('/scan')} style={s.scanButton}><Icon name="scan" color="#4F6D2D" size={25}/></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Scanner une ordonnance" onPress={() => router.push('/scan')} style={s.scanButton}><Icon name="scan" color="#246B56" size={25}/></Pressable>
                 </View>
                 {pharmacyFilters}
-                {!query && !pharmacyFilter && pharmacyMode === 'all' && <Pressable accessibilityRole="button" accessibilityLabel="Voir les médicaments Laboratoires 4C" onPress={() => {setQuery('Laboratoires 4C');setCategory('Tous');}} style={s.catalogBanner}>
-                  <View style={{flex:1,gap:12}}><Text style={s.eyebrow}>LABORATOIRES 4C</Text><Text style={s.heroTitle}>Votre santé,
-à portée de main.</Text><View style={s.bannerAction}><Text style={s.bannerActionText}>Découvrir  ↗</Text></View></View>
-                  <View style={s.bannerIcon}><Icon name="pill" color="#709645" size={72}/></View>
-                </Pressable>}
                 {!!filteredPharmacy && <Button title={`${filteredPharmacy.display_name}  ×`} secondary onPress={() => setPharmacyFilter(null)}/>}
                 <Text style={s.heading}>Catégories</Text>
                 <ScrollView
@@ -677,6 +672,7 @@ export default function App() {
         {Object.values(cart).some(q => q > 0) && tab !== 'Panier' && <Pressable accessibilityRole="button" onPress={() => setTab('Panier')} style={s.cartDock}><Text style={s.cartDockText}>Voir mon panier · {Object.values(cart).reduce((a,b) => a+b,0)}</Text><Text style={s.cartDockText}>→</Text></Pressable>}
         <View style={s.bottomNav}>{tabs.map((t,i) => <Pressable key={t} accessibilityRole="tab" accessibilityState={{selected:tab === t}} accessibilityLabel={t} onPress={() => setTab(t)} style={({pressed}) => [s.navItem,pressed && s.pressed]}>
           <View style={[s.navIcon,tab === t && s.navIconActive]}><Icon name={(['pill','heart','store','document','bag'] as const)[i]} size={21} color={tab === t ? '#FFFFFF' : '#59634E'}/>{t === 'Panier' && Object.keys(cart).length > 0 && <View style={s.cartDot}/>}</View>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[s.navLabel,tab === t && s.navLabelActive]}>{(['Catalogue','Favoris','Pharmacies','Documents','Panier'] as const)[i]}</Text>
         </Pressable>)}</View>
       </View>}
     </SafeAreaView>

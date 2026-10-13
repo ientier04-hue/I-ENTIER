@@ -946,6 +946,13 @@ const _columnMappings = <_CollectionKind, Map<String, String>>{
   _CollectionKind.cycleEntries: {
     'date': 'entry_date',
     'isPeriod': 'is_period',
+    'isSpotting': 'is_spotting',
+    'stressLevel': 'stress_level',
+    'sleepHours': 'sleep_hours',
+    'basalTemperatureC': 'basal_temperature_c',
+    'temperatureDisturbed': 'temperature_disturbed',
+    'lhTest': 'lh_test',
+    'cervicalMucus': 'cervical_mucus',
     'createdAt': 'created_at',
     'updatedAt': 'updated_at',
   },

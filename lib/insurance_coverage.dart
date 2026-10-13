@@ -258,7 +258,7 @@ class _MedicalInsurancePageState extends State<MedicalInsurancePage> {
                           style: TextStyle(
                             color: AppColors.navy,
                             fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -524,7 +524,7 @@ class _InsuranceIntro extends StatelessWidget {
           style: TextStyle(
             color: Colors.white,
             fontSize: 24,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         SizedBox(height: 8),
@@ -600,14 +600,14 @@ class _CoverageStatusCard extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.navy,
                         fontSize: 19,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
                       title,
                       style: TextStyle(
                         color: color,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -645,7 +645,7 @@ class _CoverageStatusCard extends StatelessWidget {
                     'Vous êtes éligible au service Crédit Santé.',
                     style: TextStyle(
                       color: AppColors.success,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -721,7 +721,7 @@ class _CardSidePicker extends StatelessWidget {
                     'Carte — $side',
                     style: const TextStyle(
                       color: AppColors.navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),

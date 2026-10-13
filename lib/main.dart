@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -546,52 +545,7 @@ class _SignInBackdrop extends StatelessWidget {
   const _SignInBackdrop();
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF081B3A), Color(0xFF0B3263), Color(0xFF075B70)],
-        stops: [0, .55, 1],
-      ),
-    ),
-    child: Stack(
-      children: [
-        Positioned(
-          left: -100,
-          top: -130,
-          child: _GlowOrb(size: 390, color: Color(0x2915BFCB)),
-        ),
-        Positioned(
-          right: -90,
-          bottom: -120,
-          child: _GlowOrb(size: 430, color: Color(0x241E7BFF)),
-        ),
-        Positioned(
-          right: 28,
-          top: 34,
-          child: _HealthCross(color: Color(0x12FFFFFF), size: 94),
-        ),
-      ],
-    ),
-  );
-}
-
-class _GlowOrb extends StatelessWidget {
-  final double size;
-  final Color color;
-  const _GlowOrb({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: color,
-      boxShadow: [BoxShadow(color: color, blurRadius: 90, spreadRadius: 28)],
-    ),
-  );
+  Widget build(BuildContext context) => const ColoredBox(color: AppColors.navy);
 }
 
 class _SignInStory extends StatelessWidget {
@@ -617,7 +571,7 @@ class _SignInStory extends StatelessWidget {
                 fontSize: 48,
                 height: 1.04,
                 letterSpacing: -1.8,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             SizedBox(height: 22),
@@ -626,7 +580,7 @@ class _SignInStory extends StatelessWidget {
               child: Text(
                 'Trouvez les bons professionnels, accédez aux services essentiels et gardez vos informations de santé à portée de main.',
                 style: TextStyle(
-                  color: Color(0xFFD5E7F6),
+                  color: Color(0xFFC1CDC3),
                   fontSize: 17,
                   height: 1.55,
                 ),
@@ -666,7 +620,7 @@ class _MobileSignInBrand extends StatelessWidget {
       Text(
         'Votre santé, simplement.',
         textAlign: TextAlign.center,
-        style: TextStyle(color: Color(0xFFBDD7E9), fontSize: 15),
+        style: TextStyle(color: Color(0xFFC1CDC3), fontSize: 15),
       ),
     ],
   );
@@ -708,7 +662,7 @@ class _SignInCard extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(34, 36, 34, 30),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(30),
+      borderRadius: BorderRadius.circular(20),
       border: Border.all(color: const Color(0x26FFFFFF)),
       boxShadow: const [
         BoxShadow(
@@ -746,7 +700,7 @@ class _SignInCard extends StatelessWidget {
             fontSize: 30,
             height: 1.12,
             letterSpacing: -.7,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: AppColors.navy,
           ),
         ),
@@ -1076,7 +1030,7 @@ class _BrandLockup extends StatelessWidget {
         style: TextStyle(
           color: light ? Colors.white : AppColors.navy,
           fontSize: 22,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: .7,
         ),
       ),
@@ -1098,8 +1052,8 @@ class _BrandMark extends StatelessWidget {
       border: light ? Border.all(color: const Color(0x35FFFFFF)) : null,
     ),
     child: Icon(
-      Icons.all_inclusive_rounded,
-      color: light ? const Color(0xFF6DE5DD) : AppColors.teal,
+      Icons.add_rounded,
+      color: light ? const Color(0xFFD8E5C7) : AppColors.teal,
       size: 32,
     ),
   );
@@ -1113,9 +1067,9 @@ class _Eyebrow extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     label,
     style: const TextStyle(
-      color: Color(0xFF6DE5DD),
+      color: Color(0xFFD8E5C7),
       fontSize: 12,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600,
       letterSpacing: 1.8,
     ),
   );
@@ -1137,7 +1091,7 @@ class _FeaturePill extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: const Color(0xFF8DE6DF), size: 18),
+        Icon(icon, color: const Color(0xFFD8E5C7), size: 18),
         const SizedBox(width: 8),
         Text(
           label,
@@ -1185,20 +1139,10 @@ class _SignInFooter extends StatelessWidget {
     '© ${DateTime.now().year} I-ENTIER  •  Santé accessible, partout.',
     textAlign: TextAlign.center,
     style: TextStyle(
-      color: light ? const Color(0xFF9AB8CE) : AppColors.muted,
+      color: light ? const Color(0xFFC1CDC3) : AppColors.muted,
       fontSize: 11.5,
     ),
   );
-}
-
-class _HealthCross extends StatelessWidget {
-  final Color color;
-  final double size;
-  const _HealthCross({required this.color, required this.size});
-
-  @override
-  Widget build(BuildContext context) =>
-      Icon(Icons.health_and_safety_rounded, color: color, size: size);
 }
 
 class _GoogleMark extends StatelessWidget {
@@ -1218,7 +1162,7 @@ class _GoogleMark extends StatelessWidget {
       style: TextStyle(
         color: Color(0xFF4285F4),
         fontSize: 17,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
     ),
   );
@@ -1568,7 +1512,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 28,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AppColors.navy,
                       ),
                     ),
@@ -2009,7 +1953,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                             'Ajouter ou vérifier OFATMA',
                                             style: TextStyle(
                                               color: AppColors.navy,
-                                              fontWeight: FontWeight.w800,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                           SizedBox(height: 4),
@@ -2100,7 +2044,7 @@ Widget _profileLabel(String value) => Padding(
   padding: const EdgeInsets.only(bottom: 8),
   child: Text(
     value,
-    style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.navy),
+    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.navy),
   ),
 );
 
@@ -2146,7 +2090,7 @@ class _ProfileCategoryCard extends StatelessWidget {
                     style: const TextStyle(
                       color: AppColors.navy,
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -2311,9 +2255,10 @@ class HealthService {
       imagePath.startsWith('https://') || imagePath.startsWith('http://');
 
   Color get background => _colorFromHex(backgroundColor, Colors.white);
-  Color get accent => _colorFromHex(accentColor, AppColors.primary);
-  Color get contentColor => _contrast(AppColors.navy, background) >= 4.5
-      ? AppColors.navy
+  Color get accent => _colorFromHex(accentColor, const Color(0xFF176BFF));
+  Color get contentColor =>
+      _contrast(const Color(0xFF102A56), background) >= 4.5
+      ? const Color(0xFF102A56)
       : Colors.white;
   Color get accessibleAccent =>
       _contrast(accent, background) >= 4.5 ? accent : contentColor;
@@ -2499,7 +2444,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<List<AppNotification>>? _notificationSubscription;
   Timer? _notificationClock;
   late final List<ScrollController> _tabScrollControllers = List.generate(
-    _GlassNavigationBar.destinations.length,
+    _PatientNavigationBar.destinations.length,
     (_) => ScrollController(),
   );
 
@@ -3051,6 +2996,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (index == 2) {
       return PatientAppointmentsPage(
         patientId: widget.user.uid,
+        onVideoCallsTap: () => VideoCallHost.open(context),
         repository: !SupabaseConfig.isInitialized
             ? null
             : SupabasePatientAppointmentRepository(),
@@ -3063,7 +3009,7 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SearchField(
-          hint: 'Institution, personnel, malaise, médicament, examen...',
+          hint: 'Rechercher un soin, un médicament…',
           onTap: _openUniversalSearch,
           onFilterTap: _openUniversalSearch,
         ),
@@ -3116,13 +3062,13 @@ class _HomeScreenState extends State<HomeScreen> {
     unreadNotificationCount: _unreadNotificationCount,
     onNotificationsTap: _openNotifications,
     onProfileTap: _openPatientProfile,
-    onVideoCallsTap: () => VideoCallHost.open(context),
   );
 
   Widget _scrollablePage(int index, {required bool wide}) => SafeArea(
     top: index != 0,
     bottom: wide,
-    child: Center(
+    child: Align(
+      alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1120),
         child: SingleChildScrollView(
@@ -3223,7 +3169,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: _GlassNavigationBar(
+                          child: _PatientNavigationBar(
                             selectedIndex: _selectedTab,
                             onDestinationSelected: _selectTab,
                           ),
@@ -3260,18 +3206,11 @@ class _DesktopNavigationRail extends StatelessWidget {
     width: extended ? 208 : 94,
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(16),
       border: Border.all(color: AppColors.border),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x12102A56),
-          blurRadius: 28,
-          offset: Offset(0, 12),
-        ),
-      ],
     ),
     child: ClipRRect(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(16),
       child: NavigationRail(
         selectedIndex: selectedIndex,
         extended: extended,
@@ -3291,7 +3230,7 @@ class _DesktopNavigationRail extends StatelessWidget {
           child: _EmergencyButton(compact: true),
         ),
         destinations: [
-          for (final destination in _GlassNavigationBar.destinations)
+          for (final destination in _PatientNavigationBar.destinations)
             NavigationRailDestination(
               icon: Icon(destination.$1),
               selectedIcon: Icon(destination.$2),
@@ -3304,8 +3243,8 @@ class _DesktopNavigationRail extends StatelessWidget {
   );
 }
 
-class _GlassNavigationBar extends StatelessWidget {
-  const _GlassNavigationBar({
+class _PatientNavigationBar extends StatelessWidget {
+  const _PatientNavigationBar({
     required this.selectedIndex,
     required this.onDestinationSelected,
   });
@@ -3325,14 +3264,14 @@ class _GlassNavigationBar extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) => _GlassSurface(
+  Widget build(BuildContext context) => _NavigationSurface(
     key: const ValueKey('home-tab-bar-surface'),
     borderRadius: 24.5,
     child: Row(
       children: List.generate(destinations.length, (index) {
         final destination = destinations[index];
         return Expanded(
-          child: _GlassNavigationDestination(
+          child: _PatientNavigationDestination(
             icon: destination.$1,
             selectedIcon: destination.$2,
             label: destination.$3,
@@ -3345,8 +3284,8 @@ class _GlassNavigationBar extends StatelessWidget {
   );
 }
 
-class _GlassNavigationDestination extends StatelessWidget {
-  const _GlassNavigationDestination({
+class _PatientNavigationDestination extends StatelessWidget {
+  const _PatientNavigationDestination({
     required this.icon,
     required this.selectedIcon,
     required this.label,
@@ -3382,9 +3321,7 @@ class _GlassNavigationDestination extends StatelessWidget {
                 width: selected ? 38 : 32,
                 height: 25,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? const Color(0x241778D4)
-                      : Colors.transparent,
+                  color: selected ? AppColors.primarySoft : Colors.transparent,
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
@@ -3402,7 +3339,7 @@ class _GlassNavigationDestination extends StatelessWidget {
                   style: TextStyle(
                     color: selected ? AppColors.primary : AppColors.navy,
                     fontSize: 10.5,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w700,
                     height: 1,
                   ),
                 ),
@@ -3415,51 +3352,26 @@ class _GlassNavigationDestination extends StatelessWidget {
   );
 }
 
-class _GlassSurface extends StatelessWidget {
-  const _GlassSurface({
+class _NavigationSurface extends StatelessWidget {
+  const _NavigationSurface({
     super.key,
     required this.child,
     required this.borderRadius,
   });
-
   final Widget child;
   final double borderRadius;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(borderRadius),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x2B102A56),
-          blurRadius: 32,
-          spreadRadius: -5,
-          offset: Offset(0, 14),
-        ),
-        BoxShadow(
-          color: Color(0x70FFFFFF),
-          blurRadius: 8,
-          offset: Offset(0, -2),
-        ),
-      ],
+      border: Border.all(color: AppColors.border),
+      boxShadow: AppDecorations.cardShadow,
     ),
     child: ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xD9FFFFFF), Color(0xA8EDF5FF), Color(0xB8F7FCFF)],
-            ),
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: const Color(0xD9FFFFFF), width: 1.4),
-          ),
-          child: child,
-        ),
-      ),
+      child: child,
     ),
   );
 }
@@ -3475,7 +3387,7 @@ class _SectionHeading extends StatelessWidget {
     builder: (context, constraints) {
       const titleWidgetStyle = TextStyle(
         fontSize: 24,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         color: AppColors.navy,
       );
       final actionWidget = action == null
@@ -3657,7 +3569,7 @@ class _DirectoryTypeOption extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: selected ? AppColors.primary : AppColors.navy,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w700,
                   ),
                 ),
               ),
@@ -3731,7 +3643,7 @@ class _PersonnelDirectoryState extends State<_PersonnelDirectory> {
         'Personnel médical',
         style: TextStyle(
           fontSize: 27,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           color: AppColors.navy,
         ),
       ),
@@ -3870,7 +3782,7 @@ class _InstitutionsDirectoryState extends State<_InstitutionsDirectory> {
         'Institutions',
         style: TextStyle(
           fontSize: 27,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           color: AppColors.navy,
         ),
       ),
@@ -3968,7 +3880,7 @@ class _FilterChip extends StatelessWidget {
         : null,
     tooltip: 'Filtrer par $label',
     labelStyle: TextStyle(
-      fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+      fontWeight: selected ? FontWeight.w600 : FontWeight.w700,
       color: selected ? AppColors.primaryDark : AppColors.navy,
     ),
   );
@@ -4043,7 +3955,7 @@ class _ProfessionalCard extends StatelessWidget {
                   professional.initials,
                   style: const TextStyle(
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.primary,
                   ),
                 ),
@@ -4060,7 +3972,7 @@ class _ProfessionalCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 17,
                         height: 1.18,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AppColors.navy,
                       ),
                     ),
@@ -4184,7 +4096,7 @@ class _StatusBadge extends StatelessWidget {
             style: TextStyle(
               color: foreground,
               fontSize: 11.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -4291,7 +4203,7 @@ class _DirectoryFeedback extends StatelessWidget {
           title,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: AppColors.navy,
           ),
         ),
@@ -4809,7 +4721,7 @@ class _InstitutionCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 17,
                         height: 1.18,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AppColors.navy,
                       ),
                     ),
@@ -4830,7 +4742,7 @@ class _InstitutionCard extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.navy,
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -4945,7 +4857,7 @@ class _ProfessionalDetailPage extends StatelessWidget {
                   professional.initials,
                   style: const TextStyle(
                     fontSize: 24,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.primary,
                   ),
                 ),
@@ -5488,7 +5400,7 @@ class _ProfileQuickAction extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
         ),
       ],
     ),
@@ -5555,7 +5467,7 @@ class _DirectoryDetailScaffold extends StatelessWidget {
                                   tab.label,
                                   style: const TextStyle(
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
@@ -5717,7 +5629,7 @@ class _DirectoryDetailHero extends StatelessWidget {
                   fontSize: 25,
                   height: 1.12,
                   letterSpacing: -.45,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 7),
@@ -5727,7 +5639,7 @@ class _DirectoryDetailHero extends StatelessWidget {
                   color: AppColors.primary,
                   fontSize: 15.5,
                   height: 1.3,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (details.isNotEmpty) ...[
@@ -5879,7 +5791,7 @@ class _ProfileHighlight extends StatelessWidget {
             color: AppColors.navy,
             fontSize: 12.5,
             height: 1.2,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 3),
@@ -6004,7 +5916,7 @@ class _ProfileSectionTitle extends StatelessWidget {
             color: AppColors.navy,
             fontSize: 18,
             height: 1.2,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -6091,14 +6003,12 @@ class _Header extends StatelessWidget {
   final int unreadNotificationCount;
   final VoidCallback onNotificationsTap;
   final VoidCallback onProfileTap;
-  final VoidCallback onVideoCallsTap;
   const _Header({
     required this.user,
     required this.profileName,
     required this.unreadNotificationCount,
     required this.onNotificationsTap,
     required this.onProfileTap,
-    required this.onVideoCallsTap,
   });
 
   @override
@@ -6132,7 +6042,7 @@ class _Header extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     fontSize: 19,
                     height: 1.1,
                     color: AppColors.navy,
@@ -6154,12 +6064,6 @@ class _Header extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _RoundIcon(
-            icon: Icons.videocam_outlined,
-            tooltip: 'Appels vidéo',
-            onTap: onVideoCallsTap,
-          ),
-          const SizedBox(width: 4),
           _RoundIcon(
             icon: Icons.notifications_none_rounded,
             badge: unreadNotificationCount == 0
@@ -6232,7 +6136,7 @@ class _GoogleAvatar extends StatelessWidget {
         initials,
         style: TextStyle(
           fontSize: radius * .72,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           color: AppColors.navy,
         ),
       ),
@@ -6327,17 +6231,17 @@ class _SearchField extends StatelessWidget {
                   icon: const Icon(Icons.tune_rounded),
                 ),
           filled: true,
-          fillColor: AppColors.surfaceMuted,
+          fillColor: AppColors.surface,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
           ),
         ),
@@ -6349,11 +6253,11 @@ class _SearchField extends StatelessWidget {
       label: hint,
       child: Material(
         key: const ValueKey('home-search-bar'),
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(28),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(12),
           child: SizedBox(
             height: 58,
             child: Padding(
@@ -6450,7 +6354,7 @@ class _ProfileCompletionCard extends StatelessWidget {
                       style: TextStyle(
                         color: AppColors.navy,
                         fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     SizedBox(height: 3),
@@ -6704,7 +6608,7 @@ class _PinnedServicesPanel extends StatelessWidget {
                   child: Text(
                     'Mes services épinglés',
                     style: TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.navy,
                     ),
                   ),
@@ -6713,7 +6617,7 @@ class _PinnedServicesPanel extends StatelessWidget {
                   '${services.length}/$maximumPinnedServices',
                   style: const TextStyle(
                     color: AppColors.primary,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -7192,7 +7096,7 @@ class _UniversalSearchDelegate extends SearchDelegate<_UniversalSearchResult?> {
                 category.label,
                 style: TextStyle(
                   color: category.color,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
           ],
@@ -7288,7 +7192,7 @@ class _UniversalSearchIntro extends StatelessWidget {
         style: TextStyle(
           color: AppColors.navy,
           fontSize: 21,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
       const SizedBox(height: 9),
@@ -7300,7 +7204,7 @@ class _UniversalSearchIntro extends StatelessWidget {
       const SizedBox(height: 28),
       const Text(
         'Essayez par exemple',
-        style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w800),
+        style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: 10),
       Wrap(
@@ -7345,13 +7249,13 @@ class _UniversalSearchSectionHeader extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.navy,
             fontSize: 16,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
       Text(
         '$count',
-        style: TextStyle(color: category.color, fontWeight: FontWeight.w800),
+        style: TextStyle(color: category.color, fontWeight: FontWeight.w600),
       ),
     ],
   );
@@ -7405,7 +7309,7 @@ class _UniversalSearchResultTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   if (result.subtitle.isNotEmpty) ...[
@@ -7624,7 +7528,9 @@ class _ServiceCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     icon: Icon(
                       pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-                      color: pinned ? AppColors.primary : AppColors.muted,
+                      color: pinned
+                          ? const Color(0xFF176BFF)
+                          : const Color(0xFF667085),
                       size: 21,
                     ),
                   ),
@@ -7827,7 +7733,7 @@ class _AssistantCard extends StatelessWidget {
                       width: 42,
                       height: 42,
                       decoration: const BoxDecoration(
-                        color: AppColors.primary,
+                        color: Color(0xFF176BFF),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -8622,7 +8528,7 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
                 style: TextStyle(
                   color: AppColors.navy,
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 12),
@@ -8634,7 +8540,7 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
                 ),
                 title: const Text(
                   'CAN',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 subtitle: const Text('Composer le 116'),
                 trailing: const Icon(Icons.phone_forwarded),
@@ -8652,7 +8558,7 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
                 ),
                 title: const Text(
                   'Air Ambulance',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 subtitle: const Text('Numéro bientôt disponible'),
                 trailing: const Icon(Icons.chevron_right),
@@ -8687,7 +8593,7 @@ class _EmergencyButtonState extends State<_EmergencyButton> {
         label: 'Urgences',
         child: Tooltip(
           message: 'Urgences',
-          child: _GlassSurface(
+          child: _NavigationSurface(
             borderRadius: radius,
             child: Material(
               color: Colors.transparent,

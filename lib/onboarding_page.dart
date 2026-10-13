@@ -12,14 +12,11 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen>
-    with TickerProviderStateMixin {
+class _OnboardingScreenState extends State<OnboardingScreen> {
   late final PageController _pageController;
-  late final AnimationController _ambientController;
   int _currentPage = 0;
   double _page = 0;
   bool _reduceMotion = false;
-  bool _hasMotionPreference = false;
 
   static const _pages = <_OnboardingData>[
     _OnboardingData(
@@ -30,9 +27,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       imagePath: 'assets/onboarding/health-overview.jpg',
       imageLabel:
           'Une mère et sa fille préparent ensemble un petit-déjeuner équilibré',
-      accent: Color(0xFF61E4D8),
+      accent: Color(0xFFD8E5C7),
       softAccent: Color(0xFFCCFBF4),
-      visual: _OnboardingVisual.overview,
     ),
     _OnboardingData(
       eyebrow: 'TROUVER & CONSULTER',
@@ -42,9 +38,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       imagePath: 'assets/onboarding/nearby-care.jpg',
       imageLabel:
           'Une pharmacienne accompagne un patient dans une pharmacie de proximité',
-      accent: Color(0xFF72A8FF),
+      accent: Color(0xFFD8E5C7),
       softAccent: Color(0xFFDDEAFF),
-      visual: _OnboardingVisual.nearby,
     ),
     _OnboardingData(
       eyebrow: 'SUIVRE & PRÉVENIR',
@@ -54,9 +49,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       imagePath: 'assets/onboarding/health-tracking.jpg',
       imageLabel:
           'Une femme prend soin de son bien-être lors d’une activité matinale en plein air',
-      accent: Color(0xFFFF8CAA),
+      accent: Color(0xFFD8E5C7),
       softAccent: Color(0xFFFFDFE8),
-      visual: _OnboardingVisual.tracking,
     ),
     _OnboardingData(
       eyebrow: 'SIMPLE & SÉCURISÉ',
@@ -66,9 +60,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       imagePath: 'assets/onboarding/private-care.jpg',
       imageLabel:
           'Une patiente échange en confiance avec son médecin dans un cabinet privé',
-      accent: Color(0xFFFFC76A),
+      accent: Color(0xFFD8E5C7),
       softAccent: Color(0xFFFFEBC8),
-      visual: _OnboardingVisual.secure,
     ),
   ];
 
@@ -77,27 +70,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.initState();
     _pageController = PageController();
     _pageController.addListener(_handlePageScroll);
-    _ambientController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 8),
-    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    if (_hasMotionPreference && _reduceMotion == reduceMotion) return;
-
-    _hasMotionPreference = true;
-    _reduceMotion = reduceMotion;
-    if (reduceMotion) {
-      _ambientController
-        ..stop()
-        ..value = 0;
-    } else {
-      _ambientController.repeat();
-    }
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
   }
 
   void _handlePageScroll() {
@@ -113,7 +91,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _pageController
       ..removeListener(_handlePageScroll)
       ..dispose();
-    _ambientController.dispose();
     super.dispose();
   }
 
@@ -152,18 +129,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _ambientController,
-              builder: (context, _) => CustomPaint(
-                painter: _OnboardingBackdropPainter(
-                  animation: _ambientController.value,
-                  page: _page,
-                  accent: currentData.accent,
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: Column(
               children: [
@@ -181,7 +146,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     itemBuilder: (context, index) => _OnboardingPage(
                       data: _pages[index],
                       progress: (_page - index).clamp(-1.0, 1.0),
-                      animation: _ambientController,
                     ),
                   ),
                 ),
@@ -273,8 +237,8 @@ class _IntroBrand extends StatelessWidget {
           border: Border.all(color: Colors.white.withValues(alpha: .16)),
         ),
         child: const Icon(
-          Icons.all_inclusive_rounded,
-          color: Color(0xFF70E9DF),
+          Icons.add_rounded,
+          color: Color(0xFFD8E5C7),
           size: 26,
         ),
       ),
@@ -284,7 +248,7 @@ class _IntroBrand extends StatelessWidget {
         style: TextStyle(
           color: Colors.white,
           fontSize: 17,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: .7,
         ),
       ),
@@ -293,15 +257,10 @@ class _IntroBrand extends StatelessWidget {
 }
 
 class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage({
-    required this.data,
-    required this.progress,
-    required this.animation,
-  });
+  const _OnboardingPage({required this.data, required this.progress});
 
   final _OnboardingData data;
   final double progress;
-  final Animation<double> animation;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -309,10 +268,7 @@ class _OnboardingPage extends StatelessWidget {
       final desktop = constraints.maxWidth >= 820;
       final compactHeight = constraints.maxHeight < 610;
       final reduceMotion = MediaQuery.disableAnimationsOf(context);
-      final visualContent = _OnboardingIllustration(
-        data: data,
-        animation: animation,
-      );
+      final visualContent = _OnboardingIllustration(data: data);
       final copyContent = _OnboardingCopy(data: data, centered: !desktop);
       final visual = reduceMotion
           ? visualContent
@@ -383,21 +339,13 @@ class _OnboardingCopy extends StatelessWidget {
         : CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: data.accent.withValues(alpha: .13),
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: data.accent.withValues(alpha: .28)),
-        ),
-        child: Text(
-          data.eyebrow,
-          style: TextStyle(
-            color: data.accent,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.35,
-          ),
+      Text(
+        data.eyebrow,
+        style: TextStyle(
+          color: data.accent,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
         ),
       ),
       const SizedBox(height: 17),
@@ -409,7 +357,7 @@ class _OnboardingCopy extends StatelessWidget {
           fontSize: centered ? 34 : 48,
           height: 1.04,
           letterSpacing: centered ? -1.1 : -1.7,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
       const SizedBox(height: 16),
@@ -419,7 +367,7 @@ class _OnboardingCopy extends StatelessWidget {
           data.description,
           textAlign: centered ? TextAlign.center : TextAlign.left,
           style: const TextStyle(
-            color: Color(0xFFBCD0E5),
+            color: Color(0xFFC1CDC3),
             fontSize: 15.5,
             height: 1.5,
             fontWeight: FontWeight.w400,
@@ -431,242 +379,23 @@ class _OnboardingCopy extends StatelessWidget {
 }
 
 class _OnboardingIllustration extends StatelessWidget {
-  const _OnboardingIllustration({required this.data, required this.animation});
-
-  final _OnboardingData data;
-  final Animation<double> animation;
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: animation,
-    builder: (context, child) {
-      final wave = math.sin(animation.value * math.pi * 2);
-      return Center(
-        child: AspectRatio(
-          aspectRatio: 1.05,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Transform.scale(
-                scale: 1 + wave * .015,
-                child: Container(
-                  margin: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        data.accent.withValues(alpha: .22),
-                        data.accent.withValues(alpha: .035),
-                        Colors.transparent,
-                      ],
-                      stops: const [0, .63, 1],
-                    ),
-                  ),
-                ),
-              ),
-              Transform.translate(
-                offset: Offset(0, wave * 5),
-                child: _MainVisualCard(data: data),
-              ),
-              ..._floatingItems(data.visual, data.accent, wave),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-
-  List<Widget> _floatingItems(
-    _OnboardingVisual visual,
-    Color accent,
-    double wave,
-  ) => switch (visual) {
-    _OnboardingVisual.overview => [
-      Positioned(
-        left: 5,
-        top: 42 + wave * 5,
-        child: const _FloatingChip(
-          icon: Icons.favorite_rounded,
-          label: 'Bien-être',
-          color: Color(0xFFFF6B8E),
-        ),
-      ),
-      Positioned(
-        right: 0,
-        bottom: 50 - wave * 5,
-        child: const _FloatingChip(
-          icon: Icons.verified_user_rounded,
-          label: 'Protégé',
-          color: Color(0xFF27C7B8),
-        ),
-      ),
-    ],
-    _OnboardingVisual.nearby => [
-      Positioned(
-        left: 0,
-        bottom: 54 + wave * 4,
-        child: const _FloatingChip(
-          icon: Icons.local_pharmacy_rounded,
-          label: 'Pharmacie',
-          color: Color(0xFF27C7B8),
-        ),
-      ),
-      Positioned(
-        right: 0,
-        top: 48 - wave * 4,
-        child: const _FloatingChip(
-          icon: Icons.biotech_rounded,
-          label: 'Laboratoire',
-          color: Color(0xFF8A7CFF),
-        ),
-      ),
-    ],
-    _OnboardingVisual.tracking => [
-      Positioned(
-        right: 0,
-        top: 46 + wave * 4,
-        child: const _FloatingChip(
-          icon: Icons.self_improvement_rounded,
-          label: 'Équilibre',
-          color: Color(0xFF9A7BFF),
-        ),
-      ),
-      Positioned(
-        left: 2,
-        bottom: 52 - wave * 4,
-        child: const _FloatingChip(
-          icon: Icons.calendar_month_rounded,
-          label: 'Prévention',
-          color: Color(0xFFFFB54C),
-        ),
-      ),
-    ],
-    _OnboardingVisual.secure => [
-      Positioned(
-        left: 3,
-        top: 48 + wave * 4,
-        child: const _FloatingChip(
-          icon: Icons.lock_rounded,
-          label: 'Privé',
-          color: Color(0xFF27C7B8),
-        ),
-      ),
-      Positioned(
-        right: 0,
-        bottom: 50 - wave * 4,
-        child: const _FloatingChip(
-          icon: Icons.auto_awesome_rounded,
-          label: 'Assistant',
-          color: Color(0xFF6E9EFF),
-        ),
-      ),
-    ],
-  };
-}
-
-class _MainVisualCard extends StatelessWidget {
-  const _MainVisualCard({required this.data});
-
+  const _OnboardingIllustration({required this.data});
   final _OnboardingData data;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 224,
-    height: 224,
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .1),
-      borderRadius: BorderRadius.circular(56),
-      border: Border.all(color: Colors.white.withValues(alpha: .2)),
-      boxShadow: [
-        BoxShadow(
-          color: data.accent.withValues(alpha: .16),
-          blurRadius: 48,
-          spreadRadius: 4,
+  Widget build(BuildContext context) => Center(
+    child: AspectRatio(
+      aspectRatio: 1.12,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Image.asset(
+          data.imagePath,
+          fit: BoxFit.cover,
+          semanticLabel: data.imageLabel,
+          errorBuilder: (context, error, stackTrace) =>
+              ColoredBox(color: data.softAccent),
         ),
-        const BoxShadow(
-          color: Color(0x38000000),
-          blurRadius: 30,
-          offset: Offset(0, 18),
-        ),
-      ],
-    ),
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(55),
-          child: Image.asset(
-            data.imagePath,
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            semanticLabel: data.imageLabel,
-            errorBuilder: (context, error, stackTrace) =>
-                ColoredBox(color: data.softAccent),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(55),
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Colors.transparent, Color(0x2607182F)],
-              stops: [.62, 1],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _FloatingChip extends StatelessWidget {
-  const _FloatingChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(10, 9, 14, 9),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF7FAFF),
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x3D001632),
-          blurRadius: 22,
-          offset: Offset(0, 10),
-        ),
-      ],
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 31,
-          height: 31,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: .14),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: color, size: 18),
-        ),
-        const SizedBox(width: 9),
-        Text(
-          label,
-          style: const TextStyle(
-            color: _IntroColors.navy,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
+      ),
     ),
   );
 }
@@ -778,13 +507,6 @@ class _OnboardingControls extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: accent,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accent.withValues(alpha: .3),
-                        blurRadius: 24,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
                   ),
                   child: Material(
                     color: Colors.transparent,
@@ -814,7 +536,7 @@ class _OnboardingControls extends StatelessWidget {
                                     style: TextStyle(
                                       color: _IntroColors.navy,
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
@@ -854,85 +576,6 @@ class _OnboardingControls extends StatelessWidget {
   }
 }
 
-class _OnboardingBackdropPainter extends CustomPainter {
-  const _OnboardingBackdropPainter({
-    required this.animation,
-    required this.page,
-    required this.accent,
-  });
-
-  final double animation;
-  final double page;
-  final Color accent;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF07182F), Color(0xFF0A2B52), Color(0xFF073F56)],
-          stops: [0, .58, 1],
-        ).createShader(rect),
-    );
-
-    final phase = animation * math.pi * 2;
-    final glow = Paint()
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 85)
-      ..color = accent.withValues(alpha: .12);
-    canvas.drawCircle(
-      Offset(
-        size.width * (.2 + math.sin(phase) * .035),
-        size.height * (.3 + math.cos(phase) * .03),
-      ),
-      math.min(size.width, size.height) * .25,
-      glow,
-    );
-    glow.color = const Color(0x1F247BFF);
-    canvas.drawCircle(
-      Offset(
-        size.width * (.85 + math.cos(phase * .7) * .04),
-        size.height * (.76 + math.sin(phase * .7) * .03),
-      ),
-      math.min(size.width, size.height) * .3,
-      glow,
-    );
-
-    final grid = Paint()
-      ..color = Colors.white.withValues(alpha: .025)
-      ..strokeWidth = 1;
-    for (double x = -30; x < size.width + 50; x += 54) {
-      canvas.drawLine(
-        Offset(x + page * 5, 0),
-        Offset(x - 70 + page * 5, size.height),
-        grid,
-      );
-    }
-
-    final particle = Paint();
-    for (var index = 0; index < 18; index++) {
-      final x = ((index * 47) % 101) / 100 * size.width;
-      final baseY = ((index * 73) % 97) / 100 * size.height;
-      final y = baseY + math.sin(phase + index) * 7;
-      particle.color = Colors.white.withValues(
-        alpha: .08 + (math.sin(phase * 1.4 + index) + 1) * .06,
-      );
-      canvas.drawCircle(Offset(x, y), index % 5 == 0 ? 1.8 : 1, particle);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _OnboardingBackdropPainter oldDelegate) =>
-      oldDelegate.animation != animation ||
-      oldDelegate.page != page ||
-      oldDelegate.accent != accent;
-}
-
-enum _OnboardingVisual { overview, nearby, tracking, secure }
-
 class _OnboardingData {
   const _OnboardingData({
     required this.eyebrow,
@@ -942,7 +585,6 @@ class _OnboardingData {
     required this.imageLabel,
     required this.accent,
     required this.softAccent,
-    required this.visual,
   });
 
   final String eyebrow;
@@ -952,9 +594,8 @@ class _OnboardingData {
   final String imageLabel;
   final Color accent;
   final Color softAccent;
-  final _OnboardingVisual visual;
 }
 
 abstract final class _IntroColors {
-  static const navy = Color(0xFF0B2444);
+  static const navy = Color(0xFF1D322A);
 }

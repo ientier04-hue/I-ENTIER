@@ -734,7 +734,7 @@ class _FormHeader extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.navy,
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               SizedBox(height: 5),
@@ -823,7 +823,7 @@ class _BloodHero extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -.3,
                       ),
                     ),
@@ -890,7 +890,7 @@ class _BloodSectionNavigation extends StatelessWidget {
                         color: selected == section
                             ? _bloodRedDark
                             : AppColors.navy,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12.5,
                       ),
                       selectedColor: _bloodSoft,
@@ -1026,7 +1026,7 @@ class _RequestsSection extends StatelessWidget {
                             color: selectedGroup == group
                                 ? _bloodRedDark
                                 : _ink,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1173,7 +1173,7 @@ class _StateCard extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.navy,
             fontSize: 17,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 7),
@@ -1238,7 +1238,7 @@ class _BloodRequestCard extends StatelessWidget {
                   style: const TextStyle(
                     color: _bloodRedDark,
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1254,7 +1254,7 @@ class _BloodRequestCard extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.navy,
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (request.personAge != null)
@@ -1395,7 +1395,7 @@ class _StatusPill extends StatelessWidget {
       style: TextStyle(
         color: color,
         fontSize: 10.5,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w700,
       ),
     ),
   );
@@ -1461,7 +1461,7 @@ class _RequestContactSheet extends StatelessWidget {
                 style: const TextStyle(
                   color: _bloodRedDark,
                   fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1475,7 +1475,7 @@ class _RequestContactSheet extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.navy,
                       fontSize: 19,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
@@ -1525,7 +1525,7 @@ class _RequestContactSheet extends StatelessWidget {
                           : request.contactName,
                       style: const TextStyle(
                         color: AppColors.navy,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
@@ -1717,7 +1717,7 @@ class _TimelineStep extends StatelessWidget {
                   number,
                   style: const TextStyle(
                     color: _bloodRedDark,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1749,7 +1749,7 @@ class _TimelineStep extends StatelessWidget {
                         title,
                         style: const TextStyle(
                           color: AppColors.navy,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1809,7 +1809,7 @@ class _OfficialSourceCard extends StatelessWidget {
             title,
             style: const TextStyle(
               color: AppColors.navy,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
@@ -1908,7 +1908,7 @@ class _EligibilitySummary extends StatelessWidget {
                 'Repères généraux avant un don',
                 style: TextStyle(
                   color: AppColors.navy,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1963,7 +1963,7 @@ class _CriterionPill extends StatelessWidget {
           style: const TextStyle(
             color: _ink,
             fontSize: 12,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -2070,7 +2070,7 @@ class _EligibilityCard extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: AppColors.navy,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 5),
@@ -2186,7 +2186,7 @@ class _CompatibilityHeader extends StatelessWidget {
           style: TextStyle(
             color: _muted,
             fontSize: 10,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             letterSpacing: .8,
           ),
         ),
@@ -2197,7 +2197,7 @@ class _CompatibilityHeader extends StatelessWidget {
           style: TextStyle(
             color: _muted,
             fontSize: 10,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             letterSpacing: .8,
           ),
         ),
@@ -2233,7 +2233,7 @@ class _CompatibilityRow extends StatelessWidget {
           style: const TextStyle(
             color: _bloodRedDark,
             fontSize: 16,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -2376,7 +2376,7 @@ class _QuestionsSection extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.navy,
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     children: [
@@ -2431,7 +2431,7 @@ class _SectionIntro extends StatelessWidget {
               style: const TextStyle(
                 color: _bloodRed,
                 fontSize: 10.5,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 letterSpacing: 1.1,
               ),
             ),
@@ -2441,7 +2441,7 @@ class _SectionIntro extends StatelessWidget {
               style: const TextStyle(
                 color: AppColors.navy,
                 fontSize: 23,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -.4,
               ),
             ),
@@ -2482,7 +2482,7 @@ class _CountPill extends StatelessWidget {
       style: const TextStyle(
         color: _bloodRedDark,
         fontSize: 11,
-        fontWeight: FontWeight.w900,
+        fontWeight: FontWeight.w700,
       ),
     ),
   );

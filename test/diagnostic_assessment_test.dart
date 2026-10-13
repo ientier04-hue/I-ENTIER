@@ -30,8 +30,432 @@ class _FakeAssessmentRepository implements SymptomAssessmentRepository {
       Stream.value(saved);
 }
 
+Future<void> _openDraft(
+  WidgetTester tester,
+  _FakeAssessmentRepository repository, {
+  String pathwayId = 'abdominal',
+  String currentQuestionId = 'abdominal_bowel_detail',
+  Future<void> Function(String text)? onSpeak,
+  Map<String, String> answers = const {
+    'abdominal_onset': 'hours',
+    'abdominal_location': 'upper',
+    'abdominal_intensity': 'mild',
+    'abdominal_warning': 'none',
+    'abdominal_evolution': 'stable',
+    'abdominal_associated': 'diarrhea',
+    'abdominal_drink': 'yes',
+    'abdominal_context': 'none',
+    'abdominal_upper_pattern': 'burning',
+  },
+}) async {
+  await tester.binding.setSurfaceSize(const Size(430, 980));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final pathway = assessmentPathwayById(pathwayId)!;
+  final now = DateTime(2026, 10, 12);
+  final draft = SymptomAssessmentRecord(
+    id: 'navigation-draft',
+    patientId: 'patient-test',
+    pathwayId: pathway.id,
+    pathwayTitle: pathway.title,
+    pathwayVersion: pathway.version,
+    pathwaySnapshot: assessmentPathwayToMap(pathway),
+    status: 'draft',
+    currentQuestionId: currentQuestionId,
+    answers: answers,
+    consents: const {},
+    contextSnapshot: const {},
+    result: null,
+    startedAt: now,
+    updatedAt: now,
+    completedAt: null,
+  );
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light,
+      home: DiagnosticAssessmentPage(
+        patientId: 'patient-test',
+        patientProfile: const {},
+        repository: repository,
+        assessmentStream: Stream.value([draft]),
+        onSpeak: onSpeak ?? (_) async {},
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(pathway.title));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   const engine = AssessmentEngine();
+
+  testWidgets(
+    'les quatre nouveaux parcours sont accessibles dans le choix des symptômes',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: DiagnosticAssessmentPage(
+            patientId: 'patient-test',
+            patientProfile: const {},
+            repository: _FakeAssessmentRepository(),
+            assessmentStream: Stream.value(const []),
+            startImmediately: true,
+            onSpeak: (_) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('consent-understood')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('consent-understood')));
+      await tester.pump();
+      await tester.ensureVisible(find.byKey(const Key('consent-continue')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('consent-continue')));
+      await tester.pumpAndSettle();
+      for (final id in ['back', 'joint', 'eyes', 'dental']) {
+        await tester.scrollUntilVisible(
+          find.byKey(Key('pathway-$id')),
+          180,
+          scrollable: find.byType(Scrollable).last,
+        );
+        await tester.pumpAndSettle();
+        expect(find.text(assessmentPathwayById(id)!.title), findsOneWidget);
+      }
+      await tester.tap(find.byKey(const Key('pathway-dental')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('answer-dental_warning-breathing')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'projection chimique : consigne visible et lue avant de poursuivre',
+    (tester) async {
+      final repository = _FakeAssessmentRepository();
+      String? spoken;
+      await _openDraft(
+        tester,
+        repository,
+        pathwayId: 'eyes',
+        currentQuestionId: 'eyes_warning',
+        answers: {},
+        onSpeak: (text) async => spoken = text,
+      );
+      await tester.tap(find.byKey(const Key('answer-eyes_warning-chemical')));
+      await tester.pump();
+      expect(find.textContaining('au moins 20 minutes'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('assessment-read-question')));
+      await tester.pump();
+      expect(spoken, contains('Rincez immédiatement'));
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
+      expect(find.text('Signe d’urgence détecté'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.textContaining('au moins 20 minutes'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('assessment-emergency-stop')));
+      await tester.pumpAndSettle();
+      expect(
+        repository.saved.last.result!.immediateActions.single,
+        contains('20 minutes'),
+      );
+      expect(find.textContaining('Rincez immédiatement'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'dent expulsée : orientation immédiate vers le dentiste, même hors ligne',
+    (tester) async {
+      final repository = _FakeAssessmentRepository()..failSaves = true;
+      await _openDraft(
+        tester,
+        repository,
+        pathwayId: 'dental',
+        currentQuestionId: 'dental_warning',
+        answers: {},
+      );
+      final choice = find.byKey(const Key('answer-dental_warning-knocked_out'));
+      await tester.scrollUntilVisible(
+        choice,
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(choice);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
+      expect(find.text('Soins à obtenir sans attendre'), findsOneWidget);
+      expect(find.byKey(const Key('assessment-emergency-call')), findsNothing);
+      await tester.tap(find.byKey(const Key('assessment-emergency-stop')));
+      await tester.pumpAndSettle();
+      expect(find.text('Votre orientation'), findsOneWidget);
+      expect(
+        find.textContaining('Contactez un dentiste immédiatement'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('assessment-call-116')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'relit le résultat personnalisé depuis l’historique sur écran étroit',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final pathway = assessmentPathwayById('abdominal')!;
+      const answers = {
+        'abdominal_location': 'upper',
+        'abdominal_upper_pattern': 'burning',
+      };
+      final result = AssessmentResult.fromMap(
+        engine.evaluate(pathway, answers).toMap(),
+      );
+      final now = DateTime(2026, 10, 12);
+      final record = SymptomAssessmentRecord(
+        id: 'saved-result',
+        patientId: 'patient-test',
+        pathwayId: pathway.id,
+        pathwayTitle: pathway.title,
+        pathwayVersion: pathway.version,
+        pathwaySnapshot: assessmentPathwayToMap(pathway),
+        status: 'completed',
+        currentQuestionId: null,
+        answers: answers,
+        consents: const {},
+        contextSnapshot: const {},
+        result: result,
+        startedAt: now,
+        updatedAt: now,
+        completedAt: now,
+      );
+      String? spoken;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: DiagnosticAssessmentPage(
+            patientId: 'patient-test',
+            patientProfile: const {},
+            repository: _FakeAssessmentRepository(),
+            assessmentStream: Stream.value([record]),
+            onSpeak: (text) async => spoken = text,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(pathway.title),
+        150,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text(pathway.title));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Lire le résultat'));
+      await tester.pump();
+      expect(spoken, contains('repas plus petits'));
+      expect(spoken, contains('antiacide'));
+      expect(spoken, contains(result.matches.first.supportingAnswers.first));
+      expect(
+        spoken!.indexOf('Prochaines étapes'),
+        lessThan(spoken!.indexOf('Possibilités à vérifier')),
+      );
+      await tester.scrollUntilVisible(
+        find.textContaining(result.matches.first.supportingAnswers.first),
+        150,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'je ne sais pas reste exclusif dans les nouveaux choix multiples',
+    (tester) async {
+      final repository = _FakeAssessmentRepository();
+      await _openDraft(
+        tester,
+        repository,
+        pathwayId: 'menstrual',
+        currentQuestionId: 'menstrual_contraception',
+        answers: {},
+      );
+      final hormonal = find.byKey(
+        const Key('answer-menstrual_contraception-hormonal_change'),
+      );
+      await tester.tap(hormonal);
+      await tester.pump();
+      final unsure = find.byKey(
+        const Key('answer-menstrual_contraception-unsure'),
+      );
+      await tester.scrollUntilVisible(
+        unsure,
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(unsure);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
+      expect(
+        repository.saved.last.answers['menstrual_contraception'],
+        'unsure',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('revient à la réponse précédente sans effacer les choix', (
+    tester,
+  ) async {
+    final repository = _FakeAssessmentRepository();
+    await _openDraft(tester, repository);
+    await tester.tap(find.byTooltip('Question précédente'));
+    await tester.pumpAndSettle();
+
+    final selected = find.byKey(
+      const Key('answer-abdominal_upper_pattern-burning'),
+    );
+    expect(
+      find.descendant(
+        of: selected,
+        matching: find.byIcon(Icons.check_circle_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(repository.saved, isEmpty);
+    await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+    await tester.pumpAndSettle();
+    expect(repository.saved.last.answers, hasLength(9));
+    expect(repository.saved.last.answers['abdominal_upper_pattern'], 'burning');
+    expect(repository.saved.last.currentQuestionId, 'abdominal_bowel_detail');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'corrige une branche depuis Mes réponses en conservant les choix communs',
+    (tester) async {
+      final repository = _FakeAssessmentRepository();
+      await _openDraft(tester, repository);
+      await tester.tap(find.byKey(const Key('assessment-review-answers')));
+      await tester.pumpAndSettle();
+      expect(find.text('Mes réponses'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const Key('review-answer-abdominal_location')),
+      );
+      await tester.pumpAndSettle();
+
+      final selected = find.byKey(const Key('answer-abdominal_location-upper'));
+      expect(
+        find.descendant(
+          of: selected,
+          matching: find.byIcon(Icons.check_circle_rounded),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const Key('answer-abdominal_location-lower_right')),
+      );
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
+      final saved = repository.saved.last;
+      expect(saved.answers['abdominal_location'], 'lower_right');
+      expect(saved.answers.containsKey('abdominal_upper_pattern'), isFalse);
+      expect(saved.answers['abdominal_associated'], 'diarrhea');
+      expect(saved.answers['abdominal_context'], 'none');
+      expect(saved.currentQuestionId, 'abdominal_bowel_detail');
+      await tester.tap(
+        find.byKey(const Key('answer-abdominal_bowel_detail-watery')),
+      );
+      await tester.pump();
+      expect(find.text('Voir l’orientation'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'garde la réponse en cas d’échec et permet de la synchroniser à nouveau',
+    (tester) async {
+      final repository = _FakeAssessmentRepository()..failSaves = true;
+      await _openDraft(
+        tester,
+        repository,
+        currentQuestionId: 'abdominal_onset',
+        answers: {},
+      );
+      await tester.tap(find.byKey(const Key('answer-abdominal_onset-hours')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('answer-abdominal_onset-hours')),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Réponse non synchronisée'), findsOneWidget);
+      expect(repository.saved, isEmpty);
+
+      repository.failSaves = false;
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
+      expect(repository.saved.single.answers['abdominal_onset'], 'hours');
+      expect(repository.saved.single.currentQuestionId, 'abdominal_location');
+      expect(find.byTooltip('Progression synchronisée'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('conserve une urgence non synchronisée et permet de terminer', (
+    tester,
+  ) async {
+    final repository = _FakeAssessmentRepository()..failSaves = true;
+    await _openDraft(
+      tester,
+      repository,
+      currentQuestionId: 'abdominal_intensity',
+      answers: const {
+        'abdominal_onset': 'hours',
+        'abdominal_location': 'lower_right',
+      },
+    );
+    await tester.tap(
+      find.byKey(const Key('answer-abdominal_intensity-severe')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('assessment-emergency-continue')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('assessment-emergency-banner')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('answer-abdominal_intensity-severe')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Réponse non synchronisée'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('assessment-emergency-finish-now')));
+    await tester.pumpAndSettle();
+    expect(find.text('Urgence médicale'), findsOneWidget);
+    expect(find.byKey(const Key('assessment-call-116')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   test('présente les scores comme compatibilité et détecte une urgence', () {
     final pathway = assessmentPathwayById('abdominal')!;
@@ -124,6 +548,8 @@ void main() {
       'abdominal_associated': 'none',
       'abdominal_drink': 'yes',
       'abdominal_context': 'none',
+      'abdominal_warning': 'none',
+      'abdominal_evolution': 'stable',
     };
 
     expect(
@@ -593,7 +1019,7 @@ void main() {
       version: original.version,
     );
 
-    expect(original.version, 3);
+    expect(original.version, 4);
     expect(
       restored.questionById('skin_blister_detail')!.requiredTags,
       contains('branch_skin_blister'),
@@ -616,15 +1042,15 @@ void main() {
       final equalVersion = assessmentPathwayFromMap({
         ...assessmentPathwayToMap(bundled),
         'title': 'Parcours abdominal révisé',
-      }, version: 3);
+      }, version: 4);
       final newer = assessmentPathwayFromMap({
         ...assessmentPathwayToMap(bundled),
-        'title': 'Parcours abdominal révisé v4',
-      }, version: 4);
+        'title': 'Parcours abdominal révisé v5',
+      }, version: 5);
 
       expect(
         mergeNewestAssessmentPathways([bundled], [older]).single.version,
-        3,
+        4,
       );
       expect(
         mergeNewestAssessmentPathways([bundled], [equalVersion]).single.title,
@@ -632,7 +1058,7 @@ void main() {
       );
       expect(
         mergeNewestAssessmentPathways([bundled], [newer]).single.title,
-        'Parcours abdominal révisé v4',
+        'Parcours abdominal révisé v5',
       );
     },
   );
@@ -649,7 +1075,7 @@ void main() {
         (total, pathway) => total + pathway.possibilities.length,
       );
 
-      expect(assessmentPathways, hasLength(10));
+      expect(assessmentPathways, hasLength(14));
       expect(questionCount, greaterThanOrEqualTo(84));
       expect(possibilityCount, greaterThanOrEqualTo(103));
 
@@ -820,9 +1246,18 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('assessment-emergency-continue')));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('answer-abdominal_warning-none')),
+        180,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.byKey(const Key('answer-abdominal_warning-none')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
 
       expect(
-        find.text('Quel autre signe accompagne le mieux la douleur ?'),
+        find.text('Quels autres signes avez-vous avec le mal de ventre ?'),
         findsOneWidget,
       );
       expect(find.text('Plusieurs réponses possibles'), findsOneWidget);
@@ -854,7 +1289,11 @@ void main() {
       );
       await tester.tap(associatedFever);
       await tester.pump();
-      await tester.ensureVisible(associatedNone);
+      await tester.scrollUntilVisible(
+        associatedNone,
+        -160,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.tap(associatedNone);
       await tester.pump();
       await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
@@ -879,15 +1318,27 @@ void main() {
       await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
       await tester.pumpAndSettle();
 
+      await tester.tap(
+        find.byKey(const Key('answer-abdominal_evolution-stable')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('assessment-confirm-answer')));
+      await tester.pumpAndSettle();
+
       expect(find.text('Urgence médicale'), findsOneWidget);
       expect(find.byKey(const Key('assessment-call-116')), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Douleur abdominale aiguë sévère à évaluer en urgence'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       expect(
         find.text('Douleur abdominale aiguë sévère à évaluer en urgence'),
         findsOneWidget,
       );
       expect(repository.saved.last.status, 'completed');
-      expect(repository.saved.last.answers, hasLength(6));
-      expect(repository.saved.last.pathwayVersion, 3);
+      expect(repository.saved.last.answers, hasLength(8));
+      expect(repository.saved.last.pathwayVersion, 4);
       expect(repository.saved.last.pathwaySnapshot['id'], 'abdominal');
       expect(tester.takeException(), isNull);
     },
@@ -914,6 +1365,8 @@ void main() {
           'abdominal_location': 'diffuse',
           'abdominal_intensity': 'mild',
           'abdominal_associated': 'diarrhea',
+          'abdominal_warning': 'none',
+          'abdominal_evolution': 'stable',
           'abdominal_drink': 'yes',
           'abdominal_context': 'none',
         },
@@ -966,6 +1419,11 @@ void main() {
 
       expect(find.text('Urgence médicale'), findsOneWidget);
       expect(find.byKey(const Key('assessment-call-116')), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Occlusion intestinale possible'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       expect(find.text('Occlusion intestinale possible'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

@@ -460,7 +460,7 @@ class _PharmacyPageState extends State<PharmacyPage> {
         surfaceTintColor: Colors.transparent,
         title: const Text(
           'Pharmacie',
-          style: TextStyle(fontWeight: FontWeight.w800, color: _navy),
+          style: TextStyle(fontWeight: FontWeight.w600, color: _navy),
         ),
         actions: [
           IconButton(
@@ -686,7 +686,7 @@ class _PharmacySectionSwitch extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: selected == section ? _navy : _muted,
                             ),
                           ),
@@ -747,7 +747,7 @@ class _PharmacyDirectoryIntro extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 21,
                   height: 1.1,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: _navy,
                 ),
               ),
@@ -811,7 +811,7 @@ class _PrescriptionHubHeader extends StatelessWidget {
               'Mes ordonnances',
               style: TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: _navy,
               ),
             ),
@@ -918,7 +918,7 @@ class _PrescriptionHistory extends StatelessWidget {
                   'Historique',
                   style: TextStyle(
                     fontSize: 21,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: _navy,
                   ),
                 ),
@@ -992,7 +992,7 @@ class _SavingPrescriptionCard extends StatelessWidget {
             children: [
               Text(
                 'Enregistrement sécurisé',
-                style: TextStyle(fontWeight: FontWeight.w800, color: _navy),
+                style: TextStyle(fontWeight: FontWeight.w600, color: _navy),
               ),
               SizedBox(height: 3),
               Text(
@@ -1031,7 +1031,7 @@ class _PrescriptionCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: _navy,
                 ),
               ),
@@ -1203,7 +1203,7 @@ class _StoredPrescriptionPreview extends StatelessWidget {
                     prescription.displayName,
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: _navy,
                     ),
                   ),
@@ -1268,7 +1268,7 @@ class _PharmacyHero extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   letterSpacing: .8,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: _green,
                 ),
               ),
@@ -1281,7 +1281,7 @@ class _PharmacyHero extends StatelessWidget {
               style: TextStyle(
                 fontSize: compact ? 27 : 32,
                 height: 1.08,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: _navy,
               ),
             ),
@@ -1491,7 +1491,7 @@ class _SectionTitle extends StatelessWidget {
           title,
           style: const TextStyle(
             fontSize: 22,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: _navy,
           ),
         ),
@@ -1581,7 +1581,7 @@ class _MedicationCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 16,
                         height: 1.15,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: _navy,
                       ),
                     ),
@@ -1617,7 +1617,7 @@ class _MedicationCard extends StatelessWidget {
                       medication.price,
                       style: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         color: _green,
                       ),
                     ),
@@ -1663,7 +1663,7 @@ class _TinyBadge extends StatelessWidget {
     ),
     child: Text(
       label,
-      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800),
+      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
     ),
   );
 }
@@ -1705,7 +1705,7 @@ class _NearbyHeader extends StatelessWidget {
               'Pharmacies proches',
               style: TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: _navy,
               ),
             ),
@@ -1886,7 +1886,7 @@ class _NearbyPharmacyCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       color: _navy,
                     ),
                   ),
@@ -1900,7 +1900,7 @@ class _NearbyPharmacyCard extends StatelessWidget {
                 pharmacy.distanceLabel,
                 style: const TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: _primary,
                 ),
               ),
@@ -2035,7 +2035,7 @@ class _FeedbackCard extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.w800, color: _navy),
+          style: const TextStyle(fontWeight: FontWeight.w600, color: _navy),
         ),
         const SizedBox(height: 5),
         Text(
@@ -2074,7 +2074,7 @@ class _PrescriptionSourceSheet extends StatelessWidget {
             'Ajouter une ordonnance',
             style: TextStyle(
               fontSize: 21,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: _navy,
             ),
           ),
@@ -2130,7 +2130,7 @@ class _SourceTile extends StatelessWidget {
       ),
       child: Icon(icon, color: _green),
     ),
-    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
     subtitle: Text(subtitle),
     trailing: const Icon(Icons.chevron_right_rounded),
   );
@@ -2229,7 +2229,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   'Filtrer les médicaments',
                   style: TextStyle(
                     fontSize: 21,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: _navy,
                   ),
                 ),
@@ -2247,7 +2247,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           const SizedBox(height: 16),
           const Text(
             'Catégorie',
-            style: TextStyle(fontWeight: FontWeight.w800, color: _navy),
+            style: TextStyle(fontWeight: FontWeight.w600, color: _navy),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -2544,7 +2544,7 @@ class _PatientCartDialogState extends State<_PatientCartDialog> {
                 widget.medications.first.pharmacyName,
                 style: const TextStyle(
                   color: _green,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             const SizedBox(height: 12),
@@ -2600,7 +2600,7 @@ class _PatientCartDialogState extends State<_PatientCartDialog> {
                   style: const TextStyle(
                     color: _navy,
                     fontSize: 19,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],

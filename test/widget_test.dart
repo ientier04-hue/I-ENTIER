@@ -356,11 +356,10 @@ void main() {
     expect(find.text('Votre espace santé'), findsOneWidget);
     expect(find.text('PT'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
-    expect(
-      find.text('Institution, personnel, malaise, médicament, examen...'),
-      findsOneWidget,
-    );
+    expect(find.text('Rechercher un soin, un médicament…'), findsOneWidget);
     expect(find.byTooltip('Filtrer'), findsOneWidget);
+    expect(find.byTooltip('Appels vidéo'), findsNothing);
+    expect(find.byIcon(Icons.videocam_outlined), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('home-header')),

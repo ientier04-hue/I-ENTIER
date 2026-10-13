@@ -1,7 +1,7 @@
 # Base clinique de l’évaluation assistée
 
-Dernière revue technique : 29 juillet 2026.
-Version documentée : catalogue clinique v3.
+Dernière revue documentaire et technique : 12 octobre 2026.
+Version documentée : catalogue clinique v4 (schéma de stockage v3).
 
 ## Périmètre
 
@@ -16,8 +16,202 @@ urgente affiche immédiatement une alerte non dismissible. Le patient peut
 afficher l’orientation urgente sans attendre ou continuer les questions. Dans
 ce second cas, un bandeau d’urgence reste visible et permet d’arrêter à tout
 moment. Le niveau d’urgence déjà détecté est conservé dans le résultat final.
-Les conseils médicamenteux sont supprimés en cas d’urgence ou de grossesse
-possible.
+
+## Extension : dos, articulations, yeux et dents
+
+Le catalogue comprend désormais **14 parcours, 162 questions et 913 choix**.
+Les quatre nouveaux parcours v4 ajoutent 45 questions et 273 choix, sans
+modifier le schéma des instantanés (v3). Leur contenu est isolé dans
+`lib/diagnostic_assessment_additional_pathways.dart`; les conseils conditionnels
+restent dans `lib/diagnostic_assessment_guidance.dart`.
+
+| Parcours | Questions | Points couverts |
+| --- | ---: | --- |
+| Mal de dos | 12 | Déclenchement, localisation, irradiation, force/sensibilité, urines/selles, traumatisme, fragilité osseuse, raideur prolongée, contexte infectieux ou tumoral. |
+| Douleurs articulaires | 11 | Articulation et répartition, appui, traumatisme, chaleur/gonflement, fièvre, raideur matinale, prothèse ou geste récent, enfant et antécédents. |
+| Problèmes des yeux | 11 | Vision, douleur, rougeur, lentilles, traumatisme/projection, intervention récente, sécrétions, paupière, âge et nouveau-né. |
+| Douleurs dentaires | 11 | Sensibilité brève ou persistante, douleur spontanée, morsure, gencive, abcès/extension, soin récent, dent cassée/expulsée, grossesse et allaitement séparés. |
+
+Les branches spécialisées ne s’activent que si les réponses le justifient.
+Les symptômes, traitements et contextes isolés ne suffisent pas à nommer une
+maladie : pas de sciatique pour une douleur du dos seule, pas d’arthrose pour
+la seule localisation au genou, ni de conjonctivite pour une rougeur seule.
+
+Les règles composites renforcent notamment le triage pour une articulation
+chaude et gonflée (même sans fièvre), un petit traumatisme sur un os fragile,
+un œil rouge ou douloureux avec lentilles, une modification visuelle après
+intervention et un gonflement périoculaire fébrile ou douloureux aux mouvements.
+Une articulation chaude/gonflée avec fièvre, prothèse, geste récent ou
+immunodépression, ainsi qu’un mal de dos fébrile sous immunodépression, sont
+orientés immédiatement vers l’hôpital par prudence. Ces seuils conservateurs
+doivent être validés cliniquement dans le contexte local.
+
+La conduite à tenir distingue le dentiste, l’ophtalmologue et l’urgence
+hospitalière. Une dent expulsée déclenche une orientation dentaire immédiate
+sans assimiler ce seul signe à une urgence respiratoire. L’urgence respiratoire
+ou une extension vers l’œil/le cou prime sur les conseils de conservation de la
+dent. La dent de lait ne doit pas être réimplantée; quand son type n’est pas
+connu, aucune réimplantation à domicile n’est proposée.
+
+Les consignes de premiers secours pour une projection chimique, une blessure
+pénétrante de l’œil ou une dent expulsée apparaissent dès la réponse concernée,
+dans l’alerte, en lecture audio et dans le résultat sauvegardé. Le champ JSON
+optionnel `immediateActions` reste rétrocompatible. Les conseils de rinçage
+chimique ne sont pas associés à une consigne de manipulation d’un objet planté.
+
+### Sources de cette extension
+
+- [NHS — Back pain](https://www.nhs.uk/conditions/back-pain/),
+  [Sciatica](https://www.nhs.uk/conditions/sciatica/),
+  [Ankylosing spondylitis: symptoms](https://www.nhs.uk/conditions/ankylosing-spondylitis/symptoms/)
+  et [NICE NG59](https://www.nice.org.uk/guidance/NG59/chapter/recommendations) :
+  orientation des douleurs du dos, signes neurologiques et activité adaptée;
+  pas d’imagerie systématique proposée.
+- [NHS — Joint pain](https://www.nhs.uk/symptoms/joint-pain/) et
+  [Septic arthritis](https://www.nhs.uk/conditions/septic-arthritis/) :
+  perte d’appui, chaleur/gonflement, absence possible de fièvre et terrain à risque.
+- [NHS — Eye pain](https://www.nhs.uk/symptoms/eye-pain/),
+  [Red eye](https://www.nhs.uk/symptoms/red-eye/),
+  [Eye injuries](https://www.nhs.uk/conditions/eye-injuries/),
+  [Floaters and flashes](https://www.nhs.uk/symptoms/floaters-and-flashes-in-the-eyes/),
+  [Conjunctivitis](https://www.nhs.uk/conditions/conjunctivitis/),
+  [Stye](https://www.nhs.uk/conditions/stye/) et
+  [Blepharitis](https://www.nhs.uk/conditions/blepharitis/) : vision, lentilles,
+  nouveau-né, premiers secours et hygiène de surface.
+- [NHS — Toothache](https://www.nhs.uk/symptoms/toothache/),
+  [Dental abscess](https://www.nhs.uk/conditions/dental-abscess/),
+  [Knocked-out tooth](https://www.nhs.uk/conditions/knocked-out-tooth/),
+  [Heart attack](https://www.nhs.uk/conditions/heart-attack/) et
+  [ADA — Antibiotics for dental pain and swelling](https://www.ada.org/resources/research/science/evidence-based-dental-research/antibiotics-for-dental-pain-and-swelling/)
+  : triage dentaire, extension infectieuse, traumatisme, douleur de mâchoire
+  associée à des signes thoraciques et place limitée des antibiotiques seuls.
+
+Les tests vérifient le routage, les associations urgentes, les recommandations,
+la sauvegarde/relecture, l’accès aux nouveaux motifs et les consignes immédiates.
+Ils ne constituent pas une validation clinique des questionnaires.
+
+## Révision des questions v4
+
+### Résultats et recommandations conditionnelles
+
+Les conseils des dix parcours sont désormais sélectionnés à partir des réponses
+et du contexte autorisé, indépendamment du titre de l’hypothèse classée première.
+Le résultat conserve son résumé, les indices internes et jusqu’à trois réponses
+qui étayent chaque hypothèse. Les anciens résultats sans ces propriétés restent
+lisibles. La conduite à tenir précède les possibilités, à l’écran et en audio;
+la lecture audio inclut aussi les conseils d’attente et de pharmacie.
+
+- Les causes courantes demandent des signes discriminants : un diabète seul
+  ne suggère plus une hypoglycémie, des cycles irréguliers seuls ne suffisent
+  plus pour un SOPK, et une démangeaison seule ne déclenche plus un eczéma.
+- Les explications bénignes principales sont exclues quand le triage est
+  urgent (`triage_emergency`). Les causes sérieuses, dont l’appendicite,
+  restent présentées lorsqu’elles sont étayées. Les scores restent des indices
+  de concordance internes non validés, sans interprétation probabiliste.
+- En l’absence d’hypothèse étayée, le résultat indique « Orientation à préciser »
+  avec un avis médical, au lieu de suggérer une absence de risque. Un drapeau
+  rouge conserve une orientation urgente même sans hypothèse identifiée.
+- La diarrhée, les vomissements, la constipation et le reflux disposent de
+  conseils distincts. Aucun laxatif n’est suggéré avec diarrhée ou vomissements;
+  aucune mesure d’autosoins n’est présentée en cas d’urgence.
+- Les céphalées récurrentes invitent à noter les crises et les prises; les
+  prises fréquentes d’antidouleurs orientent vers une révision du traitement.
+- L’échec d’un traitement urinaire après 48 heures, le sang dans les urines,
+  la soif avec urines abondantes et les signes génitaux ont des suites distinctes.
+- Les conseils cutanés séparent plaques sèches, infection, cloques douloureuses,
+  démangeaisons des proches et lésions changeantes.
+- L’urgence générale prime sur la consigne de joindre la maternité. Le Doppler
+  domestique n’est mentionné que pour une diminution des mouvements fœtaux.
+- Les suggestions de nouveaux médicaments nécessitent un avis professionnel
+  en cas d’urgence, grossesse, allaitement déclaré, enfance ou dossier signalant
+  allergies, traitements ou antécédents. Les précautions contre l’aspirine et
+  l’ibuprofène restent explicites pour une dengue possible, même en urgence.
+
+Sources complémentaires consultées pour les conseils :
+[NHS — Diarrhoea and vomiting](https://www.nhs.uk/symptoms/diarrhoea-and-vomiting/),
+[Heartburn and acid reflux](https://www.nhs.uk/conditions/heartburn-and-acid-reflux/),
+[Asthma](https://www.nhs.uk/conditions/asthma/),
+[Period pain](https://www.nhs.uk/symptoms/period-pain/),
+[Your baby's movements](https://www.nhs.uk/pregnancy/keeping-well/your-babys-movements/),
+ainsi que les références v4 ci-dessous (céphalées, peau, vertiges, infections
+urinaires, dengue et grossesse).
+
+Ces règles et leurs tests sont une vérification logicielle et documentaire;
+ils ne remplacent pas une validation clinique humaine.
+
+### Questions et choix
+
+Les dix parcours passent de 95 à 117 questions et de 480 à 640 choix. Les
+questions conditionnelles restent limitées aux branches activées par les
+réponses. Les évaluations déjà enregistrées conservent leur propre définition
+de parcours; les nouveaux questionnaires utilisent la version 4.
+
+| Parcours | Précisions ajoutées |
+| --- | --- |
+| Abdomen | Localisation séparée des repas, migration de la douleur, évolution, obstruction, saignement digestif et diabète avec vomissements. |
+| Céphalée | Durée des épisodes, fréquence des prises d’antidouleurs, symptômes neurologiques distincts et douleur à la mastication. |
+| Menstruations | Quantité des saignements, saignement entre les règles ou après rapport distingués, contraception et contexte du cycle. |
+| Respiration | Température réellement mesurée, capacité à avaler la salive, signes concomitants de toux et de gêne respiratoire. |
+| Peau | Durée, zones atteintes, terrain à risque; douleur, chaleur et gonflement sélectionnés séparément. |
+| Grossesse | Étape plus précise après 20 semaines, symptômes d’une jambe pendant toute la grossesse, signes urinaires et température maternelle. |
+| Poitrine | Irradiation et durée de la douleur; l’oppression nouvelle persistante ne comporte plus de seuil suggérant d’attendre 15 minutes. |
+| Urines | Quantité d’urine, soif associée, réponse au traitement après 48 heures, âge supérieur ou égal à 65 ans et contexte à risque. |
+| Vertiges | Durée, vraie perte de connaissance et récupération; baisse d’audition et acouphènes distingués. |
+| Fièvre | Température non mesurée distincte d’une mesure sous 38 °C, durée en jours et contexte médical séparé de l’hydratation. |
+
+Les réponses « je ne sais pas » ajoutées ne sont pas considérées comme une
+absence de symptôme; elles gardent une orientation prudente. En sélection
+multiple, elles sont exclusives comme « aucun ». Les nouveaux choix ne
+déduisent plus une nausée d’une photophobie, une convulsion d’une confusion,
+un écoulement génital d’une exposition sexuelle ou une température de 39 °C
+de simples frissons.
+
+Les règles associées aux nouvelles questions couvrent notamment une
+température inférieure à 36 °C chez le jeune nourrisson, une zone cutanée
+douloureuse, chaude et gonflée, ainsi que polyurie et soif avec vomissements,
+respiration anormale ou confusion. Les prises fréquentes d’antidouleurs ne
+suffisent pas seules à faire apparaître une surutilisation possible : le
+parcours recherche aussi des céphalées fréquentes et des prises répétées
+depuis au moins trois mois. La classe du médicament et le seuil propre à
+cette classe restent à vérifier par le professionnel.
+
+Cette révision est une implémentation documentaire de règles d’orientation,
+pas une validation clinique. Une relecture médicale humaine et une évaluation
+prospective restent nécessaires avant de s’en servir pour des décisions de soins.
+
+### Références consultées pour la v4
+
+- [NHS — Stomach ache](https://www.nhs.uk/symptoms/stomach-ache/) et
+  [Appendicitis](https://www.nhs.uk/conditions/appendicitis/) : signes d’alerte
+  digestifs et migration de la douleur.
+- [NHS — Headaches](https://www.nhs.uk/symptoms/headaches/),
+  [Temporal arteritis](https://www.nhs.uk/conditions/temporal-arteritis/) et
+  [NICE CG150](https://www.nice.org.uk/guidance/cg150/chapter/recommendations) :
+  signes secondaires, durée et consommation d’antidouleurs.
+- [NHS — Period problems](https://www.nhs.uk/conditions/periods/period-problems/)
+  et [Heavy periods](https://www.nhs.uk/conditions/heavy-periods/) : description
+  des pertes sanguines et retentissement.
+- [NHS — Shortness of breath](https://www.nhs.uk/symptoms/shortness-of-breath/)
+  et [Tonsillitis](https://www.nhs.uk/conditions/tonsillitis/) : détresse,
+  incapacité à avaler et signes de complication de la gorge.
+- [NHS — Cellulitis](https://www.nhs.uk/conditions/cellulitis/) : association
+  douleur, chaleur et gonflement, y compris quand la rougeur est peu visible.
+- [CDC — Urgent Maternal Warning Signs](https://www.cdc.gov/hearher/maternal-warning-signs/index.html)
+  et [NHS — Signs that labour has begun](https://www.nhs.uk/pregnancy/labour-and-birth/signs-that-labour-has-begun/) :
+  signes maternels, seuil de fièvre et terme de la grossesse.
+- [NHS — Chest pain](https://www.nhs.uk/symptoms/chest-pain/) : douleur
+  persistante ou irradiée et symptômes associés.
+- [NHS — Urinary tract infections](https://www.nhs.uk/conditions/urinary-tract-infections-utis/)
+  et [Diabetic ketoacidosis](https://www.nhs.uk/conditions/diabetic-ketoacidosis/) :
+  groupes à risque, évolution sous traitement et signes métaboliques associés.
+- [NHS — Dizziness](https://www.nhs.uk/symptoms/dizziness/),
+  [Fainting](https://www.nhs.uk/symptoms/fainting/) et
+  [Hearing loss](https://www.nhs.uk/conditions/hearing-loss/) : temporalité,
+  récupération après syncope et modification de l’audition.
+- [NICE NG143](https://www.nice.org.uk/guidance/NG143/chapter/recommendations),
+  [NHS — Fever in children](https://www.nhs.uk/symptoms/fever-in-children/) et
+  [OMS — Dengue](https://www.who.int/news-room/fact-sheets/detail/dengue-and-severe-dengue) :
+  température selon l’âge, durée et signes d’alerte fébriles.
 
 ## Audit clinique v3
 

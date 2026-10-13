@@ -633,7 +633,7 @@ class _SectionSwitchItem extends StatelessWidget {
                 style: TextStyle(
                   color: selected ? Colors.white : _ink,
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -746,7 +746,7 @@ class _DashboardActionCard extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       color: _navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -836,7 +836,7 @@ class _WelcomeCard extends StatelessWidget {
                 color: Colors.white,
                 fontSize: 27,
                 height: 1.12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 letterSpacing: -.4,
               ),
             ),
@@ -923,7 +923,7 @@ class _CrisisBanner extends StatelessWidget {
                 children: [
                   Text(
                     'Besoin d’aide maintenant ?',
-                    style: TextStyle(color: _navy, fontWeight: FontWeight.w800),
+                    style: TextStyle(color: _navy, fontWeight: FontWeight.w600),
                   ),
                   SizedBox(height: 3),
                   Text(
@@ -962,7 +962,7 @@ class _SectionTitle extends StatelessWidget {
         style: const TextStyle(
           color: _primary,
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: 1.5,
         ),
       ),
@@ -972,7 +972,7 @@ class _SectionTitle extends StatelessWidget {
         style: const TextStyle(
           color: _navy,
           fontSize: 22,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: -.25,
         ),
       ),
@@ -1042,7 +1042,7 @@ class _CheckInCard extends StatelessWidget {
         const SizedBox(height: 22),
         const Text(
           'Qu’est-ce qui est le plus présent ?',
-          style: TextStyle(color: _navy, fontWeight: FontWeight.w800),
+          style: TextStyle(color: _navy, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -1286,7 +1286,7 @@ class _ToolCard extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       color: _navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1309,7 +1309,7 @@ class _ToolCard extends StatelessWidget {
                   style: TextStyle(
                     color: color,
                     fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -1404,7 +1404,7 @@ class _EntryTile extends StatelessWidget {
                       entry.mood.label,
                       style: const TextStyle(
                         color: _navy,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -1577,7 +1577,7 @@ class _PsycrephCard extends StatelessWidget {
                     style: TextStyle(
                       color: _primaryDark,
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -1589,7 +1589,7 @@ class _PsycrephCard extends StatelessWidget {
               style: TextStyle(
                 color: _navy,
                 fontSize: 18,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             SizedBox(height: 4),
@@ -1658,7 +1658,7 @@ class _ProfessionalCard extends StatelessWidget {
                     professional.name,
                     style: const TextStyle(
                       color: _navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -1687,7 +1687,7 @@ class _ProfessionalCard extends StatelessWidget {
                   style: TextStyle(
                     color: _teal,
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -1799,7 +1799,7 @@ class _FeedbackCard extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: _navy, fontWeight: FontWeight.w800),
+          style: const TextStyle(color: _navy, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 5),
         Text(
@@ -1857,7 +1857,7 @@ class _CrisisSupportSheet extends StatelessWidget {
                       style: TextStyle(
                         color: _navy,
                         fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     SizedBox(height: 7),
@@ -1967,7 +1967,7 @@ class _CrisisAction extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       color: _navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -2109,7 +2109,7 @@ class _BreathingExerciseSheetState extends State<_BreathingExerciseSheet> {
                     style: const TextStyle(
                       color: _navy,
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 5),
@@ -2117,7 +2117,7 @@ class _BreathingExerciseSheetState extends State<_BreathingExerciseSheet> {
                     '${(_totalSeconds - _elapsed).clamp(0, _totalSeconds)} s',
                     style: const TextStyle(
                       color: _teal,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -2205,7 +2205,7 @@ class _GroundingExerciseSheetState extends State<_GroundingExerciseSheet> {
                           : _primary,
                       child: Text(
                         _steps[index].$1,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2303,7 +2303,7 @@ class _ExerciseSheetFrame extends StatelessWidget {
                       style: const TextStyle(
                         color: _navy,
                         fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 5),

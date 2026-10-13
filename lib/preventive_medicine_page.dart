@@ -801,7 +801,7 @@ class _PreventiveLoadingState extends StatelessWidget {
                       style: TextStyle(
                         color: _navy,
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     SizedBox(height: 5),
@@ -1185,7 +1185,7 @@ class _PreventionSectionMenu extends StatelessWidget {
                                   ? Colors.white
                                   : const Color(0xFF334A68),
                               fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -1262,7 +1262,7 @@ class _PreventionHero extends StatelessWidget {
               color: Colors.white,
               fontSize: 28,
               height: 1.08,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               letterSpacing: -.5,
             ),
           ),
@@ -1286,7 +1286,7 @@ class _PreventionHero extends StatelessWidget {
                       '$completed sur $total préparés',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1418,7 +1418,7 @@ class _SectionTitle extends StatelessWidget {
               style: const TextStyle(
                 color: _navy,
                 fontSize: 22,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
@@ -1509,7 +1509,7 @@ class _ReminderPanel extends StatelessWidget {
                 children: [
                   Text(
                     'Ne laissez pas votre prochain contrôle au hasard',
-                    style: TextStyle(color: _navy, fontWeight: FontWeight.w900),
+                    style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
                   ),
                   SizedBox(height: 4),
                   Text(
@@ -1608,7 +1608,7 @@ class _ReminderTile extends StatelessWidget {
                       reminder.title,
                       style: const TextStyle(
                         color: _navy,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     _StatusPill(label: timing, color: statusColor),
@@ -1683,7 +1683,7 @@ class _CancerSectionIntro extends StatelessWidget {
                 style: TextStyle(
                   color: _navy,
                   fontSize: 21,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               SizedBox(height: 6),
@@ -1725,7 +1725,7 @@ class _CancerWarningSigns extends StatelessWidget {
           ),
           title: const Text(
             'Changements à ne pas ignorer',
-            style: TextStyle(color: _navy, fontWeight: FontWeight.w900),
+            style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
           ),
           subtitle: const Text(
             'Un signe persistant mérite une évaluation, même sans douleur.',
@@ -1767,7 +1767,7 @@ class _CancerWarningSigns extends StatelessWidget {
             ),
             title: Text(
               'Comment observer mes seins ?',
-              style: TextStyle(color: _navy, fontWeight: FontWeight.w900),
+              style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
             ),
             subtitle: Text(
               'Un repère simple pour connaître ce qui est habituel pour vous.',
@@ -1825,7 +1825,7 @@ class _GuideStep extends StatelessWidget {
             number,
             style: const TextStyle(
               color: Color(0xFFC9365C),
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -1942,7 +1942,7 @@ class _PlanItemCard extends StatelessWidget {
                       color: _navy,
                       fontSize: 16,
                       height: 1.2,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -2029,7 +2029,7 @@ class _StatusPill extends StatelessWidget {
       style: TextStyle(
         color: color,
         fontSize: 10.5,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
     ),
   );
@@ -2085,7 +2085,7 @@ class _DueDateStrip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: _navy,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const Spacer(),
@@ -2163,7 +2163,7 @@ class _ProtectiveHabits extends StatelessWidget {
                   habit.$2,
                   style: const TextStyle(
                     color: _navy,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -2472,7 +2472,7 @@ class _AdviceHeader extends StatelessWidget {
                 color: _navy,
                 fontSize: 17,
                 height: 1.2,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
@@ -2525,7 +2525,7 @@ class _AdviceLine extends StatelessWidget {
                 style: const TextStyle(
                   color: _navy,
                   fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 3),
@@ -2567,7 +2567,7 @@ class _HydrationSignalsCard extends StatelessWidget {
             Expanded(
               child: Text(
                 'Écoutez les signes de déshydratation',
-                style: TextStyle(color: _navy, fontWeight: FontWeight.w900),
+                style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -2658,7 +2658,7 @@ class _RecordTile extends StatelessWidget {
     ),
     title: Text(
       record.title,
-      style: const TextStyle(color: _navy, fontWeight: FontWeight.w800),
+      style: const TextStyle(color: _navy, fontWeight: FontWeight.w600),
     ),
     subtitle: Padding(
       padding: const EdgeInsets.only(top: 4),
@@ -2705,7 +2705,7 @@ class _EvidenceCard extends StatelessWidget {
             Expanded(
               child: Text(
                 'Repères issus de sources sanitaires officielles',
-                style: TextStyle(color: _navy, fontWeight: FontWeight.w900),
+                style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -2814,7 +2814,7 @@ class _PreventiveFeedback extends StatelessWidget {
             style: const TextStyle(
               color: _navy,
               fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 7),
@@ -2971,7 +2971,7 @@ class _PreventiveRecordFormState extends State<_PreventiveRecordForm> {
                     style: TextStyle(
                       color: _navy,
                       fontSize: 23,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -3230,7 +3230,7 @@ class _PreventiveReminderFormState extends State<_PreventiveReminderForm> {
                         style: TextStyle(
                           color: _navy,
                           fontSize: 23,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
@@ -3286,7 +3286,7 @@ class _PreventiveReminderFormState extends State<_PreventiveReminderForm> {
               style: TextStyle(
                 color: _navy,
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 7),

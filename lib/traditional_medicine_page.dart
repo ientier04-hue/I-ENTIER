@@ -637,7 +637,7 @@ class _TraditionalMedicinePageState extends State<TraditionalMedicinePage> {
     appBar: AppBar(
       title: const Text(
         'Médecine Traditionnelle',
-        style: TextStyle(fontWeight: FontWeight.w900),
+        style: TextStyle(fontWeight: FontWeight.w700),
       ),
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.transparent,
@@ -919,7 +919,7 @@ class _TraditionalHero extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 22,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                             height: 1.12,
                           ),
                         ),
@@ -956,7 +956,7 @@ class _TraditionalHero extends StatelessWidget {
                           'Signe d’urgence ? N’attendez pas une consultation traditionnelle.',
                           style: TextStyle(
                             color: Color(0xFF8E1B14),
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -1175,7 +1175,7 @@ class _PractitionerCard extends StatelessWidget {
                 style: const TextStyle(
                   color: _traditionalGreenDark,
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1194,7 +1194,7 @@ class _PractitionerCard extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.navy,
                           fontSize: 17,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const _VerifiedBadge(),
@@ -1264,7 +1264,7 @@ class _VerifiedBadge extends StatelessWidget {
           style: TextStyle(
             color: _traditionalGreenDark,
             fontSize: 11,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -1298,7 +1298,7 @@ class _MiniPill extends StatelessWidget {
           style: TextStyle(
             color: color,
             fontSize: 11,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -1335,7 +1335,7 @@ class _JournalSection extends StatelessWidget {
               style: TextStyle(
                 color: AppColors.navy,
                 fontSize: 21,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -1362,7 +1362,7 @@ class _JournalSection extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.navy,
                   fontSize: 17,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),
@@ -1445,7 +1445,7 @@ class _RecommendationCard extends StatelessWidget {
                 recommendation.title,
                 style: const TextStyle(
                   color: _traditionalGreenDark,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1465,7 +1465,7 @@ class _RecommendationCard extends StatelessWidget {
             style: const TextStyle(
               color: _traditionalGreenDark,
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1500,7 +1500,7 @@ class _PrivacyPanel extends StatelessWidget {
                 'Privé par défaut, partagé par vous uniquement',
                 style: TextStyle(
                   color: Color(0xFF183B91),
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1569,7 +1569,7 @@ class _JournalCard extends StatelessWidget {
                 entry.title,
                 style: const TextStyle(
                   color: AppColors.navy,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               if (entry.details.isNotEmpty) ...[
@@ -1633,7 +1633,7 @@ class _PreventionSection extends StatelessWidget {
         style: TextStyle(
           color: AppColors.navy,
           fontSize: 21,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
       const SizedBox(height: 5),
@@ -1705,7 +1705,7 @@ class _PreventionCard extends StatelessWidget {
                 content.title,
                 style: const TextStyle(
                   color: AppColors.navy,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   fontSize: 16,
                 ),
               ),
@@ -1736,7 +1736,7 @@ class _OrientationsSection extends StatelessWidget {
         style: TextStyle(
           color: AppColors.navy,
           fontSize: 21,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
       const SizedBox(height: 6),
@@ -1812,7 +1812,7 @@ class _OrientationCard extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColors.navy,
                     fontSize: 16,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1913,7 +1913,7 @@ class _PractitionerSheetState extends State<_PractitionerSheet> {
                       style: const TextStyle(
                         color: AppColors.navy,
                         fontSize: 22,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -1953,7 +1953,7 @@ class _PractitionerSheetState extends State<_PractitionerSheet> {
                   p.trustLevel,
                   style: const TextStyle(
                     color: _traditionalGreenDark,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -1993,7 +1993,7 @@ class _PractitionerSheetState extends State<_PractitionerSheet> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             title: const Text(
               'Partager mon carnet',
-              style: TextStyle(fontWeight: FontWeight.w900),
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
             subtitle: const Text(
               'Accès révocable à tout moment depuis Mon carnet.',
@@ -2057,7 +2057,7 @@ class _Metric extends StatelessWidget {
         style: const TextStyle(
           color: _traditionalGreenDark,
           fontSize: 20,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
       Text(
@@ -2094,7 +2094,7 @@ class _DetailBlock extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: AppColors.navy,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 3),
@@ -2155,7 +2155,7 @@ class _BookingSheetState extends State<_BookingSheet> {
             style: const TextStyle(
               color: AppColors.navy,
               fontSize: 21,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 15),
@@ -2287,7 +2287,7 @@ class _JournalEntrySheetState extends State<_JournalEntrySheet> {
               style: TextStyle(
                 color: AppColors.navy,
                 fontSize: 21,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 14),
@@ -2501,7 +2501,7 @@ class _TraditionalEmpty extends StatelessWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: AppColors.navy,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             fontSize: 16,
           ),
         ),

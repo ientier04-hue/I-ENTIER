@@ -1,6 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+
+part 'diagnostic_assessment_guidance.dart';
+part 'diagnostic_assessment_additional_pathways.dart';
 
 enum AssessmentUrgency {
   selfCare,
@@ -160,6 +161,7 @@ class AssessmentMatch {
   final int compatibility;
   final List<String> matchedTags;
   final bool urgentReason;
+  final List<String> supportingAnswers;
 
   const AssessmentMatch({
     required this.title,
@@ -167,9 +169,11 @@ class AssessmentMatch {
     required this.compatibility,
     required this.matchedTags,
     this.urgentReason = false,
+    this.supportingAnswers = const [],
   });
 
   String get compatibilityLabel {
+    if (compatibility == 0) return 'À préciser';
     if (compatibility >= 70) return 'Compatibilité forte';
     if (compatibility >= 45) return 'Compatibilité modérée';
     return 'Compatibilité limitée';
@@ -180,18 +184,30 @@ class AssessmentMatch {
     'explanation': explanation,
     'compatibility': compatibility,
     'urgentReason': urgentReason,
+    'matchedTags': matchedTags,
+    'supportingAnswers': supportingAnswers,
   };
 
   factory AssessmentMatch.fromMap(Map<String, dynamic> map) => AssessmentMatch(
     title: map['title']?.toString() ?? '',
     explanation: map['explanation']?.toString() ?? '',
     compatibility: (map['compatibility'] as num?)?.round() ?? 0,
-    matchedTags: const [],
+    matchedTags:
+        (map['matchedTags'] as List?)
+            ?.map((value) => value.toString())
+            .toList() ??
+        const [],
+    supportingAnswers:
+        (map['supportingAnswers'] as List?)
+            ?.map((value) => value.toString())
+            .toList() ??
+        const [],
     urgentReason: map['urgentReason'] == true,
   );
 }
 
 class AssessmentResult {
+  final String? summary;
   final AssessmentUrgency urgency;
   final List<AssessmentMatch> matches;
   final List<String> nextSteps;
@@ -199,6 +215,7 @@ class AssessmentResult {
   final List<String> pharmacyAdvice;
   final List<String> contextNotes;
   final List<String> redFlags;
+  final List<String> immediateActions;
 
   const AssessmentResult({
     required this.urgency,
@@ -208,16 +225,20 @@ class AssessmentResult {
     required this.pharmacyAdvice,
     required this.contextNotes,
     this.redFlags = const [],
+    this.immediateActions = const [],
+    this.summary,
   });
 
   Map<String, dynamic> toMap() => {
     'urgency': urgency.name,
+    'summary': summary,
     'matches': matches.map((item) => item.toMap()).toList(),
     'nextSteps': nextSteps,
     'selfCare': selfCare,
     'pharmacyAdvice': pharmacyAdvice,
     'contextNotes': contextNotes,
     'redFlags': redFlags,
+    'immediateActions': immediateActions,
     'disclaimer':
         'La compatibilité est qualitative, non calibrée, et ne constitue ni une probabilité ni un diagnostic.',
   };
@@ -233,6 +254,7 @@ class AssessmentResult {
         const [];
     final rawMatches = map['matches'] as List? ?? const [];
     return AssessmentResult(
+      summary: map['summary']?.toString(),
       urgency: urgency,
       matches: rawMatches
           .whereType<Map>()
@@ -245,6 +267,7 @@ class AssessmentResult {
       pharmacyAdvice: strings('pharmacyAdvice'),
       contextNotes: strings('contextNotes'),
       redFlags: strings('redFlags'),
+      immediateActions: strings('immediateActions'),
     );
   }
 }
@@ -252,12 +275,65 @@ class AssessmentResult {
 class AssessmentEngine {
   const AssessmentEngine();
 
+  List<String> immediateActions(
+    AssessmentPathway pathway,
+    Map<String, String> answers,
+  ) => _immediateActionsForTags(answerTags(pathway, answers));
+
   Iterable<String> _selectedOptionIds(String? encoded) sync* {
     if (encoded == null) return;
     for (final id in encoded.split('|')) {
       final normalized = id.trim();
       if (normalized.isNotEmpty) yield normalized;
     }
+  }
+
+  /// Keeps only valid answers supported by the current branch choices.
+  /// Start from unconditional questions so abandoned branches cannot keep
+  /// themselves (or each other) active through their own tags.
+  Map<String, String> reconcileAnswers(
+    AssessmentPathway pathway,
+    Map<String, String> answers,
+  ) {
+    var candidates = <String, String>{};
+    for (final question in pathway.questions) {
+      final ids = _selectedOptionIds(answers[question.id]).toSet();
+      if (ids.isEmpty || (!question.allowMultiple && ids.length > 1)) continue;
+      if (ids.any((id) => !question.options.any((option) => option.id == id))) {
+        continue;
+      }
+      final sorted = ids.toList()..sort();
+      candidates[question.id] = sorted.join('|');
+    }
+    while (candidates.isNotEmpty) {
+      final supported = <String, String>{};
+      final tags = <String>{};
+      var added = true;
+      while (added) {
+        added = false;
+        for (final question in pathway.questions) {
+          if (supported.containsKey(question.id) ||
+              !candidates.containsKey(question.id) ||
+              !question.requiredTags.every(tags.contains)) {
+            continue;
+          }
+          supported[question.id] = candidates[question.id]!;
+          final ids = _selectedOptionIds(candidates[question.id]).toSet();
+          tags.addAll(
+            question.options
+                .where((option) => ids.contains(option.id))
+                .expand((option) => option.tags),
+          );
+          added = true;
+        }
+      }
+      supported.removeWhere(
+        (id, _) => !pathway.questionById(id)!.appliesTo(tags),
+      );
+      if (supported.length == candidates.length) return supported;
+      candidates = supported;
+    }
+    return candidates;
   }
 
   Set<String> answerTags(
@@ -281,42 +357,79 @@ class AssessmentEngine {
     Map<String, String> answers, {
     String? afterQuestionId,
   }) {
-    final tags = answerTags(pathway, answers);
-    var start = 0;
-    if (afterQuestionId != null) {
-      final index = pathway.questions.indexWhere(
-        (question) => question.id == afterQuestionId,
-      );
-      start = math.max(0, index + 1);
-      final current = pathway.questionById(afterQuestionId);
-      if (current != null) {
-        final selectedIds = _selectedOptionIds(
-          answers[afterQuestionId],
-        ).toSet();
-        for (final selected in current.options.where(
-          (option) => selectedIds.contains(option.id),
-        )) {
-          final explicit = pathway.questionById(selected.nextQuestionId);
-          if (explicit != null && explicit.appliesTo(tags)) return explicit;
-        }
+    final activeAnswers = reconcileAnswers(pathway, answers);
+    final tags = answerTags(pathway, activeAnswers);
+    bool isPending(AssessmentQuestion question) =>
+        !activeAnswers.containsKey(question.id) && question.appliesTo(tags);
+
+    // Explicit links prioritize follow-ups without skipping other unanswered
+    // questions, including sibling branches selected in a multiple choice.
+    final current = pathway.questionById(afterQuestionId);
+    for (final question in [
+      ?current,
+      ...pathway.questions.where((question) => question != current),
+    ]) {
+      final selectedIds = _selectedOptionIds(
+        activeAnswers[question.id],
+      ).toSet();
+      for (final option in question.options) {
+        if (!selectedIds.contains(option.id)) continue;
+        final target = pathway.questionById(option.nextQuestionId);
+        if (target != null && isPending(target)) return target;
       }
     }
-    for (var index = start; index < pathway.questions.length; index++) {
-      final candidate = pathway.questions[index];
-      if (!answers.containsKey(candidate.id) && candidate.appliesTo(tags)) {
-        return candidate;
-      }
+    final start =
+        pathway.questions.indexWhere(
+          (question) => question.id == afterQuestionId,
+        ) +
+        1;
+    for (final question in [
+      ...pathway.questions.skip(start),
+      ...pathway.questions.take(start),
+    ]) {
+      if (isPending(question)) return question;
     }
     return null;
   }
 
+  List<AssessmentQuestion> answeredQuestions(
+    AssessmentPathway pathway,
+    Map<String, String> answers,
+  ) {
+    final active = reconcileAnswers(pathway, answers);
+    final visited = <String, String>{};
+    final ordered = <AssessmentQuestion>[];
+    while (visited.length < active.length) {
+      var next = nextQuestion(
+        pathway,
+        visited,
+        afterQuestionId: ordered.lastOrNull?.id,
+      );
+      // A restored draft can contain answers beyond an unanswered question.
+      if (next == null ||
+          !active.containsKey(next.id) ||
+          visited.containsKey(next.id)) {
+        next = pathway.questions.firstWhere(
+          (question) =>
+              active.containsKey(question.id) &&
+              !visited.containsKey(question.id),
+        );
+      }
+      visited[next.id] = active[next.id]!;
+      ordered.add(next);
+    }
+    return ordered;
+  }
+
   int progress(AssessmentPathway pathway, Map<String, String> answers) {
-    if (answers.isEmpty) return 0;
+    final activeAnswers = reconcileAnswers(pathway, answers);
+    if (activeAnswers.isEmpty) return 0;
+    final tags = answerTags(pathway, activeAnswers);
     final visible = pathway.questions
-        .where((question) => question.appliesTo(answerTags(pathway, answers)))
+        .where((question) => question.appliesTo(tags))
         .length;
     if (visible == 0) return 0;
-    return ((answers.length / visible) * 100).round().clamp(1, 100);
+    return ((activeAnswers.length / visible) * 100).round().clamp(1, 100);
   }
 
   AssessmentResult evaluate(
@@ -357,6 +470,11 @@ class AssessmentEngine {
         'Les traitements actuels peuvent modifier les choix de médicaments.',
       );
     }
+    if ((context['conditions'] as List?)?.isNotEmpty == true) {
+      contextNotes.add(
+        'Les antécédents déclarés dans le dossier justifient de vérifier tout nouveau médicament avec un professionnel.',
+      );
+    }
     if (context['recentHighTemperature'] == true) {
       tags.add('fever');
       contextNotes.add(
@@ -366,6 +484,7 @@ class AssessmentEngine {
 
     var urgency = AssessmentUrgency.selfCare;
     final redFlags = <String>[];
+    final orientationReasons = <({AssessmentUrgency urgency, String label})>[];
     for (final entry in answers.entries) {
       final question = pathway.questionById(entry.key);
       if (question == null) continue;
@@ -376,6 +495,12 @@ class AssessmentEngine {
         if (option.urgency.priority > urgency.priority) {
           urgency = option.urgency;
         }
+        if (option.urgency != AssessmentUrgency.selfCare) {
+          orientationReasons.add((
+            urgency: option.urgency,
+            label: option.label,
+          ));
+        }
         if (option.urgency == AssessmentUrgency.emergency &&
             !redFlags.contains(option.label)) {
           redFlags.add(option.label);
@@ -385,6 +510,9 @@ class AssessmentEngine {
 
     void raiseUrgency(AssessmentUrgency target, {String? reason}) {
       if (target.priority > urgency.priority) urgency = target;
+      if (reason != null) {
+        orientationReasons.add((urgency: target, label: reason));
+      }
       if (target == AssessmentUrgency.emergency &&
           reason != null &&
           !redFlags.contains(reason)) {
@@ -451,6 +579,8 @@ class AssessmentEngine {
       } else if (pregnancyRelevant ||
           maleUrinaryContext ||
           urinaryChild ||
+          tags.contains('older_adult') ||
+          (age != null && age >= 65) ||
           tags.contains('complicated_urinary_context')) {
         raiseUrgency(AssessmentUrgency.consultationToday);
         contextNotes.add(
@@ -468,7 +598,7 @@ class AssessmentEngine {
       );
     }
     if (pathway.id == 'urinary' &&
-        feverPresent &&
+        (feverPresent || tags.contains('chills')) &&
         (tags.contains('colicky_flank_pain') ||
             tags.contains('known_urinary_stone') ||
             tags.contains('known_urinary_obstruction') ||
@@ -573,10 +703,141 @@ class AssessmentEngine {
         'Une température d’au moins 39 °C entre 3 et 6 mois nécessite une évaluation aujourd’hui.',
       );
     }
+    if (youngInfant && tags.contains('temperature_below_36')) {
+      tags.add('infant_hypothermia');
+      raiseUrgency(
+        AssessmentUrgency.emergency,
+        reason:
+            'Température inférieure à 36 °C chez un nourrisson de moins de 3 mois',
+      );
+    }
+    if (pathway.id == 'skin' &&
+        tags.contains('painful_skin') &&
+        tags.contains('warm_skin') &&
+        tags.contains('skin_swelling')) {
+      tags.add('cellulitis_pattern');
+      raiseUrgency(
+        AssessmentUrgency.consultationToday,
+        reason: 'Zone cutanée douloureuse, chaude et gonflée',
+      );
+    }
+    if (pathway.id == 'skin' &&
+        (tags.contains('diabetes_context') ||
+            tags.contains('immunocompromised')) &&
+        (tags.contains('cellulitis_pattern') ||
+            tags.contains('wound_trigger'))) {
+      raiseUrgency(AssessmentUrgency.consultationToday);
+    }
+    if (pathway.id == 'urinary' &&
+        tags.contains('large_urine_volume') &&
+        tags.contains('excessive_thirst') &&
+        (tags.contains('vomiting') ||
+            tags.contains('deep_breathing') ||
+            tags.contains('confusion'))) {
+      tags.add('possible_ketoacidosis');
+      raiseUrgency(
+        AssessmentUrgency.emergency,
+        reason:
+            'Urines abondantes et soif intense avec vomissements, respiration anormale ou confusion',
+      );
+    }
+    if (pathway.id == 'back') {
+      if (tags.contains('back_minor_trauma') &&
+          tags.contains('back_bone_fragility')) {
+        tags.add('back_fracture_risk');
+        raiseUrgency(
+          AssessmentUrgency.consultationToday,
+          reason: 'Douleur après un choc sur un terrain de fragilité osseuse',
+        );
+      }
+      if (feverPresent && tags.contains('immunocompromised')) {
+        tags.add('back_spinal_infection_risk');
+        raiseUrgency(
+          AssessmentUrgency.emergency,
+          reason: 'Mal de dos avec fièvre et immunité diminuée',
+        );
+      }
+    }
+    if (pathway.id == 'joint') {
+      if (age != null && age < 16) tags.add('person_under_16');
+      final hotSwollen =
+          tags.contains('joint_hot') && tags.contains('joint_swollen');
+      final infectionRisk =
+          tags.contains('joint_prosthesis') ||
+          tags.contains('joint_recent_procedure') ||
+          tags.contains('immunocompromised');
+      if (infectionRisk) tags.add('joint_infection_risk');
+      if (hotSwollen) {
+        tags.add('joint_hot_swollen');
+        raiseUrgency(
+          feverPresent || infectionRisk
+              ? AssessmentUrgency.emergency
+              : AssessmentUrgency.consultationToday,
+          reason: feverPresent || infectionRisk
+              ? 'Articulation chaude et gonflée avec fièvre ou risque d’infection'
+              : 'Articulation chaude et gonflée, même sans fièvre',
+        );
+      }
+    }
+    if (pathway.id == 'eyes') {
+      final eyePain =
+          tags.contains('eye_deep_pain') || tags.contains('eye_severe_pain');
+      final alteredVision =
+          tags.contains('eye_blurred') ||
+          tags.contains('eye_double') ||
+          tags.contains('eye_vision_loss');
+      if (tags.contains('eye_contact_lenses') &&
+          (tags.contains('eye_red') ||
+              eyePain ||
+              tags.contains('eye_gritty'))) {
+        tags.add('eye_contact_lens_risk');
+        raiseUrgency(
+          alteredVision && eyePain
+              ? AssessmentUrgency.emergency
+              : AssessmentUrgency.consultationToday,
+          reason:
+              'Œil rouge ou douloureux chez une personne portant des lentilles',
+        );
+      }
+      if ((tags.contains('eye_red') &&
+              (alteredVision || tags.contains('eye_photophobia'))) ||
+          (tags.contains('eye_minor_trauma') &&
+              (alteredVision || tags.contains('eye_photophobia') || eyePain)) ||
+          (tags.contains('eye_recent_procedure') &&
+              (eyePain || alteredVision)) ||
+          (tags.contains('eye_sudden') && eyePain)) {
+        raiseUrgency(
+          AssessmentUrgency.emergency,
+          reason:
+              'Douleur, rougeur ou traumatisme de l’œil avec signe visuel d’alerte',
+        );
+      }
+      if ((tags.contains('eye_lid_swelling') ||
+              tags.contains('eye_spreading_swelling')) &&
+          (feverPresent || tags.contains('eye_movement_pain'))) {
+        tags.add('eye_orbital_warning');
+        raiseUrgency(
+          AssessmentUrgency.emergency,
+          reason:
+              'Gonflement autour de l’œil avec fièvre ou douleur aux mouvements',
+        );
+      }
+    }
+    if (pathway.id == 'dental') {
+      // Dental pain needs a dental examination even when an analgesic helps.
+      if (answers.isNotEmpty) raiseUrgency(AssessmentUrgency.consultationSoon);
+      if (pregnancyRelevant || tags.contains('person_under_16')) {
+        contextNotes.add(
+          'Le dentiste doit connaître l’âge et une éventuelle grossesse pour adapter les soins.',
+        );
+      }
+    }
     if (tags.contains('context_vulnerable_age') &&
         urgency == AssessmentUrgency.selfCare) {
       raiseUrgency(AssessmentUrgency.consultationSoon);
     }
+
+    if (urgency == AssessmentUrgency.emergency) tags.add('triage_emergency');
 
     final matches =
         pathway.possibilities
@@ -585,77 +846,91 @@ class AssessmentEngine {
             .where((match) => match.compatibility >= 24)
             .toList()
           ..sort((first, second) {
-            if (urgency == AssessmentUrgency.emergency &&
+            if (urgency.priority >=
+                    AssessmentUrgency.consultationToday.priority &&
                 first.urgentReason != second.urgentReason) {
               return first.urgentReason ? -1 : 1;
             }
             return second.compatibility.compareTo(first.compatibility);
           });
-    final limitedMatches = matches.take(3).toList(growable: false);
-
-    final needsMaternityNow =
-        tags.contains('reduced_fetal_movement') ||
-        tags.contains('fluid_leak') ||
-        tags.contains('regular_contractions');
-    final nextSteps = needsMaternityNow
-        ? [
-            'Appelez maintenant votre maternité ou l’unité obstétricale; n’attendez pas demain, même la nuit.',
-            'N’utilisez pas un Doppler domestique pour vous rassurer et suivez les instructions de la maternité.',
-            'Si vous ne pouvez joindre personne ou si l’état s’aggrave, appelez le 116.',
-          ]
-        : switch (urgency) {
-            AssessmentUrgency.emergency => [
-              'Appelez le Centre Ambulancier National au 116 ou faites-vous accompagner vers les urgences.',
-              'Ne conduisez pas vous-même si vous êtes faible, confus(e), essoufflé(e) ou sur le point de perdre connaissance.',
-              'Emportez votre liste de médicaments, d’allergies et vos documents de santé.',
-            ],
-            AssessmentUrgency.consultationToday => [
-              'Contactez aujourd’hui une clinique, une maternité ou un médecin.',
-              'Si un signe d’alerte apparaît ou s’aggrave, appelez immédiatement le 116.',
-            ],
-            AssessmentUrgency.consultationSoon => [
-              'Prenez rendez-vous dans les prochains jours pour confirmer la cause.',
-              'Consultez plus vite si la douleur, la fièvre, le saignement ou l’essoufflement augmente.',
-            ],
-            AssessmentUrgency.selfCare => [
-              'Surveillez les symptômes et refaites une évaluation s’ils changent.',
-              'Prenez rendez-vous si le malaise persiste, revient souvent ou vous inquiète.',
-            ],
-          };
-
-    final medicationUnsafe =
-        urgency == AssessmentUrgency.emergency ||
-        tags.contains('context_pregnant') ||
-        tags.contains('pregnancy_possible');
+    final limitedMatches = matches
+        .take(3)
+        .map((match) {
+          final evidence = <String>[];
+          final evidenceTags = match.matchedTags
+              .expand((tag) => _derivedEvidenceTags[tag] ?? {tag})
+              .toSet();
+          for (final question in pathway.questions) {
+            final selected = _selectedOptionIds(answers[question.id]).toSet();
+            for (final option in question.options) {
+              if (selected.contains(option.id) &&
+                  option.tags.any(evidenceTags.contains)) {
+                evidence.add('${question.title} : ${option.label}');
+              }
+            }
+          }
+          return AssessmentMatch(
+            title: match.title,
+            explanation: match.explanation,
+            compatibility: match.compatibility,
+            matchedTags: match.matchedTags,
+            supportingAnswers: evidence.toSet().take(3).toList(),
+            urgentReason: match.urgentReason,
+          );
+        })
+        .toList(growable: false);
+    // An absence of a supported hypothesis must not look like a clean bill of
+    // health, particularly when the patient could not describe their symptoms.
+    if (limitedMatches.isEmpty && urgency == AssessmentUrgency.selfCare) {
+      raiseUrgency(AssessmentUrgency.consultationSoon);
+    }
+    final guidance = _guidanceFor(
+      pathway: pathway,
+      tags: tags,
+      urgency: urgency,
+      context: context,
+    );
+    final reasons = orientationReasons
+        .where((reason) => reason.urgency == urgency)
+        .map((reason) => reason.label)
+        .toSet()
+        .take(2)
+        .join('; ');
+    final summary = reasons.isNotEmpty
+        ? switch (urgency) {
+            AssessmentUrgency.emergency =>
+              'Une évaluation immédiate est nécessaire : $reasons.',
+            AssessmentUrgency.consultationToday =>
+              'Ces réponses nécessitent un avis aujourd’hui : $reasons.',
+            _ => 'Ces réponses méritent un avis médical : $reasons.',
+          }
+        : limitedMatches.isEmpty
+        ? 'Vos réponses ne permettent pas de préciser la cause. Un avis médical est recommandé si les symptômes persistent ou vous inquiètent.'
+        : urgency.description;
     return AssessmentResult(
       urgency: urgency,
+      summary: summary,
       matches: limitedMatches.isEmpty
-          ? const [
+          ? [
               AssessmentMatch(
-                title: 'Cause non spécifique',
-                explanation:
-                    'Les réponses ne correspondent pas assez clairement à une cause fréquente. Une consultation peut préciser la situation.',
-                compatibility: 24,
-                matchedTags: [],
+                title: urgency == AssessmentUrgency.emergency
+                    ? 'Signes d’alerte à évaluer en urgence'
+                    : 'Orientation à préciser',
+                explanation: urgency == AssessmentUrgency.emergency
+                    ? 'Les signes déclarés justifient une prise en charge immédiate, même sans cause identifiée par ce questionnaire.'
+                    : 'Aucune hypothèse n’est suffisamment étayée par les réponses. Un examen peut aider à préciser la cause.',
+                compatibility: 0,
+                matchedTags: const [],
+                urgentReason: urgency == AssessmentUrgency.emergency,
               ),
             ]
           : limitedMatches,
-      nextSteps: nextSteps,
-      selfCare: urgency == AssessmentUrgency.emergency
-          ? const []
-          : pathway.selfCare,
-      pharmacyAdvice: medicationUnsafe
-          ? const [
-              'Ne commencez pas de nouveau médicament sans avis médical ou pharmaceutique dans cette situation.',
-            ]
-          : [
-              ...pathway.pharmacyAdvice,
-              if (tags.contains('context_allergies') ||
-                  tags.contains('context_medications'))
-                'Montrez vos allergies et traitements actuels au pharmacien avant tout achat.',
-            ],
+      nextSteps: guidance.nextSteps,
+      selfCare: guidance.selfCare,
+      pharmacyAdvice: guidance.pharmacyAdvice,
       contextNotes: contextNotes,
       redFlags: redFlags,
+      immediateActions: _immediateActionsForTags(tags),
     );
   }
 }
@@ -663,7 +938,7 @@ class AssessmentEngine {
 const assessmentPathways = <AssessmentPathway>[
   AssessmentPathway(
     id: 'abdominal',
-    version: 3,
+    version: 4,
     title: 'Mal au ventre',
     subtitle: 'Douleur, crampes, nausée ou trouble digestif',
     icon: Icons.sick_outlined,
@@ -712,18 +987,17 @@ const assessmentPathways = <AssessmentPathway>[
         options: [
           AssessmentOption(
             id: 'upper',
-            label: 'En haut, brûlure ou gêne après les repas',
-            icon: Icons.arrow_upward_outlined,
-            tags: {'upper_abdomen', 'after_meal', 'branch_upper_abdominal'},
+            label: 'Au milieu, en haut du ventre',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'upper_abdomen', 'branch_upper_abdominal'},
           ),
           AssessmentOption(
             id: 'right_upper',
-            label: 'Sous les côtes à droite, surtout après un repas gras',
-            icon: Icons.north_east_outlined,
+            label: 'Sous les côtes à droite',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {
               'upper_abdomen',
               'right_upper_abdomen',
-              'after_fatty_meal',
               'branch_upper_abdominal',
             },
           ),
@@ -749,9 +1023,28 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'diffuse',
-            label: 'Partout ou en crampes',
-            icon: Icons.blur_circular_outlined,
-            tags: {'diffuse', 'cramps', 'branch_bowel'},
+            label: 'Dans tout le ventre',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'diffuse', 'branch_bowel'},
+          ),
+          AssessmentOption(
+            id: 'lower_left',
+            label: 'En bas à gauche',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'lower_left', 'branch_bowel'},
+          ),
+          AssessmentOption(
+            id: 'navel',
+            label: 'Autour du nombril',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'periumbilical_pain'},
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
           ),
         ],
       ),
@@ -791,9 +1084,63 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'abdominal_warning',
+        title: 'Signes à vérifier',
+        prompt: 'Avez-vous l’un de ces signes maintenant ?',
+        icon: Icons.health_and_safety_outlined,
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
+            id: 'blood_vomit',
+            label: 'Vomissement de sang ou de matière brun-noir',
+            icon: Icons.warning_amber_rounded,
+            tags: {'digestive_bleeding', 'bleeding'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'black_stool',
+            label: 'Selles noires, collantes, inhabituelles',
+            icon: Icons.warning_amber_rounded,
+            tags: {'digestive_bleeding', 'bleeding'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'blocked',
+            label:
+                'Ventre gonflé et impossibilité d’émettre des selles ou des gaz',
+            icon: Icons.warning_amber_rounded,
+            tags: {'obstruction_pattern', 'abdominal_distension'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'chest',
+            label: 'Douleur dans la poitrine en même temps',
+            icon: Icons.warning_amber_rounded,
+            tags: {'chest_pain'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'diabetes_vomit',
+            label: 'Diabète connu et vomissements',
+            icon: Icons.warning_amber_rounded,
+            tags: {
+              'diabetes_context',
+              'vomiting',
+              'diabetic_abdominal_warning',
+            },
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucun de ces signes',
+            icon: Icons.check_circle_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'abdominal_associated',
         title: 'Autres signes',
-        prompt: 'Quel autre signe accompagne le mieux la douleur ?',
+        prompt: 'Quels autres signes avez-vous avec le mal de ventre ?',
         icon: Icons.playlist_add_check_circle_outlined,
         allowMultiple: true,
         options: [
@@ -828,6 +1175,24 @@ const assessmentPathways = <AssessmentPathway>[
             icon: Icons.emergency_outlined,
             tags: {'bleeding', 'digestive_bleeding'},
             urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'constipation',
+            label: 'Selles plus rares ou difficiles à évacuer',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'constipation', 'branch_bowel'},
+          ),
+          AssessmentOption(
+            id: 'bloating',
+            label: 'Ventre gonflé ou ballonné',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'bloating', 'branch_bowel'},
+          ),
+          AssessmentOption(
+            id: 'appetite',
+            label: 'Perte d’appétit inhabituelle',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'loss_of_appetite'},
           ),
         ],
       ),
@@ -902,6 +1267,54 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'abdominal_evolution',
+        title: 'Évolution de la douleur',
+        prompt: 'Comment la douleur a-t-elle changé depuis son début ?',
+        icon: Icons.trending_up_outlined,
+        options: [
+          AssessmentOption(
+            id: 'improving',
+            label: 'Elle diminue',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'improving'},
+          ),
+          AssessmentOption(
+            id: 'stable',
+            label: 'Elle reste à peu près la même',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'stable_pain'},
+          ),
+          AssessmentOption(
+            id: 'worsening',
+            label: 'Elle devient plus forte',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'worsening'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'migration_right',
+            label:
+                'Elle a commencé près du nombril puis s’est déplacée en bas à droite',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'migrating_right_lower_pain', 'lower_right'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'waves',
+            label: 'Elle revient par vagues avec des accalmies',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'colicky_pain'},
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'abdominal_upper_pattern',
         title: 'Douleur du haut du ventre',
         prompt: 'Quelle description précise le mieux cette douleur ?',
@@ -956,6 +1369,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel signe urinaire ou lombaire est présent ?',
         icon: Icons.water_outlined,
         requiredTags: {'branch_urinary'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'burning_frequency',
@@ -998,6 +1412,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quelle situation correspond le mieux ?',
         icon: Icons.favorite_border_outlined,
         requiredTags: {'branch_pelvic'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'pregnancy_one_side',
@@ -1038,6 +1453,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Comment votre transit a-t-il changé ?',
         icon: Icons.sync_alt_outlined,
         requiredTags: {'branch_bowel'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'watery',
@@ -1138,6 +1554,7 @@ const assessmentPathways = <AssessmentPathway>[
           'obstruction_pattern',
           'pancreatic_pattern',
           'testicular_torsion_pattern',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -1172,6 +1589,7 @@ const assessmentPathways = <AssessmentPathway>[
           'chest_pain',
           'pancreatic_pattern',
           'biliary_infection_pattern',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -1296,6 +1714,7 @@ const assessmentPathways = <AssessmentPathway>[
           'digestive_bleeding',
           'obstruction_pattern',
           'cannot_hydrate',
+          'triage_emergency',
         },
       ),
     ],
@@ -1310,7 +1729,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'headache',
-    version: 3,
+    version: 4,
     title: 'Migraine ou mal de tête',
     subtitle: 'Douleur à la tête, lumière gênante ou nausée',
     icon: Icons.psychology_alt_outlined,
@@ -1385,26 +1804,26 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'headache_associated',
         title: 'Signes associés',
-        prompt: 'Qu’est-ce qui accompagne surtout la douleur ?',
+        prompt: 'Quels signes accompagnent le mal de tête ?',
         icon: Icons.light_mode_outlined,
         allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'light_nausea',
-            label: 'Lumière ou bruit gênant, avec nausée',
-            icon: Icons.brightness_6_outlined,
+            label: 'La lumière me gêne et j’ai des nausées',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'photophobia', 'nausea'},
           ),
           AssessmentOption(
             id: 'neck_tension',
-            label: 'Tension du cou, fatigue ou stress',
-            icon: Icons.self_improvement_outlined,
-            tags: {'neck_tension', 'stress'},
+            label: 'Muscles du cou tendus ou douloureux',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'neck_tension'},
           ),
           AssessmentOption(
             id: 'fever_stiff',
-            label: 'Fièvre avec nuque raide, confusion ou forte somnolence',
-            icon: Icons.emergency_outlined,
+            label: 'Fièvre avec nuque raide',
+            icon: Icons.warning_amber_rounded,
             tags: {'fever', 'stiff_neck', 'meningeal_pattern'},
             urgency: AssessmentUrgency.emergency,
           ),
@@ -1427,6 +1846,25 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucun de ceux-ci',
             icon: Icons.remove_circle_outline,
           ),
+          AssessmentOption(
+            id: 'light_only',
+            label: 'La lumière me gêne, sans nausée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'photophobia'},
+          ),
+          AssessmentOption(
+            id: 'nausea_only',
+            label: 'Nausées, sans gêne à la lumière',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'nausea'},
+          ),
+          AssessmentOption(
+            id: 'vomiting',
+            label: 'Vomissements',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'vomiting'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
         ],
       ),
       AssessmentQuestion(
@@ -1445,9 +1883,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'confusion',
-            label: 'Confusion, convulsion ou évanouissement',
-            icon: Icons.personal_injury_outlined,
-            tags: {'confusion', 'seizure'},
+            label: 'Confusion ou somnolence inhabituelle',
+            icon: Icons.warning_amber_rounded,
+            tags: {'confusion'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -1469,12 +1907,66 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucun de ces signes',
             icon: Icons.check_circle_outline,
           ),
+          AssessmentOption(
+            id: 'seizure',
+            label: 'Convulsion avec secousses',
+            icon: Icons.warning_amber_rounded,
+            tags: {'seizure'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'faint',
+            label: 'Perte de connaissance',
+            icon: Icons.warning_amber_rounded,
+            tags: {'collapse'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'headache_duration',
+        title: 'Durée d’un épisode',
+        prompt: 'Combien de temps dure un épisode sans traitement ?',
+        icon: Icons.schedule_outlined,
+        options: [
+          AssessmentOption(
+            id: 'minutes',
+            label: 'Moins de 30 minutes',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'headache_short'},
+          ),
+          AssessmentOption(
+            id: 'hours',
+            label: 'De 30 minutes à 4 heures',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'headache_hours'},
+          ),
+          AssessmentOption(
+            id: 'day',
+            label: 'De 4 à 72 heures',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'headache_4_to_72h'},
+          ),
+          AssessmentOption(
+            id: 'continuous',
+            label: 'Plus de 72 heures sans disparaître',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'persistent', 'prolonged_headache'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
         ],
       ),
       AssessmentQuestion(
         id: 'headache_context',
         title: 'Contexte',
-        prompt: 'Quelle situation s’applique ?',
+        prompt: 'Quelles situations vous concernent ?',
         icon: Icons.health_and_safety_outlined,
         allowMultiple: true,
         options: [
@@ -1503,14 +1995,37 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucune de ces situations',
             icon: Icons.check_outlined,
           ),
+          AssessmentOption(
+            id: 'jaw_scalp',
+            label:
+                'Douleur à la mâchoire en mâchant ou cuir chevelu très sensible',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temporal_arteritis_warning'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'immunosuppression',
+            label: 'Immunité diminuée ou cancer en cours de traitement',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'immunocompromised'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'stress',
+            label: 'Période de stress important',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'stress'},
+          ),
         ],
       ),
       AssessmentQuestion(
         id: 'headache_pregnancy_detail',
         title: 'Grossesse ou post-partum',
-        prompt: 'Quel signe accompagne ce mal de tête ?',
+        prompt:
+            'Quels signes accompagnent ce mal de tête pendant ou après la grossesse ?',
         icon: Icons.pregnant_woman_outlined,
         requiredTags: {'branch_headache_pregnancy'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'persistent_severe',
@@ -1611,9 +2126,10 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'headache_one_sided_features',
         title: 'Douleur d’un seul côté',
-        prompt: 'Quel signe accompagne le mieux la douleur d’un côté ?',
+        prompt: 'Quels signes accompagnent la douleur d’un côté de la tête ?',
         icon: Icons.visibility_outlined,
         requiredTags: {'branch_one_sided_headache'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'migraine',
@@ -1656,6 +2172,7 @@ const assessmentPathways = <AssessmentPathway>[
             'Quelle situation décrit le mieux les signes du visage ou du nez ?',
         icon: Icons.face_outlined,
         requiredTags: {'branch_sinus_headache'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'viral',
@@ -1706,10 +2223,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'frequent_medicine',
-            label:
-                'Très fréquents avec antidouleurs plusieurs jours par semaine',
-            icon: Icons.medication_outlined,
-            tags: {'frequent_headache', 'frequent_pain_medicine'},
+            label: 'Mal de tête au moins 15 jours par mois',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'frequent_headache'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
@@ -1733,6 +2249,53 @@ const assessmentPathways = <AssessmentPathway>[
           ),
         ],
       ),
+      AssessmentQuestion(
+        id: 'headache_medicine_days',
+        title: 'Antidouleurs',
+        prompt:
+            'Depuis au moins 3 mois, combien de jours par mois prenez-vous des antidouleurs pour ces maux de tête ?',
+        icon: Icons.medication_outlined,
+        requiredTags: {'branch_recurrent_headache'},
+        options: [
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucun',
+            icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'under_10',
+            label: 'De 1 à 9 jours',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'occasional_pain_medicine'},
+          ),
+          AssessmentOption(
+            id: '10_to_14',
+            label: 'De 10 à 14 jours',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'frequent_pain_medicine', 'pain_medicine_over_3_months'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: '15_plus',
+            label: '15 jours ou plus',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'frequent_pain_medicine', 'pain_medicine_over_3_months'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'recent',
+            label: 'Ces prises ont commencé il y a moins de 3 mois',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+        ],
+      ),
     ],
     possibilities: [
       AssessmentPossibility(
@@ -1752,7 +2315,10 @@ const assessmentPathways = <AssessmentPathway>[
           'stiff_neck',
           'seizure',
           'obstetric_headache_red_flag',
+          'aura',
+          'triage_emergency',
         },
+        requiredAnyTags: {'one_sided', 'pulsating', 'migraine_pattern'},
       ),
       AssessmentPossibility(
         title: 'Céphalée de tension',
@@ -1770,19 +2336,25 @@ const assessmentPathways = <AssessmentPathway>[
           'stiff_neck',
           'seizure',
           'obstetric_headache_red_flag',
+          'triage_emergency',
         },
+        requiredAnyTags: {'pressure', 'neck_tension'},
       ),
       AssessmentPossibility(
         title: 'Céphalée liée à une congestion',
         explanation:
             'Une pression du visage avec nez bouché peut accompagner une infection respiratoire ou une inflammation des sinus.',
         tagWeights: {'facial_pressure': 32, 'congestion': 32, 'fever': 10},
+        requiredAllTags: {'facial_pressure', 'congestion'},
+        excludedTags: {'sinus_infection_pattern', 'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Déshydratation ou fatigue',
         explanation:
             'Le manque d’eau, la chaleur, le manque de sommeil ou un repas sauté peuvent favoriser un mal de tête.',
         tagWeights: {'dehydration_risk': 42, 'gradual': 12, 'diffuse': 12},
+        requiredAllTags: {'dehydration_risk'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Algie vasculaire de la face possible',
@@ -1794,6 +2366,8 @@ const assessmentPathways = <AssessmentPathway>[
           'restlessness': 22,
           'one_sided': 14,
         },
+        requiredAllTags: {'cluster_pattern'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Migraine avec aura possible',
@@ -1806,7 +2380,7 @@ const assessmentPathways = <AssessmentPathway>[
           'photophobia': 14,
         },
         requiredAllTags: {'aura'},
-        excludedTags: {'neurologic_deficit', 'thunderclap'},
+        excludedTags: {'neurologic_deficit', 'thunderclap', 'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Céphalée par surutilisation médicamenteuse possible',
@@ -1817,6 +2391,12 @@ const assessmentPathways = <AssessmentPathway>[
           'frequent_pain_medicine': 44,
           'persistent': 14,
         },
+        requiredAllTags: {
+          'frequent_headache',
+          'frequent_pain_medicine',
+          'pain_medicine_over_3_months',
+        },
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Rhinosinusite ou infection ORL possible',
@@ -1829,6 +2409,7 @@ const assessmentPathways = <AssessmentPathway>[
           'worsening': 18,
           'upper_respiratory': 10,
         },
+        requiredAllTags: {'facial_pressure', 'sinus_infection_pattern'},
       ),
       AssessmentPossibility(
         title: 'Allergie nasale',
@@ -1839,6 +2420,8 @@ const assessmentPathways = <AssessmentPathway>[
           'itchy_eyes': 34,
           'congestion': 18,
         },
+        requiredAnyTags: {'allergen_trigger', 'itchy_eyes'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Problème oculaire urgent possible',
@@ -1861,6 +2444,7 @@ const assessmentPathways = <AssessmentPathway>[
           'night_waking': 24,
           'exertional_headache': 34,
           'positional_headache': 24,
+          'temporal_arteritis_warning': 60,
         },
       ),
       AssessmentPossibility(
@@ -1916,7 +2500,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'menstrual',
-    version: 3,
+    version: 4,
     title: 'Santé menstruelle',
     subtitle: 'Règles douloureuses, irrégulières ou saignement',
     icon: Icons.water_drop_outlined,
@@ -1925,7 +2509,7 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'menstrual_concern',
         title: 'Malaise principal',
-        prompt: 'Qu’est-ce qui vous préoccupe le plus ?',
+        prompt: 'Quels changements avez-vous remarqués ?',
         icon: Icons.favorite_border_outlined,
         allowMultiple: true,
         options: [
@@ -2003,6 +2587,55 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'none',
             label: 'Ni douleur importante ni saignement très abondant',
             icon: Icons.remove_circle_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'menstrual_bleeding_quantity',
+        title: 'Quantité de sang',
+        prompt:
+            'À quelle fréquence une protection est-elle complètement imbibée ?',
+        icon: Icons.water_drop_outlined,
+        requiredTags: {'branch_menstrual_bleeding'},
+        options: [
+          AssessmentOption(
+            id: 'usual',
+            label: 'Pas plus souvent que d’habitude',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'usual_flow'},
+          ),
+          AssessmentOption(
+            id: 'every_1_2h',
+            label: 'Toutes les 1 à 2 heures',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'heavy_bleeding'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'hourly',
+            label: 'Au moins une par heure, pendant 2 heures de suite',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'bleeding', 'very_heavy_bleeding'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'uncontrolled',
+            label: 'Le sang coule sans arrêt malgré les protections',
+            icon: Icons.warning_amber_rounded,
+            tags: {'bleeding', 'very_heavy_bleeding', 'uncontrolled_bleeding'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'no_current_bleeding',
+            label: 'Je ne saigne pas actuellement',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
           ),
         ],
       ),
@@ -2136,25 +2769,72 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'menstrual_contraception',
+        title: 'Contexte du cycle',
+        prompt: 'Quelles situations vous concernent actuellement ?',
+        icon: Icons.calendar_month_outlined,
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
+            id: 'hormonal_change',
+            label:
+                'Contraception hormonale commencée, arrêtée ou modifiée récemment',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'hormonal_change'},
+          ),
+          AssessmentOption(
+            id: 'missed_pill',
+            label: 'Oubli de pilule ou incident de préservatif',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'pregnancy_possible'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'iud',
+            label: 'Stérilet en place',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'iud'},
+          ),
+          AssessmentOption(
+            id: 'breastfeeding',
+            label: 'Allaitement en cours',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'breastfeeding'},
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucune de ces situations',
+            icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'menstrual_bleeding_pattern',
         title: 'Caractéristiques du saignement',
-        prompt: 'Quel changement de saignement avez-vous remarqué ?',
+        prompt: 'Quels changements de saignement avez-vous remarqués ?',
         icon: Icons.water_drop_outlined,
         requiredTags: {'branch_menstrual_bleeding'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'clots_long',
-            label:
-                'Caillots, règles de plus de 7 jours ou protections nocturnes',
-            icon: Icons.calendar_month_outlined,
-            tags: {'prolonged_bleeding', 'large_clots'},
+            label: 'Les règles durent plus de 7 jours',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'prolonged_bleeding'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
             id: 'between_after_sex',
-            label: 'Saignement entre les règles ou après un rapport',
-            icon: Icons.warning_amber_rounded,
-            tags: {'intermenstrual_bleeding', 'postcoital_bleeding'},
+            label: 'Saignement entre les règles',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'intermenstrual_bleeding'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
@@ -2176,6 +2856,20 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucun de ces changements',
             icon: Icons.remove_circle_outline,
           ),
+          AssessmentOption(
+            id: 'after_sex',
+            label: 'Saignement après un rapport',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'postcoital_bleeding'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'large_clots',
+            label: 'Caillots plus gros qu’une pièce de monnaie',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'large_clots'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
         ],
       ),
       AssessmentQuestion(
@@ -2184,6 +2878,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quand et comment la douleur se manifeste-t-elle ?',
         icon: Icons.waves_outlined,
         requiredTags: {'branch_menstrual_pain'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'with_period',
@@ -2226,12 +2921,13 @@ const assessmentPathways = <AssessmentPathway>[
             'Quel changement accompagne les règles irrégulières ou absentes ?',
         icon: Icons.sync_outlined,
         requiredTags: {'branch_menstrual_cycle'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'stress_weight',
-            label: 'Stress important, changement de poids ou sport intensif',
-            icon: Icons.monitor_weight_outlined,
-            tags: {'stress', 'weight_change', 'intense_exercise'},
+            label: 'Stress important récemment',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'stress'},
           ),
           AssessmentOption(
             id: 'acne_hair',
@@ -2249,9 +2945,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'milk_headache',
-            label: 'Écoulement de lait hors allaitement ou maux de tête',
-            icon: Icons.warning_amber_rounded,
-            tags: {'galactorrhea', 'headache'},
+            label: 'Écoulement de lait en dehors de l’allaitement',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'galactorrhea'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
@@ -2259,14 +2955,35 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucun changement évident',
             icon: Icons.remove_circle_outline,
           ),
+          AssessmentOption(
+            id: 'weight_change',
+            label: 'Perte ou prise de poids importante',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'weight_change'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'exercise',
+            label: 'Entraînement physique devenu très intense',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'intense_exercise'},
+          ),
+          AssessmentOption(
+            id: 'headache',
+            label: 'Maux de tête nouveaux',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'headache'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
         ],
       ),
       AssessmentQuestion(
         id: 'menstrual_discharge_detail',
         title: 'Pertes et irritation',
-        prompt: 'Quelle description correspond le mieux ?',
+        prompt: 'Comment sont les pertes et quels signes les accompagnent ?',
         icon: Icons.info_outline,
         requiredTags: {'branch_menstrual_discharge'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'fever_odor',
@@ -2321,6 +3038,7 @@ const assessmentPathways = <AssessmentPathway>[
           'one_sided_pelvic_pain',
           'severe_pain',
           'collapse',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -2333,6 +3051,7 @@ const assessmentPathways = <AssessmentPathway>[
           'dizziness': 18,
           'persistent': 10,
         },
+        requiredAnyTags: {'heavy_bleeding', 'very_heavy_bleeding'},
       ),
       AssessmentPossibility(
         title: 'Cycle irrégulier ou cause hormonale',
@@ -2343,6 +3062,8 @@ const assessmentPathways = <AssessmentPathway>[
           'missed_period': 28,
           'persistent': 12,
         },
+        requiredAnyTags: {'irregular_cycle', 'missed_period'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Infection ou inflammation pelvienne possible',
@@ -2391,6 +3112,11 @@ const assessmentPathways = <AssessmentPathway>[
           'activity_limiting': 14,
           'chronic': 10,
         },
+        requiredAnyTags: {
+          'heavy_bleeding',
+          'prolonged_bleeding',
+          'large_clots',
+        },
       ),
       AssessmentPossibility(
         title: 'Syndrome des ovaires polykystiques possible',
@@ -2402,6 +3128,8 @@ const assessmentPathways = <AssessmentPathway>[
           'acne': 18,
           'persistent': 12,
         },
+        requiredAllTags: {'irregular_cycle', 'androgen_pattern'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Transition vers la ménopause possible',
@@ -2413,6 +3141,8 @@ const assessmentPathways = <AssessmentPathway>[
           'irregular_cycle': 20,
           'postmenopausal_bleeding': 20,
         },
+        requiredAnyTags: {'perimenopause_pattern', 'hot_flashes'},
+        excludedTags: {'postmenopausal_bleeding', 'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Cause cervicale ou utérine à vérifier',
@@ -2435,6 +3165,12 @@ const assessmentPathways = <AssessmentPathway>[
           'odor': 22,
           'foul_discharge': 30,
         },
+        requiredAnyTags: {
+          'thick_discharge',
+          'thin_discharge',
+          'foul_discharge',
+        },
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Kyste ovarien ou autre cause pelvienne aiguë possible',
@@ -2499,7 +3235,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'respiratory',
-    version: 3,
+    version: 4,
     title: 'Santé respiratoire',
     subtitle: 'Toux, congestion, respiration sifflante ou essoufflement',
     icon: Icons.air_outlined,
@@ -2574,7 +3310,7 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'respiratory_main',
         title: 'Signe principal',
-        prompt: 'Quel signe correspond le mieux ?',
+        prompt: 'Quels symptômes respiratoires avez-vous ?',
         icon: Icons.medical_information_outlined,
         allowMultiple: true,
         options: [
@@ -2657,8 +3393,8 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'fever',
-            label: 'Température mesurée à 39 °C ou plus, ou forts frissons',
-            icon: Icons.thermostat_outlined,
+            label: 'Température mesurée à 39 °C ou plus',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'fever', 'temperature_39'},
             urgency: AssessmentUrgency.consultationToday,
           ),
@@ -2689,6 +3425,61 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'none',
             label: 'Aucun de ces signes',
             icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'chills',
+            label: 'Frissons, sans température mesurée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'chills', 'temperature_unconfirmed'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'respiratory_temperature',
+        title: 'Température',
+        prompt:
+            'Quelle a été la température la plus élevée mesurée depuis le début ?',
+        icon: Icons.thermostat_outlined,
+        options: [
+          AssessmentOption(
+            id: 'below_38',
+            label: 'De 36 à 37,9 °C',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_below_38'},
+          ),
+          AssessmentOption(
+            id: '38',
+            label: 'De 38 à 38,9 °C',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_38', 'fever'},
+          ),
+          AssessmentOption(
+            id: '39',
+            label: 'De 39 à 39,9 °C',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_39', 'fever'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: '40',
+            label: '40 °C ou plus',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_40', 'fever'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'below_36',
+            label: 'Moins de 36 °C',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_below_36'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'unmeasured',
+            label: 'Je ne l’ai pas mesurée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_unconfirmed'},
           ),
         ],
       ),
@@ -2735,7 +3526,7 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'respiratory_context',
         title: 'Contexte respiratoire',
-        prompt: 'Quelle situation vous concerne ?',
+        prompt: 'Quelles situations vous concernent ?',
         icon: Icons.health_and_safety_outlined,
         allowMultiple: true,
         options: [
@@ -2794,6 +3585,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quelle situation accompagne l’essoufflement ?',
         icon: Icons.air_outlined,
         requiredTags: {'branch_respiratory_breathlessness'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'sudden_pleuritic',
@@ -2834,9 +3626,10 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'respiratory_cough_detail',
         title: 'Caractéristiques de la toux',
-        prompt: 'Quel signe décrit le mieux votre toux ?',
+        prompt: 'Quels signes accompagnent votre toux ?',
         icon: Icons.record_voice_over_outlined,
         requiredTags: {'branch_respiratory_cough'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'fits_vomit',
@@ -2854,9 +3647,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'night_reflux',
-            label: 'Surtout la nuit, couché(e) ou après les repas',
-            icon: Icons.bedtime_outlined,
-            tags: {'night_cough', 'reflux_pattern'},
+            label: 'La toux est surtout nocturne',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'night_cough'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
@@ -2871,6 +3664,13 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucun de ces signes',
             icon: Icons.check_circle_outline,
           ),
+          AssessmentOption(
+            id: 'after_meals',
+            label: 'Toux après les repas avec remontées acides',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'reflux_pattern', 'acid_reflux'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
         ],
       ),
       AssessmentQuestion(
@@ -2879,6 +3679,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Comment évoluent le sifflement ou l’oppression ?',
         icon: Icons.air_outlined,
         requiredTags: {'branch_respiratory_wheeze'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'reliever_fails',
@@ -2929,6 +3730,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quel ensemble de signes est présent ?',
         icon: Icons.face_outlined,
         requiredTags: {'branch_respiratory_nose'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'itchy_watery',
@@ -2965,11 +3767,52 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'respiratory_swallowing',
+        title: 'Gorge et déglutition',
+        prompt: 'Comment arrivez-vous à avaler ?',
+        icon: Icons.record_voice_over_outlined,
+        requiredTags: {'branch_respiratory_nose'},
+        options: [
+          AssessmentOption(
+            id: 'normal',
+            label: 'Je mange et bois normalement',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'swallowing_ok'},
+          ),
+          AssessmentOption(
+            id: 'painful',
+            label: 'Avaler fait mal, mais je peux boire',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'sore_throat'},
+          ),
+          AssessmentOption(
+            id: 'cannot_swallow_saliva',
+            label: 'Je n’arrive pas à avaler ma salive',
+            icon: Icons.warning_amber_rounded,
+            tags: {'upper_airway_obstruction'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'muffled_voice',
+            label: 'Ma voix est étouffée et j’ai du mal à ouvrir la bouche',
+            icon: Icons.warning_amber_rounded,
+            tags: {'deep_throat_infection_warning'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucune de ces situations',
+            icon: Icons.check_circle_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'respiratory_chronic_detail',
         title: 'Toux persistante',
-        prompt: 'Quel signe accompagne la toux persistante ?',
+        prompt: 'Quels signes accompagnent cette toux persistante ?',
         icon: Icons.history_outlined,
         requiredTags: {'branch_respiratory_chronic'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'smoking_phlegm',
@@ -3060,6 +3903,7 @@ const assessmentPathways = <AssessmentPathway>[
           'respiratory_failure_pattern',
           'young_infant_fever',
           'possible_neutropenic_sepsis',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -3121,6 +3965,8 @@ const assessmentPathways = <AssessmentPathway>[
         explanation:
             'Éternuements, congestion ou sifflement après un déclencheur peuvent correspondre à une réaction allergique.',
         tagWeights: {'allergen_trigger': 38, 'congestion': 22, 'wheeze': 20},
+        requiredAnyTags: {'allergen_trigger', 'allergy_pattern'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Bronchite aiguë possible',
@@ -3132,6 +3978,8 @@ const assessmentPathways = <AssessmentPathway>[
           'days': 16,
           'simple_cold': 14,
         },
+        requiredAnyTags: {'dry_cough', 'productive_cough'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Coqueluche ou autre toux en quintes possible',
@@ -3142,6 +3990,7 @@ const assessmentPathways = <AssessmentPathway>[
           'post_tussive_vomiting': 32,
           'persistent': 14,
         },
+        requiredAllTags: {'coughing_fits'},
       ),
       AssessmentPossibility(
         title: 'Rhinosinusite possible',
@@ -3153,12 +4002,15 @@ const assessmentPathways = <AssessmentPathway>[
           'worsening': 16,
           'congestion': 16,
         },
+        requiredAllTags: {'facial_pressure'},
       ),
       AssessmentPossibility(
         title: 'Toux liée au reflux ou à l’écoulement nasal possible',
         explanation:
             'Une toux surtout nocturne, couchée ou après les repas peut être favorisée par un reflux ou un écoulement nasal.',
         tagWeights: {'night_cough': 34, 'reflux_pattern': 36, 'congestion': 14},
+        requiredAllTags: {'night_cough'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Maladie respiratoire chronique possible',
@@ -3170,6 +4022,7 @@ const assessmentPathways = <AssessmentPathway>[
           'smoke_exposure': 34,
           'mild_breathlessness': 14,
         },
+        requiredAllTags: {'chronic'},
       ),
       AssessmentPossibility(
         title: 'Tuberculose ou autre infection prolongée à exclure',
@@ -3247,7 +4100,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'skin',
-    version: 3,
+    version: 4,
     title: 'Problème de peau',
     subtitle: 'Boutons, plaques, démangeaisons ou irritation',
     icon: Icons.texture_outlined,
@@ -3350,21 +4203,35 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'pain',
-            label: 'Douleur ou chaleur locale',
-            icon: Icons.local_fire_department_outlined,
-            tags: {'painful_skin', 'warm_skin', 'branch_skin_infection'},
+            label: 'Douleur de la peau',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'painful_skin', 'branch_skin_infection'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
             id: 'blister',
-            label: 'Brûlure ou cloques',
-            icon: Icons.water_drop_outlined,
+            label: 'Cloques remplies de liquide',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'blister', 'branch_skin_blister'},
           ),
           AssessmentOption(
             id: 'none',
             label: 'Peu de sensation',
             icon: Icons.remove_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'warm',
+            label: 'Zone plus chaude au toucher',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'warm_skin', 'branch_skin_infection'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'swollen',
+            label: 'Zone gonflée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'skin_swelling', 'branch_skin_infection'},
+            urgency: AssessmentUrgency.consultationSoon,
           ),
         ],
       ),
@@ -3404,6 +4271,99 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'skin_duration',
+        title: 'Ancienneté',
+        prompt: 'Depuis quand le problème de peau est-il présent ?',
+        icon: Icons.schedule_outlined,
+        options: [
+          AssessmentOption(
+            id: 'today',
+            label: 'Depuis moins de 24 heures',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'acute_skin'},
+          ),
+          AssessmentOption(
+            id: 'days',
+            label: 'Depuis 1 à 7 jours',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'skin_days'},
+          ),
+          AssessmentOption(
+            id: 'weeks',
+            label: 'Depuis plus d’une semaine',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'persistent_skin'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'recurrent',
+            label: 'Il disparaît puis revient',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'recurrent'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'skin_location',
+        title: 'Localisation',
+        prompt: 'Quelles zones sont touchées ?',
+        icon: Icons.accessibility_new_outlined,
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
+            id: 'face',
+            label: 'Visage ou autour d’un œil',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'face_or_eye'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'trunk',
+            label: 'Poitrine, ventre ou dos',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'skin_trunk'},
+          ),
+          AssessmentOption(
+            id: 'limbs',
+            label: 'Bras ou jambes',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'skin_limbs'},
+          ),
+          AssessmentOption(
+            id: 'folds',
+            label: 'Aisselles, aine ou sous les seins',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'skin_folds'},
+          ),
+          AssessmentOption(
+            id: 'hands_feet',
+            label: 'Mains ou pieds',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'skin_hands_feet'},
+          ),
+          AssessmentOption(
+            id: 'genitals',
+            label: 'Organes génitaux',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'skin_genitals'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'other',
+            label: 'Autre zone',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'skin_trigger',
         title: 'Déclencheur possible',
         prompt: 'Y a-t-il eu un changement récent ?',
@@ -3437,11 +4397,53 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'skin_risk_context',
+        title: 'Contexte de la peau',
+        prompt: 'Une de ces situations vous concerne-t-elle ?',
+        icon: Icons.medical_information_outlined,
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
+            id: 'diabetes',
+            label: 'Diabète connu',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'diabetes_context'},
+          ),
+          AssessmentOption(
+            id: 'immunity',
+            label: 'Immunité diminuée ou traitement immunosuppresseur',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'immunocompromised'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'surgery',
+            label: 'Intervention ou plaie récente dans cette zone',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'wound_trigger'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucune de ces situations',
+            icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'skin_infection_detail',
         title: 'Douleur, chaleur ou gonflement',
-        prompt: 'Quel signe accompagne la zone douloureuse ?',
+        prompt: 'Quels signes accompagnent la zone de peau douloureuse ?',
         icon: Icons.local_fire_department_outlined,
         requiredTags: {'branch_skin_infection'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'red_spreading_fever',
@@ -3535,6 +4537,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Quand et où les démangeaisons sont-elles les plus fortes ?',
         icon: Icons.back_hand_outlined,
         requiredTags: {'branch_skin_itch'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'night_household',
@@ -3613,9 +4616,10 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'skin_changing_lesion_detail',
         title: 'Lésion qui change',
-        prompt: 'Quel changement avez-vous remarqué ?',
+        prompt: 'Quels changements avez-vous remarqués sur cette lésion ?',
         icon: Icons.search_outlined,
         requiredTags: {'branch_skin_changing_lesion'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'mole_change',
@@ -3674,6 +4678,8 @@ const assessmentPathways = <AssessmentPathway>[
           'contact_trigger': 28,
           'localized': 8,
         },
+        requiredAnyTags: {'dry_patch', 'contact_trigger'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Urticaire',
@@ -3681,6 +4687,7 @@ const assessmentPathways = <AssessmentPathway>[
             'Des plaques gonflées et mobiles qui démangent peuvent correspondre à une urticaire.',
         tagWeights: {'hives': 48, 'itch': 22, 'new_medication': 14},
         requiredAllTags: {'hives'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Mycose cutanée possible',
@@ -3693,12 +4700,15 @@ const assessmentPathways = <AssessmentPathway>[
           'localized': 8,
         },
         requiredAllTags: {'ring_shaped'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Acné ou folliculite',
         explanation:
             'Des boutons ou petites pustules, parfois favorisés par chaleur et frottement, peuvent venir des follicules.',
         tagWeights: {'pimples': 40, 'pustules': 32, 'heat_trigger': 16},
+        requiredAnyTags: {'pimples', 'pustules'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Infection de la peau possible',
@@ -3710,6 +4720,8 @@ const assessmentPathways = <AssessmentPathway>[
           'rapid_spread': 30,
           'fever': 16,
         },
+        requiredAllTags: {'painful_skin', 'warm_skin'},
+        excludedTags: {'cellulitis_pattern', 'abscess_pattern'},
       ),
       AssessmentPossibility(
         title: 'Cellulite infectieuse possible',
@@ -3721,12 +4733,14 @@ const assessmentPathways = <AssessmentPathway>[
           'warm_skin': 18,
           'fever': 20,
         },
+        requiredAllTags: {'cellulitis_pattern'},
       ),
       AssessmentPossibility(
         title: 'Abcès cutané possible',
         explanation:
             'Une boule très sensible contenant du pus peut nécessiter un drainage ou un autre traitement professionnel.',
         tagWeights: {'abscess_pattern': 48, 'pus': 32, 'painful_skin': 18},
+        requiredAnyTags: {'abscess_pattern', 'pus'},
       ),
       AssessmentPossibility(
         title: 'Zona possible',
@@ -3751,12 +4765,15 @@ const assessmentPathways = <AssessmentPathway>[
           'extensor_distribution': 38,
           'scaly': 18,
         },
+        requiredAllTags: {'thick_scale'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Herpès cutané possible',
         explanation:
             'De petites cloques groupées qui reviennent au même endroit peuvent avoir une cause virale à confirmer.',
         tagWeights: {'grouped_blisters': 46, 'recurrent': 24, 'blister': 18},
+        requiredAllTags: {'grouped_blisters'},
       ),
       AssessmentPossibility(
         title: 'Hidradénite suppurée possible',
@@ -3767,6 +4784,7 @@ const assessmentPathways = <AssessmentPathway>[
           'skin_folds': 34,
           'recurrent': 16,
         },
+        requiredAllTags: {'deep_recurrent_nodules'},
       ),
       AssessmentPossibility(
         title: 'Impétigo possible',
@@ -3831,7 +4849,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'pregnancy',
-    version: 3,
+    version: 4,
     title: 'Malaise pendant la grossesse',
     subtitle: 'Symptômes pendant la grossesse ou après l’accouchement',
     icon: Icons.pregnant_woman_outlined,
@@ -3855,8 +4873,8 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'late',
-            label: '20 semaines ou plus',
-            icon: Icons.looks_two_outlined,
+            label: 'De 20 à 27 semaines de grossesse',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {
               'late_pregnancy',
               'context_pregnant',
@@ -3875,9 +4893,10 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'postpartum_late',
-            label: 'J’ai accouché il y a 6 semaines à 1 an',
-            icon: Icons.child_friendly_outlined,
+            label: 'Accouchement il y a plus de 6 semaines et moins d’un an',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {
+              'postpartum',
               'postpartum_within_year',
               'context_pregnant',
               'branch_pregnancy_postpartum',
@@ -3888,6 +4907,27 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Je ne sais pas précisément',
             icon: Icons.help_outline,
             tags: {'context_pregnant'},
+          ),
+          AssessmentOption(
+            id: '28_to_36',
+            label: 'De 28 à 36 semaines de grossesse',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {
+              'late_pregnancy',
+              'context_pregnant',
+              'branch_pregnancy_late',
+            },
+          ),
+          AssessmentOption(
+            id: '37_plus',
+            label: '37 semaines ou plus',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {
+              'late_pregnancy',
+              'term_pregnancy',
+              'context_pregnant',
+              'branch_pregnancy_late',
+            },
           ),
         ],
       ),
@@ -4021,9 +5061,9 @@ const assessmentPathways = <AssessmentPathway>[
           AssessmentOption(
             id: 'lying',
             label: 'Essoufflement au repos ou en position couchée',
-            icon: Icons.bed_outlined,
+            icon: Icons.warning_amber_rounded,
             tags: {'breathless_at_rest'},
-            urgency: AssessmentUrgency.consultationToday,
+            urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'effort',
@@ -4035,6 +5075,41 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'normal',
             label: 'Je respire normalement',
             icon: Icons.check_circle_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'pregnancy_leg_symptoms',
+        title: 'Jambes et circulation',
+        prompt: 'Avez-vous remarqué un de ces changements ?',
+        icon: Icons.accessibility_new_outlined,
+        options: [
+          AssessmentOption(
+            id: 'one_leg',
+            label:
+                'Une seule jambe nouvellement gonflée, chaude ou douloureuse',
+            icon: Icons.warning_amber_rounded,
+            tags: {'pregnancy_dvt_pattern'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'both_ankles',
+            label: 'Les deux chevilles gonflent progressivement, sans douleur',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'mild_swelling'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucun de ces signes',
+            icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationToday,
           ),
         ],
       ),
@@ -4074,23 +5149,72 @@ const assessmentPathways = <AssessmentPathway>[
         options: [
           AssessmentOption(
             id: 'cannot_drink',
-            label: 'Je vomis tout, urine peu ou suis très faible',
-            icon: Icons.emergency_outlined,
+            label: 'Je vomis chaque fois que je bois',
+            icon: Icons.warning_amber_rounded,
             tags: {'cannot_hydrate', 'dehydration_risk'},
-            urgency: AssessmentUrgency.consultationToday,
+            urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'fever',
-            label: 'Fièvre élevée ou frissons',
-            icon: Icons.thermostat_outlined,
-            tags: {'fever'},
-            urgency: AssessmentUrgency.consultationToday,
+            label: 'Température mesurée à 38 °C ou plus',
+            icon: Icons.warning_amber_rounded,
+            tags: {'temperature_38', 'fever'},
+            urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'mild_nausea',
             label: 'Nausées légères, je peux boire',
             icon: Icons.local_drink_outlined,
             tags: {'nausea', 'hydrated'},
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucun de ces signes',
+            icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'chills',
+            label: 'Frissons, sans température mesurée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'chills'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'low_urine',
+            label: 'J’urine beaucoup moins que d’habitude',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'low_urine'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'pregnancy_urinary',
+        title: 'Urines',
+        prompt: 'Avez-vous un de ces symptômes urinaires ?',
+        icon: Icons.water_drop_outlined,
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
+            id: 'burning',
+            label: 'Brûlure ou douleur en urinant',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'urinary_burning'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'blood',
+            label: 'Sang visible dans les urines',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'blood_in_urine'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'fever_back',
+            label: 'Fièvre avec douleur d’un côté du dos',
+            icon: Icons.warning_amber_rounded,
+            tags: {'fever', 'flank_pain', 'kidney_infection_pattern'},
+            urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'none',
@@ -4133,7 +5257,7 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Vomissements persistants, je ne garde pas les liquides',
             icon: Icons.warning_amber_rounded,
             tags: {'cannot_hydrate', 'dehydration_risk', 'severe_vomiting'},
-            urgency: AssessmentUrgency.consultationToday,
+            urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'mild_cramps',
@@ -4265,7 +5389,9 @@ const assessmentPathways = <AssessmentPathway>[
           'severe_breathlessness',
           'very_heavy_bleeding',
           'collapse',
+          'triage_emergency',
         },
+        requiredAnyTags: {'nausea', 'mild_breathlessness', 'mild_swelling'},
       ),
       AssessmentPossibility(
         title: 'Pré-éclampsie possible',
@@ -4314,6 +5440,7 @@ const assessmentPathways = <AssessmentPathway>[
           'dehydration_risk': 30,
           'nausea': 12,
         },
+        requiredAnyTags: {'cannot_hydrate', 'dehydration_risk'},
       ),
       AssessmentPossibility(
         title: 'Infection possible',
@@ -4355,6 +5482,7 @@ const assessmentPathways = <AssessmentPathway>[
           'dehydration_risk': 24,
           'early_pregnancy': 10,
         },
+        requiredAllTags: {'severe_vomiting'},
       ),
       AssessmentPossibility(
         title: 'Travail prématuré ou rupture de la poche des eaux possible',
@@ -4486,7 +5614,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'chest',
-    version: 3,
+    version: 4,
     title: 'Poitrine et palpitations',
     subtitle: 'Douleur, oppression, battements rapides ou irréguliers',
     icon: Icons.favorite_border_outlined,
@@ -4509,24 +5637,23 @@ const assessmentPathways = <AssessmentPathway>[
           AssessmentOption(
             id: 'pressure_persistent',
             label:
-                'Oppression ou poids nouveau qui dure plus de 15 minutes, même sans irradiation',
-            icon: Icons.emergency_outlined,
+                'Oppression ou poids nouveau dans la poitrine qui ne disparaît pas',
+            icon: Icons.warning_amber_rounded,
             tags: {'chest_pressure', 'persistent_chest_pressure'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'severe_breathing',
-            label:
-                'Douleur avec grande difficulté à respirer ou lèvres pâles/bleues',
-            icon: Icons.emergency_outlined,
-            tags: {'chest_pain', 'severe_breathlessness', 'cyanosis'},
+            label: 'Douleur avec grande difficulté à respirer',
+            icon: Icons.warning_amber_rounded,
+            tags: {'chest_pain', 'severe_breathlessness'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'faint_palpitations',
-            label: 'Palpitations persistantes avec malaise ou évanouissement',
-            icon: Icons.emergency_outlined,
-            tags: {'palpitations', 'collapse', 'branch_chest_palpitations'},
+            label: 'Palpitations persistantes avec impression de m’évanouir',
+            icon: Icons.warning_amber_rounded,
+            tags: {'palpitations', 'presyncope', 'branch_chest_palpitations'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -4534,6 +5661,60 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Gêne légère ou intermittente, je respire normalement',
             icon: Icons.check_circle_outline,
             tags: {'stable_chest_symptom'},
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'chest_radiation',
+        title: 'Extension de la douleur',
+        prompt: 'La douleur de la poitrine s’étend-elle ailleurs ?',
+        icon: Icons.open_in_full_outlined,
+        options: [
+          AssessmentOption(
+            id: 'arm',
+            label: 'Vers un bras ou les deux bras',
+            icon: Icons.warning_amber_rounded,
+            tags: {'radiating_chest_pain'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'jaw',
+            label: 'Vers la mâchoire ou le cou',
+            icon: Icons.warning_amber_rounded,
+            tags: {'radiating_chest_pain'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'back',
+            label: 'Vers le dos',
+            icon: Icons.warning_amber_rounded,
+            tags: {'radiating_chest_pain'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'abdomen',
+            label: 'Vers le haut du ventre',
+            icon: Icons.warning_amber_rounded,
+            tags: {'radiating_chest_pain'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Non, elle reste dans la poitrine',
+            icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'no_pain',
+            label:
+                'Je n’ai pas de douleur, seulement des battements inhabituels',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationToday,
           ),
         ],
       ),
@@ -4616,17 +5797,65 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'chest_duration',
+        title: 'Durée de la gêne',
+        prompt: 'Combien de temps dure chaque épisode ?',
+        icon: Icons.schedule_outlined,
+        options: [
+          AssessmentOption(
+            id: 'seconds',
+            label: 'Quelques secondes',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'brief_episodes'},
+          ),
+          AssessmentOption(
+            id: 'minutes',
+            label: 'Plusieurs minutes, puis la gêne disparaît',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'chest_minutes'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'ongoing',
+            label:
+                'Une douleur nouvelle dans la poitrine est toujours présente',
+            icon: Icons.warning_amber_rounded,
+            tags: {'persistent_chest_pressure'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'repeated',
+            label: 'Les épisodes se rapprochent ou deviennent plus forts',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'worsening_chest_episodes'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'no_pain',
+            label: 'Je n’ai pas de douleur dans la poitrine',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'chest_associated',
         title: 'Signes associés',
-        prompt: 'Quel autre signe accompagne la gêne ?',
+        prompt: 'Quels signes accompagnent la gêne thoracique ?',
         icon: Icons.warning_amber_rounded,
         allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'sweat_nausea',
-            label: 'Sueurs froides ou faiblesse soudaine',
-            icon: Icons.emergency_outlined,
-            tags: {'sweating', 'sudden_weakness', 'acute_coronary_autonomic'},
+            label: 'Sueurs froides inhabituelles',
+            icon: Icons.warning_amber_rounded,
+            tags: {'sweating', 'acute_coronary_autonomic'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
@@ -4668,6 +5897,13 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'none',
             label: 'Aucun de ces signes',
             icon: Icons.remove_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'sudden_weakness',
+            label: 'Faiblesse soudaine avec la gêne thoracique',
+            icon: Icons.warning_amber_rounded,
+            tags: {'sudden_weakness', 'acute_coronary_autonomic'},
+            urgency: AssessmentUrgency.emergency,
           ),
         ],
       ),
@@ -4721,6 +5957,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Comment évoluent les battements inhabituels ?',
         icon: Icons.monitor_heart_outlined,
         requiredTags: {'branch_chest_palpitations'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'persistent_symptoms',
@@ -4762,6 +5999,7 @@ const assessmentPathways = <AssessmentPathway>[
         prompt: 'Qu’est-ce qui accompagne la brûlure ?',
         icon: Icons.sick_outlined,
         requiredTags: {'branch_chest_digestive'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'acid',
@@ -4856,6 +6094,7 @@ const assessmentPathways = <AssessmentPathway>[
           'acute_coronary_autonomic',
           'pulmonary_embolism_pattern',
           'acute_aortic_pattern',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -4873,6 +6112,7 @@ const assessmentPathways = <AssessmentPathway>[
           'chest_pressure',
           'pulmonary_embolism_pattern',
           'acute_aortic_pattern',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -4902,6 +6142,7 @@ const assessmentPathways = <AssessmentPathway>[
           'persistent_chest_pressure',
           'pulmonary_embolism_pattern',
           'acute_aortic_pattern',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -4931,7 +6172,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'urinary',
-    version: 3,
+    version: 4,
     title: 'Troubles urinaires',
     subtitle: 'Brûlure, envies fréquentes, sang, fuite ou difficulté à uriner',
     icon: Icons.local_drink_outlined,
@@ -4957,8 +6198,14 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'adult',
-            label: '16 ans ou plus',
-            icon: Icons.person_outline,
+            label: 'De 16 à 64 ans',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+          AssessmentOption(
+            id: '65_plus',
+            label: '65 ans ou plus',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'older_adult'},
           ),
         ],
       ),
@@ -5053,6 +6300,20 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucun de ces signes',
             icon: Icons.check_circle_outline,
           ),
+          AssessmentOption(
+            id: 'fever_only',
+            label: 'Fièvre mesurée, sans douleur du dos',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'fever'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'chills',
+            label: 'Frissons marqués, sans température mesurée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'chills'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
         ],
       ),
       AssessmentQuestion(
@@ -5083,9 +6344,13 @@ const assessmentPathways = <AssessmentPathway>[
           AssessmentOption(
             id: 'large_thirst',
             label: 'Grandes quantités avec soif inhabituelle',
-            icon: Icons.local_drink_outlined,
-            tags: {'large_urine_volume', 'excessive_thirst'},
-            urgency: AssessmentUrgency.consultationSoon,
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {
+              'large_urine_volume',
+              'excessive_thirst',
+              'branch_urinary_thirst',
+            },
+            urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
             id: 'colicky',
@@ -5149,6 +6414,52 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'urinary_treatment_response',
+        title: 'Traitement et évolution',
+        prompt: 'Avez-vous déjà commencé un traitement pour cet épisode ?',
+        icon: Icons.medication_outlined,
+        options: [
+          AssessmentOption(
+            id: 'none',
+            label: 'Non',
+            icon: Icons.check_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'under_48h',
+            label: 'Oui, depuis moins de 48 heures',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'treatment_started'},
+          ),
+          AssessmentOption(
+            id: 'improving',
+            label: 'Oui, les symptômes diminuent',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'treatment_improving'},
+          ),
+          AssessmentOption(
+            id: 'not_improving',
+            label: 'Oui, depuis au moins 48 heures, sans amélioration',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'urinary_treatment_failure'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'worse',
+            label: 'Oui, mais les symptômes s’aggravent',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'urinary_treatment_failure', 'worsening'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'urinary_context',
         title: 'Contexte',
         prompt: 'Quelle situation vous concerne ?',
@@ -5185,9 +6496,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'stone_obstruction',
-            label: 'Calcul ou obstruction urinaire déjà diagnostiqué(e)',
-            icon: Icons.warning_amber_rounded,
-            tags: {'known_urinary_stone', 'known_urinary_obstruction'},
+            label: 'Calcul urinaire déjà diagnostiqué',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'known_urinary_stone'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
@@ -5195,14 +6506,36 @@ const assessmentPathways = <AssessmentPathway>[
             label: 'Aucune de ces situations',
             icon: Icons.check_circle_outline,
           ),
+          AssessmentOption(
+            id: 'obstruction',
+            label: 'Obstacle urinaire déjà diagnostiqué',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'known_urinary_obstruction'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'diabetes',
+            label: 'Diabète connu',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'diabetes_context', 'complicated_urinary_context'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'immunity',
+            label: 'Immunité diminuée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'immunocompromised', 'complicated_urinary_context'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
         ],
       ),
       AssessmentQuestion(
         id: 'urinary_irritation_detail',
         title: 'Irritation associée',
-        prompt: 'Quel autre signe accompagne la brûlure ?',
+        prompt: 'Quels signes ou situations accompagnent la brûlure urinaire ?',
         icon: Icons.info_outline,
         requiredTags: {'branch_urinary_irritation'},
+        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'frequency',
@@ -5212,9 +6545,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'discharge',
-            label: 'Écoulement génital, plaie ou rapport sexuel à risque',
-            icon: Icons.warning_amber_rounded,
-            tags: {'genital_discharge', 'sexual_exposure'},
+            label: 'Écoulement inhabituel par les organes génitaux',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'genital_discharge'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
@@ -5228,6 +6561,20 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'none',
             label: 'Aucun autre signe',
             icon: Icons.remove_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'sexual_exposure',
+            label: 'Rapport sans préservatif ou nouveau partenaire récent',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'sexual_exposure'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'sores',
+            label: 'Plaies ou cloques génitales',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'genital_sores'},
+            urgency: AssessmentUrgency.consultationToday,
           ),
         ],
       ),
@@ -5263,6 +6610,91 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'none',
             label: 'Aucune de ces descriptions',
             icon: Icons.remove_circle_outline,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'urinary_volume',
+        title: 'Quantité d’urine',
+        prompt:
+            'Quand vous urinez souvent, quelle quantité sort à chaque fois ?',
+        icon: Icons.water_drop_outlined,
+        requiredTags: {'urinary_frequency'},
+        options: [
+          AssessmentOption(
+            id: 'small',
+            label: 'Quelques gouttes ou de petites quantités',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'small_frequent_voids'},
+          ),
+          AssessmentOption(
+            id: 'normal',
+            label: 'Une quantité habituelle',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+          AssessmentOption(
+            id: 'large',
+            label: 'De grandes quantités à répétition',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'large_urine_volume', 'branch_urinary_thirst'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'urinary_thirst',
+        title: 'Soif et état général',
+        prompt: 'Quels signes accompagnent ces urines abondantes ?',
+        icon: Icons.local_drink_outlined,
+        requiredTags: {'branch_urinary_thirst'},
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
+            id: 'thirst',
+            label: 'Soif nettement plus forte que d’habitude',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'excessive_thirst'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'weight_loss',
+            label: 'Perte de poids involontaire',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'weight_loss'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'vomiting',
+            label: 'Vomissements',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'vomiting'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'deep_breathing',
+            label: 'Respiration inhabituellement profonde et rapide',
+            icon: Icons.warning_amber_rounded,
+            tags: {'deep_breathing'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'confusion',
+            label: 'Somnolence inhabituelle ou confusion',
+            icon: Icons.warning_amber_rounded,
+            tags: {'confusion'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucun de ces signes',
+            icon: Icons.check_circle_outline,
           ),
         ],
       ),
@@ -5333,13 +6765,15 @@ const assessmentPathways = <AssessmentPathway>[
           'urinary_leakage': 16,
         },
         requiredAllTags: {'urge_incontinence_pattern'},
-        excludedTags: {'urinary_burning'},
+        excludedTags: {'urinary_burning', 'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Incontinence d’effort possible',
         explanation:
             'Une fuite lors de la toux, du rire ou d’un effort peut correspondre à une faiblesse du soutien pelvien.',
         tagWeights: {'stress_incontinence_pattern': 52, 'urinary_leakage': 20},
+        requiredAllTags: {'stress_incontinence_pattern'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Glycémie élevée à vérifier',
@@ -5347,6 +6781,14 @@ const assessmentPathways = <AssessmentPathway>[
             'Uriner en grande quantité avec une soif inhabituelle peut nécessiter un contrôle de la glycémie.',
         tagWeights: {'large_urine_volume': 42, 'excessive_thirst': 42},
         requiredAllTags: {'large_urine_volume', 'excessive_thirst'},
+      ),
+      AssessmentPossibility(
+        title: 'Déséquilibre du diabète à exclure en urgence',
+        explanation:
+            'Une soif intense et des urines abondantes associées à des vomissements, une respiration anormale ou une confusion peuvent révéler une acidocétose, même sans diabète déjà connu.',
+        tagWeights: {'possible_ketoacidosis': 85},
+        requiredAllTags: {'possible_ketoacidosis'},
+        urgentReason: true,
       ),
       AssessmentPossibility(
         title: 'Urétrite ou infection génitale possible',
@@ -5410,7 +6852,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'dizziness',
-    version: 3,
+    version: 4,
     title: 'Vertiges et malaise',
     subtitle: 'Tête qui tourne, faiblesse, perte d’équilibre ou évanouissement',
     icon: Icons.accessibility_new_outlined,
@@ -5542,9 +6984,51 @@ const assessmentPathways = <AssessmentPathway>[
         ],
       ),
       AssessmentQuestion(
+        id: 'dizziness_duration',
+        title: 'Durée des épisodes',
+        prompt: 'Combien de temps dure le vertige ou le malaise ?',
+        icon: Icons.schedule_outlined,
+        options: [
+          AssessmentOption(
+            id: 'seconds',
+            label: 'Quelques secondes à moins d’une minute',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'brief_dizziness'},
+          ),
+          AssessmentOption(
+            id: 'minutes',
+            label: 'De 1 minute à moins d’une heure',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'episodic_dizziness'},
+          ),
+          AssessmentOption(
+            id: 'hours',
+            label:
+                'Plusieurs heures, avec des périodes normales entre les crises',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'episodic_vertigo'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'continuous',
+            label: 'En continu, même immobile',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'continuous_vertigo'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
         id: 'dizziness_associated',
         title: 'Signes associés',
-        prompt: 'Quel autre signe accompagne le malaise ?',
+        prompt: 'Quels signes accompagnent le vertige ou le malaise ?',
         icon: Icons.warning_amber_rounded,
         allowMultiple: true,
         options: [
@@ -5565,9 +7049,9 @@ const assessmentPathways = <AssessmentPathway>[
           ),
           AssessmentOption(
             id: 'hearing',
-            label: 'Baisse d’audition, bourdonnement ou oreille pleine',
-            icon: Icons.hearing_outlined,
-            tags: {'hearing_change', 'tinnitus', 'branch_dizziness_vertigo'},
+            label: 'J’entends moins bien',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'hearing_change', 'branch_dizziness_vertigo'},
             urgency: AssessmentUrgency.consultationSoon,
           ),
           AssessmentOption(
@@ -5588,6 +7072,20 @@ const assessmentPathways = <AssessmentPathway>[
             id: 'none',
             label: 'Aucun de ces signes',
             icon: Icons.remove_circle_outline,
+          ),
+          AssessmentOption(
+            id: 'tinnitus',
+            label: 'Sifflement ou bourdonnement dans une oreille',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'tinnitus', 'branch_dizziness_vertigo'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'ear_fullness',
+            label: 'Sensation d’oreille bouchée',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'ear_fullness', 'branch_dizziness_vertigo'},
+            urgency: AssessmentUrgency.consultationSoon,
           ),
         ],
       ),
@@ -5766,6 +7264,48 @@ const assessmentPathways = <AssessmentPathway>[
           ),
         ],
       ),
+      AssessmentQuestion(
+        id: 'dizziness_consciousness',
+        title: 'Perte de connaissance',
+        prompt: 'Avez-vous réellement perdu connaissance pendant ce malaise ?',
+        icon: Icons.psychology_alt_outlined,
+        requiredTags: {'branch_dizziness_faint'},
+        options: [
+          AssessmentOption(
+            id: 'no',
+            label: 'Non, je suis resté(e) conscient(e)',
+            icon: Icons.radio_button_unchecked_rounded,
+          ),
+          AssessmentOption(
+            id: 'recovered',
+            label: 'Oui, brièvement, puis je suis revenu(e) à mon état normal',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'true_syncope'},
+            urgency: AssessmentUrgency.consultationSoon,
+          ),
+          AssessmentOption(
+            id: 'incomplete',
+            label: 'Oui, et je ne suis pas revenu(e) à mon état normal',
+            icon: Icons.warning_amber_rounded,
+            tags: {'true_syncope', 'confusion'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'injury',
+            label: 'Oui, et je me suis gravement blessé(e) en tombant',
+            icon: Icons.warning_amber_rounded,
+            tags: {'true_syncope', 'serious_fall_injury'},
+            urgency: AssessmentUrgency.emergency,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+        ],
+      ),
     ],
     possibilities: [
       AssessmentPossibility(
@@ -5787,6 +7327,7 @@ const assessmentPathways = <AssessmentPathway>[
           'continuous_vertigo',
           'sudden_hearing_loss',
           'posterior_stroke_pattern',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -5828,6 +7369,7 @@ const assessmentPathways = <AssessmentPathway>[
           'orthostatic_pattern',
           'dehydration_risk',
         },
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Malaise vagal possible',
@@ -5839,6 +7381,7 @@ const assessmentPathways = <AssessmentPathway>[
           'presyncope': 16,
         },
         requiredAllTags: {'vasovagal_pattern'},
+        excludedTags: {'triage_emergency'},
       ),
       AssessmentPossibility(
         title: 'Glycémie basse possible',
@@ -5849,6 +7392,7 @@ const assessmentPathways = <AssessmentPathway>[
           'diabetes_context': 32,
           'sweating': 16,
         },
+        requiredAllTags: {'low_glucose_pattern'},
       ),
       AssessmentPossibility(
         title: 'Anémie ou perte de sang possible',
@@ -5928,7 +7472,7 @@ const assessmentPathways = <AssessmentPathway>[
   ),
   AssessmentPathway(
     id: 'fever',
-    version: 3,
+    version: 4,
     title: 'Fièvre et frissons',
     subtitle: 'Température élevée, frissons, sueurs ou sensation d’infection',
     icon: Icons.thermostat_outlined,
@@ -5979,8 +7523,8 @@ const assessmentPathways = <AssessmentPathway>[
         options: [
           AssessmentOption(
             id: 'unconfirmed',
-            label: 'Non mesurée ou inférieure à 38 °C',
-            icon: Icons.help_outline,
+            label: 'Je n’ai pas mesuré la température',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'temperature_unconfirmed'},
           ),
           AssessmentOption(
@@ -6001,6 +7545,19 @@ const assessmentPathways = <AssessmentPathway>[
             label: '40 °C ou plus',
             icon: Icons.warning_amber_rounded,
             tags: {'temperature_40', 'fever'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'below_38',
+            label: 'De 36 à 37,9 °C',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_below_38'},
+          ),
+          AssessmentOption(
+            id: 'below_36',
+            label: 'Moins de 36 °C',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'temperature_below_36'},
             urgency: AssessmentUrgency.consultationToday,
           ),
         ],
@@ -6037,6 +7594,48 @@ const assessmentPathways = <AssessmentPathway>[
             icon: Icons.replay_outlined,
             tags: {'fever', 'worsening_after_improvement'},
             urgency: AssessmentUrgency.consultationToday,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'fever_duration',
+        title: 'Nombre de jours',
+        prompt:
+            'Depuis combien de jours avez-vous de la fièvre ou des frissons ?',
+        icon: Icons.calendar_month_outlined,
+        options: [
+          AssessmentOption(
+            id: 'under_24h',
+            label: 'Moins de 24 heures',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'fever_under_24h'},
+          ),
+          AssessmentOption(
+            id: '1_to_3',
+            label: 'De 1 à 3 jours',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'fever_1_to_3_days'},
+          ),
+          AssessmentOption(
+            id: '4_days',
+            label: '4 jours',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'persistent'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: '5_plus',
+            label: '5 jours ou plus',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'fever_5_days', 'persistent'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationSoon,
           ),
         ],
       ),
@@ -6160,7 +7759,7 @@ const assessmentPathways = <AssessmentPathway>[
       AssessmentQuestion(
         id: 'fever_focus',
         title: 'Zone principale',
-        prompt: 'Quel autre symptôme accompagne surtout la fièvre ?',
+        prompt: 'Quelles zones ou quels symptômes accompagnent la fièvre ?',
         icon: Icons.search_outlined,
         allowMultiple: true,
         options: [
@@ -6201,45 +7800,85 @@ const assessmentPathways = <AssessmentPathway>[
       ),
       AssessmentQuestion(
         id: 'fever_hydration',
-        title: 'Hydratation et vulnérabilité',
-        prompt: 'Quelle situation correspond le mieux ?',
+        title: 'Hydratation',
+        prompt: 'Comment arrivez-vous à boire et à uriner ?',
         icon: Icons.local_drink_outlined,
-        allowMultiple: true,
         options: [
           AssessmentOption(
             id: 'hydrated',
-            label: 'Je peux boire et urine normalement',
-            icon: Icons.check_circle_outline,
+            label: 'Je bois et j’urine normalement',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'hydrated'},
           ),
           AssessmentOption(
+            id: 'less',
+            label: 'Je bois moins et j’urine moins que d’habitude',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'dehydration_risk'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
             id: 'cannot_drink',
-            label: 'Je vomis tout, bouche très sèche ou urine très peu',
-            icon: Icons.warning_amber_rounded,
+            label: 'Je vomis chaque fois que je bois',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'cannot_hydrate', 'dehydration_risk'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
+            id: 'dry',
+            label: 'Bouche très sèche ou absence de larmes chez l’enfant',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'dehydration_risk'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'unsure',
+            label: 'Je ne sais pas',
+            icon: Icons.help_outline,
+            tags: {'answer_uncertain'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+        ],
+      ),
+      AssessmentQuestion(
+        id: 'fever_medical_context',
+        title: 'Contexte médical',
+        prompt: 'Quelles situations vous concernent ?',
+        icon: Icons.medical_information_outlined,
+        allowMultiple: true,
+        options: [
+          AssessmentOption(
             id: 'pregnant',
-            label: 'Grossesse ou accouchement récent',
-            icon: Icons.pregnant_woman_outlined,
+            label: 'Grossesse ou accouchement dans l’année écoulée',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'pregnancy_possible'},
             urgency: AssessmentUrgency.consultationToday,
           ),
           AssessmentOption(
             id: 'active_cancer_treatment',
-            label:
-                'Chimiothérapie ou traitement anticancéreux actif/récent avec fièvre ou malaise',
-            icon: Icons.emergency_outlined,
+            label: 'Chimiothérapie ou traitement anticancéreux actif ou récent',
+            icon: Icons.warning_amber_rounded,
             tags: {'possible_neutropenic_sepsis'},
             urgency: AssessmentUrgency.emergency,
           ),
           AssessmentOption(
             id: 'immunocompromised',
-            label: 'Immunité diminuée ou maladie chronique grave',
-            icon: Icons.health_and_safety_outlined,
+            label: 'Immunité diminuée ou traitement immunosuppresseur',
+            icon: Icons.radio_button_unchecked_rounded,
             tags: {'immunocompromised'},
             urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'recent_procedure',
+            label: 'Opération, hospitalisation ou sonde récente',
+            icon: Icons.radio_button_unchecked_rounded,
+            tags: {'recent_procedure'},
+            urgency: AssessmentUrgency.consultationToday,
+          ),
+          AssessmentOption(
+            id: 'none',
+            label: 'Aucune de ces situations',
+            icon: Icons.check_circle_outline,
           ),
         ],
       ),
@@ -6594,6 +8233,7 @@ const assessmentPathways = <AssessmentPathway>[
           'dengue_warning',
           'possible_neutropenic_sepsis',
           'diphtheria_pattern',
+          'triage_emergency',
         },
       ),
       AssessmentPossibility(
@@ -6753,6 +8393,7 @@ const assessmentPathways = <AssessmentPathway>[
       'Ne commencez pas d’antibiotique sans évaluation ou prescription adaptée.',
     ],
   ),
+  ..._additionalAssessmentPathways,
 ];
 
 AssessmentPathway? assessmentPathwayById(String id) {
@@ -6919,6 +8560,35 @@ AssessmentPathway assessmentPathwayFromMap(
       'Un parcours publié doit contenir une question.',
     );
   }
+  final questionIds = <String>{};
+  for (final question in questions) {
+    if (!questionIds.add(question.id)) {
+      throw FormatException(
+        'Identifiant de question dupliqué : ${question.id}.',
+      );
+    }
+    final optionIds = <String>{};
+    for (final option in question.options) {
+      if (option.id.contains('|') || !optionIds.add(option.id)) {
+        throw FormatException('Identifiant de choix invalide : ${option.id}.');
+      }
+    }
+    if (question.requiredTags.intersection(question.excludedTags).isNotEmpty) {
+      throw FormatException('Conditions contradictoires : ${question.id}.');
+    }
+  }
+  for (final question in questions) {
+    for (final option in question.options) {
+      final target = option.nextQuestionId;
+      if (target != null &&
+          (target == question.id || !questionIds.contains(target))) {
+        throw FormatException('Destination de branche invalide : $target.');
+      }
+    }
+  }
+  if (!questions.any((question) => question.appliesTo(const {}))) {
+    throw const FormatException('Aucune question initiale accessible.');
+  }
 
   final possibilities = maps('possibilities')
       .map((possibility) {
@@ -6982,10 +8652,16 @@ IconData assessmentIconFromKey(String? key) => switch (key) {
   'stomach' => Icons.sick_outlined,
   'temperature' => Icons.thermostat_outlined,
   'water' => Icons.local_drink_outlined,
+  'eyes' => Icons.visibility_outlined,
+  'joint' => Icons.directions_walk_outlined,
+  'dental' => Icons.health_and_safety_outlined,
   _ => Icons.radio_button_checked_outlined,
 };
 
 String _assessmentIconKey(IconData icon) {
+  if (icon == Icons.visibility_outlined) return 'eyes';
+  if (icon == Icons.directions_walk_outlined) return 'joint';
+  if (icon == Icons.health_and_safety_outlined) return 'dental';
   if (icon == Icons.air_outlined) return 'air';
   if (icon == Icons.warning_amber_rounded) return 'alert';
   if (icon == Icons.water_drop_outlined) return 'blood';

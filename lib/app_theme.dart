@@ -7,35 +7,35 @@ import 'package:flutter/material.dart';
 
 /// Palette partagée par l’expérience I-ENTIER.
 abstract final class AppColors {
-  static const primary = Color(0xFF176BFF);
-  static const primaryDark = Color(0xFF0E55D2);
-  static const primarySoft = Color(0xFFEAF1FF);
-  static const teal = Color(0xFF0A8F8F);
-  static const navy = Color(0xFF102A56);
-  static const ink = Color(0xFF344054);
-  static const muted = Color(0xFF667085);
-  static const border = Color(0xFFE1E8F0);
-  static const canvas = Color(0xFFF5F8FC);
+  static const primary = Color(0xFF246B56);
+  static const primaryDark = Color(0xFF194D3E);
+  static const primarySoft = Color(0xFFE8F0E8);
+  static const teal = Color(0xFF477A68);
+  static const navy = Color(0xFF1D322A);
+  static const ink = Color(0xFF293C34);
+  static const muted = Color(0xFF606D64);
+  static const border = Color(0xFFDDE2D9);
+  static const canvas = Color(0xFFF6F5F0);
   static const surface = Color(0xFFFFFFFF);
-  static const surfaceMuted = Color(0xFFF3F6FA);
-  static const tealSoft = Color(0xFFE5F7F3);
-  static const disabled = Color(0xFFD5DDE8);
-  static const error = Color(0xFFD92D20);
-  static const success = Color(0xFF087A5B);
-  static const warning = Color(0xFFB54708);
+  static const surfaceMuted = Color(0xFFEFEEE8);
+  static const tealSoft = Color(0xFFE8EFE5);
+  static const disabled = Color(0xFFD9DED5);
+  static const error = Color(0xFFB44335);
+  static const success = Color(0xFF357351);
+  static const warning = Color(0xFF95632B);
 }
 
 /// Même finition pour les cartes, qu’elles utilisent Material ou Container.
 abstract final class AppDecorations {
-  static const controlRadius = BorderRadius.all(Radius.circular(16));
-  static const cardRadius = BorderRadius.all(Radius.circular(22));
+  static const controlRadius = BorderRadius.all(Radius.circular(12));
+  static const cardRadius = BorderRadius.all(Radius.circular(16));
   static const card = BoxDecoration(
     color: AppColors.surface,
     borderRadius: cardRadius,
     border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
   );
   static const cardShadow = [
-    BoxShadow(color: Color(0x08102A56), blurRadius: 18, offset: Offset(0, 5)),
+    BoxShadow(color: Color(0x061D322A), blurRadius: 12, offset: Offset(0, 3)),
   ];
   static final raisedCard = card.copyWith(boxShadow: cardShadow);
 }
@@ -60,16 +60,17 @@ abstract final class AppTheme {
           onSurface: AppColors.ink,
           onSurfaceVariant: AppColors.muted,
           outline: AppColors.border,
-          outlineVariant: const Color(0xFFEDF1F6),
+          outlineVariant: const Color(0xFFECEEE6),
           surfaceContainerLowest: AppColors.surface,
-          surfaceContainerLow: const Color(0xFFFAFCFE),
+          surfaceContainerLow: const Color(0xFFFAFAF6),
           surfaceContainer: AppColors.surfaceMuted,
-          surfaceContainerHigh: const Color(0xFFEDF2F7),
-          surfaceContainerHighest: const Color(0xFFE7EDF4),
+          surfaceContainerHigh: const Color(0xFFE8EBE2),
+          surfaceContainerHighest: const Color(0xFFE1E5DB),
         );
 
     final base = ThemeData(
       useMaterial3: true,
+      fontFamily: 'Roboto',
       brightness: Brightness.light,
       colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.canvas,
@@ -82,27 +83,27 @@ abstract final class AppTheme {
       textTheme: base.textTheme.copyWith(
         displaySmall: base.textTheme.displaySmall!.copyWith(
           color: AppColors.navy,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -1,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -1.1,
         ),
         headlineLarge: base.textTheme.headlineLarge!.copyWith(
           color: AppColors.navy,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -.8,
         ),
         headlineMedium: base.textTheme.headlineMedium!.copyWith(
           color: AppColors.navy,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -.5,
         ),
         headlineSmall: base.textTheme.headlineSmall!.copyWith(
           color: AppColors.navy,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -.25,
         ),
         titleLarge: base.textTheme.titleLarge!.copyWith(
           color: AppColors.navy,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
         titleMedium: base.textTheme.titleMedium!.copyWith(
           color: AppColors.navy,
@@ -143,9 +144,10 @@ abstract final class AppTheme {
         iconTheme: IconThemeData(color: AppColors.navy),
         actionsIconTheme: IconThemeData(color: AppColors.navy),
         titleTextStyle: TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.navy,
           fontSize: 20,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -.2,
         ),
       ),
@@ -166,11 +168,18 @@ abstract final class AppTheme {
           horizontal: 18,
           vertical: 17,
         ),
-        hintStyle: const TextStyle(color: AppColors.muted),
-        labelStyle: const TextStyle(color: AppColors.muted),
+        hintStyle: const TextStyle(
+          fontFamily: 'Roboto',
+          color: AppColors.muted,
+        ),
+        labelStyle: const TextStyle(
+          fontFamily: 'Roboto',
+          color: AppColors.muted,
+        ),
         prefixIconColor: WidgetStateColor.resolveWith(_inputIconColor),
         suffixIconColor: WidgetStateColor.resolveWith(_inputIconColor),
         floatingLabelStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.primary,
           fontWeight: FontWeight.w700,
         ),
@@ -209,7 +218,11 @@ abstract final class AppTheme {
           elevation: 0,
           minimumSize: const Size(48, 50),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: AppDecorations.controlRadius,
           ),
@@ -220,7 +233,11 @@ abstract final class AppTheme {
           foregroundColor: AppColors.primary,
           minimumSize: const Size(48, 50),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Roboto',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
           side: const BorderSide(color: AppColors.border),
           shape: RoundedRectangleBorder(
             borderRadius: AppDecorations.controlRadius,
@@ -230,9 +247,12 @@ abstract final class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primaryDark,
-          minimumSize: const Size(48, 44),
+          minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Roboto',
+            fontWeight: FontWeight.w700,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -248,9 +268,9 @@ abstract final class AppTheme {
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        elevation: 3,
-        focusElevation: 5,
-        hoverElevation: 5,
+        elevation: 0,
+        focusElevation: 1,
+        hoverElevation: 1,
       ),
       navigationBarTheme: const NavigationBarThemeData(
         height: 72,
@@ -260,7 +280,11 @@ abstract final class AppTheme {
         elevation: 0,
         iconTheme: WidgetStatePropertyAll(IconThemeData(size: 24)),
         labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          TextStyle(
+            fontFamily: 'Roboto',
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
         ),
       ),
       navigationRailTheme: const NavigationRailThemeData(
@@ -269,11 +293,13 @@ abstract final class AppTheme {
         selectedIconTheme: IconThemeData(color: AppColors.primary, size: 25),
         unselectedIconTheme: IconThemeData(color: AppColors.muted, size: 24),
         selectedLabelTextStyle: TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.primary,
           fontSize: 12,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
         unselectedLabelTextStyle: TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.muted,
           fontSize: 12,
           fontWeight: FontWeight.w700,
@@ -282,8 +308,13 @@ abstract final class AppTheme {
       tabBarTheme: const TabBarThemeData(
         labelColor: AppColors.primaryDark,
         unselectedLabelColor: AppColors.muted,
-        labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        labelStyle: TextStyle(
+          fontFamily: 'Roboto',
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
         unselectedLabelStyle: TextStyle(
+          fontFamily: 'Roboto',
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
@@ -320,11 +351,13 @@ abstract final class AppTheme {
         elevation: 8,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         titleTextStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.navy,
           fontSize: 20,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
         contentTextStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.ink,
           fontSize: 15,
           height: 1.45,
@@ -334,6 +367,7 @@ abstract final class AppTheme {
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.navy,
         contentTextStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: Colors.white,
           fontWeight: FontWeight.w600,
         ),
@@ -348,6 +382,22 @@ abstract final class AppTheme {
         thickness: 1,
         space: 1,
       ),
+      dataTableTheme: const DataTableThemeData(
+        headingRowColor: WidgetStatePropertyAll(AppColors.surfaceMuted),
+        headingTextStyle: TextStyle(
+          fontFamily: 'Roboto',
+          color: AppColors.muted,
+          fontWeight: FontWeight.w600,
+        ),
+        dataTextStyle: TextStyle(
+          fontFamily: 'Roboto',
+          color: AppColors.ink,
+          fontSize: 14,
+        ),
+        dividerThickness: 1,
+        horizontalMargin: 20,
+        columnSpacing: 24,
+      ),
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: AppColors.surfaceMuted,
         selectedColor: AppColors.primarySoft,
@@ -356,12 +406,14 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         labelStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.navy,
           fontWeight: FontWeight.w700,
         ),
         secondaryLabelStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: AppColors.primaryDark,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
       ),
       listTileTheme: const ListTileThemeData(
@@ -379,6 +431,7 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(10),
         ),
         textStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: Colors.white,
           fontSize: 12,
           fontWeight: FontWeight.w600,

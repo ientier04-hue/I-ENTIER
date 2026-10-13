@@ -14,7 +14,7 @@ export function PharmacyIdentity({ name, address, distance, delivery, favorite, 
   </Pressable>;
   if (compact) return <View style={[st.compact, selected && st.compactSelected]}>
     <Pressable onPress={onSelect} disabled={!onSelect} accessibilityRole={onSelect ? 'radio' : undefined} accessibilityState={onSelect ? { checked: selected } : undefined} accessibilityLabel={`${name}${distanceLabel ? `, à environ ${distanceLabel}` : ''}${offerPrice ? `, ${offerPrice}` : ''}`} style={st.offer}>
-      {selected && onSelect ? <Text style={st.offerCheck}>✓</Text> : <Icon name="store" size={15} color="#63764D"/>}
+      {selected && onSelect ? <Text style={st.offerCheck}>✓</Text> : <Icon name="store" size={15} color="#52675A"/>}
       <Text numberOfLines={1} style={st.compactName}>{name}</Text>
       {distanceLabel && <Text style={st.distanceText}>≈ {distanceLabel}</Text>}
       {!!offerPrice && <Text style={st.offerPrice}>{offerPrice}</Text>}
@@ -27,11 +27,11 @@ export function PharmacyIdentity({ name, address, distance, delivery, favorite, 
   </View>;
   return <View style={st.container}>
     <View style={st.identity}>
-      <View style={st.store}><Icon name="store" size={19} color="#526D34"/></View>
+      <View style={st.store}><Icon name="store" size={19} color="#246B56"/></View>
       <View style={st.text}>
         <Text style={st.name}>{name}</Text>
         <View style={st.meta}>
-          {distanceLabel && <View accessible accessibilityLabel={`À environ ${distanceLabel}, à vol d’oiseau`} style={st.distance}><Icon name="pin" size={13} color="#63764D"/><Text style={st.distanceText}>≈ {distanceLabel}</Text></View>}
+          {distanceLabel && <View accessible accessibilityLabel={`À environ ${distanceLabel}, à vol d’oiseau`} style={st.distance}><Icon name="pin" size={13} color="#52675A"/><Text style={st.distanceText}>≈ {distanceLabel}</Text></View>}
           {!!address && <Text numberOfLines={1} style={st.address}>{address}</Text>}
         </View>
       </View>
@@ -52,7 +52,7 @@ const st = StyleSheet.create({
   compactSelected: { backgroundColor: '#F3F6EB' },
   offer: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
   offerPrice: { fontSize: 11, fontWeight: '600', color: '#35472B' },
-  offerCheck: { width: 15, fontSize: 14, color: '#63764D', fontWeight: '700', textAlign: 'center' },
+  offerCheck: { width: 15, fontSize: 14, color: '#52675A', fontWeight: '700', textAlign: 'center' },
   compactName: { flex: 1, minWidth: 0, color: '#526744', fontSize: 12, fontWeight: '500' },
   compactDelivery: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   unknownDelivery: { position: 'absolute', right: -2, top: -3, color: '#8D9585', backgroundColor: '#FFFFFF', fontSize: 10, fontWeight: '700' },
@@ -63,7 +63,7 @@ const st = StyleSheet.create({
   name: { color: '#35472B', fontSize: 14, fontWeight: '600', lineHeight: 20 },
   meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   distance: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  distanceText: { color: '#63764D', fontSize: 11, fontWeight: '600' },
+  distanceText: { color: '#52675A', fontSize: 11, fontWeight: '600' },
   address: { color: '#818876', fontSize: 11, flexShrink: 1 },
   favorite: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingLeft: 3 },

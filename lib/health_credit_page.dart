@@ -316,7 +316,7 @@ class _NoCreditHero extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 26,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 9),
@@ -378,7 +378,7 @@ class _ActiveCreditHero extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 27,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const Text(
@@ -386,7 +386,7 @@ class _ActiveCreditHero extends StatelessWidget {
                   style: TextStyle(
                     color: Color(0xFFBFD0FF),
                     fontSize: 9,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -410,7 +410,7 @@ class _ActiveCreditHero extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 23,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -424,7 +424,7 @@ class _ActiveCreditHero extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 17,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
       const SizedBox(height: 10),
@@ -599,7 +599,7 @@ class _CreditRepaymentSection extends StatelessWidget {
                 style: const TextStyle(
                   color: _creditNavy,
                   fontSize: 28,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const Text(
@@ -1305,7 +1305,7 @@ class _ReferenceFieldsState extends State<_ReferenceFields> {
             child: Text(
               'Référence ${widget.index + 1}',
               style: const TextStyle(
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: _creditNavy,
               ),
             ),
@@ -1415,7 +1415,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               'Solde : ${_money(widget.credit.balance)}',
               style: const TextStyle(
                 color: _creditNavy,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 14),
@@ -1602,7 +1602,7 @@ class _CreditPanel extends StatelessWidget {
           style: const TextStyle(
             color: _creditNavy,
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         if (subtitle != null) ...[
@@ -1651,7 +1651,7 @@ class _CreditPageTitle extends StatelessWidget {
               style: const TextStyle(
                 color: _creditNavy,
                 fontSize: 22,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
@@ -1696,7 +1696,7 @@ class _CreditNotice extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: TextStyle(color: color, fontWeight: FontWeight.w900),
+                style: TextStyle(color: color, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 5),
               Text(
@@ -1755,7 +1755,7 @@ class _CreditEmpty extends StatelessWidget {
           title,
           style: const TextStyle(
             fontSize: 20,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             color: _creditNavy,
           ),
         ),
@@ -1835,7 +1835,7 @@ class _ScoreEventTile extends StatelessWidget {
           color: positive
               ? AppColors.success
               : Theme.of(context).colorScheme.error,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -1863,7 +1863,7 @@ class _NextInstallment extends StatelessWidget {
                 '${installment!.number}',
                 style: const TextStyle(
                   color: _creditBlue,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   fontSize: 18,
                 ),
               ),
@@ -1876,7 +1876,7 @@ class _NextInstallment extends StatelessWidget {
                   Text(
                     _money(installment!.remaining),
                     style: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       color: _creditNavy,
                     ),
                   ),
@@ -1943,7 +1943,7 @@ class _ApplicationHistoryTile extends StatelessWidget {
     leading: const Icon(Icons.description_outlined, color: _creditBlue),
     title: Text(
       _money(item.requestedAmount),
-      style: const TextStyle(fontWeight: FontWeight.w800),
+      style: const TextStyle(fontWeight: FontWeight.w600),
     ),
     subtitle: Text(
       '${_applicationStatus(item.status)} • ${_date(item.createdAt)}',
@@ -1990,7 +1990,7 @@ class _InstallmentTile extends StatelessWidget {
       ),
       title: Text(
         'Échéance ${item.number} • ${_money(item.due)}',
-        style: const TextStyle(fontWeight: FontWeight.w800),
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
         '${_date(item.dueDate)}${item.paid > 0 ? ' • ${_money(item.paid)} payé' : ''}',
@@ -2012,7 +2012,7 @@ class _PaymentTile extends StatelessWidget {
     leading: const Icon(Icons.receipt_long_outlined, color: _creditBlue),
     title: Text(
       _money(payment.amount),
-      style: const TextStyle(fontWeight: FontWeight.w800),
+      style: const TextStyle(fontWeight: FontWeight.w600),
     ),
     subtitle: Text(
       '${_paymentMethod(payment.method)} • ${_date(payment.createdAt)}${payment.rejectionReason.isEmpty ? '' : '\n${payment.rejectionReason}'}',
@@ -2061,7 +2061,7 @@ class _PartnerCenterTile extends StatelessWidget {
     ),
     title: Text(
       center.name,
-      style: const TextStyle(fontWeight: FontWeight.w800),
+      style: const TextStyle(fontWeight: FontWeight.w600),
     ),
     subtitle: Text(
       '${center.address}, ${center.commune}\n${center.services}${center.phone.isEmpty ? '' : '\n${center.phone}'}',
@@ -2090,7 +2090,7 @@ class _SolidarityRequestTile extends StatelessWidget {
               child: Text(
                 _money(request.requestedAmount),
                 style: const TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: _creditNavy,
                 ),
               ),
@@ -2105,7 +2105,7 @@ class _SolidarityRequestTile extends StatelessWidget {
             'Financé : ${_money(request.fundedAmount)}',
             style: const TextStyle(
               color: AppColors.success,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         if (request.socialWorker.isNotEmpty ||
@@ -2142,7 +2142,7 @@ class _MiniStatus extends StatelessWidget {
       style: TextStyle(
         color: danger ? AppColors.error : _creditBlue,
         fontSize: 11,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
     ),
   );

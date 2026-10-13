@@ -92,7 +92,7 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
         <View style={st.header}>
           <Pressable accessibilityRole="button" accessibilityLabel="Retour aux médicaments" onPress={close} style={st.roundButton}><View style={st.backIcon}><Icon name="chevron" color="#35472B"/></View></Pressable>
           <Text style={st.headerTitle}>Détails du médicament</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} accessibilityState={{ selected: favorite }} onPress={onFavorite} style={st.roundButton}><Icon name="heart" color={favorite ? '#D85B73' : '#63764D'} filled={favorite}/></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} accessibilityState={{ selected: favorite }} onPress={onFavorite} style={st.roundButton}><Icon name="heart" color={favorite ? '#D85B73' : '#52675A'} filled={favorite}/></Pressable>
         </View>
         <ScrollView scrollEnabled={ready} showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
           <View ref={photo} collapsable={false} onLayout={measurePhoto} style={[st.hero, { height: Math.min(300, height * .3) }]}>
@@ -153,7 +153,7 @@ const st = StyleSheet.create({
   panel: { width: '100%', height: '100%', backgroundColor: '#F5F8EC', overflow: 'hidden' },
   widePanel: { maxWidth: 560, height: '94%', maxHeight: 1000, borderRadius: 30 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 18, paddingVertical: 10 },
-  headerTitle: { fontSize: 15, fontWeight: '600', color: '#293223', flexShrink: 1, textAlign: 'center' },
+  headerTitle: { fontSize: 15, fontWeight: '600', color: '#1D322A', flexShrink: 1, textAlign: 'center' },
   roundButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   backIcon: { transform: [{ rotate: '90deg' }] },
   scroll: { flexGrow: 1 }, hero: { marginHorizontal: 22 }, fill: { flex: 1 },
@@ -163,13 +163,13 @@ const st = StyleSheet.create({
   titleCopy: { flex: 1, minWidth: 130, gap: 5 }, name: { fontSize: 25, fontWeight: '600', color: '#263020', letterSpacing: -.6 },
   muted: { fontSize: 12, color: '#868D80' },
   quantity: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D9DECF', borderRadius: 14 },
-  step: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }, stepText: { fontSize: 25, color: '#79A731' }, quantityText: { minWidth: 21, textAlign: 'center', color: '#263020', fontSize: 15, fontWeight: '600' },
+  step: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }, stepText: { fontSize: 25, color: '#246B56' }, quantityText: { minWidth: 21, textAlign: 'center', color: '#263020', fontSize: 15, fontWeight: '600' },
   variantGroup: { gap: 10 }, label: { fontSize: 13, fontWeight: '600', color: '#343D2D' },
   choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, choice: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, backgroundColor: '#F5F6F3', borderWidth: 1, borderColor: '#F5F6F3', alignItems: 'center', justifyContent: 'center' },
-  packChoice: { flexGrow: 1, flexBasis: 100, gap: 8 }, selectedChoice: { backgroundColor: '#F0F6E4', borderColor: '#ADCB75' }, choiceText: { fontSize: 12, color: '#77816D', textAlign: 'center' }, selectedText: { color: '#526D34', fontWeight: '600' },
-  packPrice: { fontSize: 15, fontWeight: '600', color: '#283126' }, radio: { width: 15, height: 15, borderRadius: 8, borderWidth: 1, borderColor: '#A3AB9C', alignItems: 'center', justifyContent: 'center' }, radioSelected: { borderColor: '#79A731' }, radioDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#79A731' },
-  tabs: { flexDirection: 'row', padding: 4, borderRadius: 24, backgroundColor: '#F5F6F3' }, tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: 'transparent' }, activeTab: { backgroundColor: '#FFFFFF', borderColor: '#ADCB75' }, tabText: { fontSize: 13, color: '#77816D' },
+  packChoice: { flexGrow: 1, flexBasis: 100, gap: 8 }, selectedChoice: { backgroundColor: '#F0F6E4', borderColor: '#AAC5AD' }, choiceText: { fontSize: 12, color: '#77816D', textAlign: 'center' }, selectedText: { color: '#246B56', fontWeight: '600' },
+  packPrice: { fontSize: 15, fontWeight: '600', color: '#1D322A' }, radio: { width: 15, height: 15, borderRadius: 8, borderWidth: 1, borderColor: '#A3AB9C', alignItems: 'center', justifyContent: 'center' }, radioSelected: { borderColor: '#246B56' }, radioDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#246B56' },
+  tabs: { flexDirection: 'row', padding: 4, borderRadius: 24, backgroundColor: '#F5F6F3' }, tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: 'transparent' }, activeTab: { backgroundColor: '#FFFFFF', borderColor: '#AAC5AD' }, tabText: { fontSize: 13, color: '#77816D' },
   infoRow: { flexDirection: 'row', gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#EFF1EA' }, infoLabel: { fontSize: 13, color: '#818976', flex: 1 }, infoValue: { fontSize: 13, color: '#323C2A', flex: 1.3, textAlign: 'right', lineHeight: 19 }, offerList: { gap: 6 },
-  footer: { backgroundColor: '#FFFFFF', paddingHorizontal: 22, paddingVertical: 16, gap: 12, borderTopWidth: 1, borderColor: '#EFF1EA' }, footerRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 }, total: { flexGrow: 1, gap: 5 }, price: { fontSize: 23, fontWeight: '700', color: '#283126', letterSpacing: -.7 },
+  footer: { backgroundColor: '#FFFFFF', paddingHorizontal: 22, paddingVertical: 16, gap: 12, borderTopWidth: 1, borderColor: '#EFF1EA' }, footerRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 }, total: { flexGrow: 1, gap: 5 }, price: { fontSize: 23, fontWeight: '700', color: '#1D322A', letterSpacing: -.7 },
   addButton: { flexGrow: 1, flexDirection: 'row', gap: 9, justifyContent: 'center', alignItems: 'center', backgroundColor: '#637F3C', borderRadius: 25, paddingHorizontal: 20, minHeight: 50 }, addText: { color: '#FFFFFF', fontWeight: '600', fontSize: 13 }, disabled: { opacity: .35 }, pressed: { opacity: .75 }, error: { color: '#8B422E', fontSize: 13 },
 });

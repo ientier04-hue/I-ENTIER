@@ -1,7 +1,16 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'cycle_context_form.dart';
+import 'cycle_personal_context.dart';
 import 'supabase_data.dart';
+
+export 'cycle_personal_context.dart';
+
+part 'cycle_symptom_learning.dart';
+part 'cycle_physiology.dart';
 
 const _rose = Color(0xFFE94C85);
 const _roseSoft = Color(0xFFFFE8F1);
@@ -88,6 +97,13 @@ class CycleEntry {
   final List<String> symptoms;
   final String mood;
   final String note;
+  final bool isSpotting;
+  final int? stressLevel;
+  final double? sleepHours;
+  final double? basalTemperatureC;
+  final bool temperatureDisturbed;
+  final String lhTest;
+  final String cervicalMucus;
 
   const CycleEntry({
     required this.id,
@@ -97,6 +113,13 @@ class CycleEntry {
     this.symptoms = const [],
     this.mood = '',
     this.note = '',
+    this.isSpotting = false,
+    this.stressLevel,
+    this.sleepHours,
+    this.basalTemperatureC,
+    this.temperatureDisturbed = false,
+    this.lhTest = '',
+    this.cervicalMucus = '',
   });
 
   factory CycleEntry.fromSupabase(
@@ -118,6 +141,39 @@ class CycleEntry {
           : const [],
       mood: data['mood']?.toString() ?? '',
       note: data['note']?.toString() ?? '',
+      isSpotting: data['isSpotting'] == true,
+      stressLevel:
+          data['stressLevel'] is num &&
+              (data['stressLevel'] as num) >= 0 &&
+              (data['stressLevel'] as num) <= 3
+          ? (data['stressLevel'] as num).toInt()
+          : null,
+      sleepHours:
+          data['sleepHours'] is num &&
+              (data['sleepHours'] as num) >= 0 &&
+              (data['sleepHours'] as num) <= 24
+          ? (data['sleepHours'] as num).toDouble()
+          : null,
+      basalTemperatureC:
+          data['basalTemperatureC'] is num &&
+              (data['basalTemperatureC'] as num) >= 34 &&
+              (data['basalTemperatureC'] as num) <= 42
+          ? (data['basalTemperatureC'] as num).toDouble()
+          : null,
+      temperatureDisturbed: data['temperatureDisturbed'] == true,
+      lhTest: ['negative', 'positive'].contains(data['lhTest'])
+          ? data['lhTest'] as String
+          : '',
+      cervicalMucus:
+          [
+            'dry',
+            'sticky',
+            'creamy',
+            'watery',
+            'stretchy',
+          ].contains(data['cervicalMucus'])
+          ? data['cervicalMucus'] as String
+          : '',
     );
   }
 
@@ -127,6 +183,7 @@ class CycleEntry {
     List<String>? symptoms,
     String? mood,
     String? note,
+    bool? isSpotting,
   }) => CycleEntry(
     id: id,
     date: date,
@@ -135,10 +192,46 @@ class CycleEntry {
     symptoms: symptoms ?? this.symptoms,
     mood: mood ?? this.mood,
     note: note ?? this.note,
+    isSpotting: isSpotting ?? this.isSpotting,
+    stressLevel: stressLevel,
+    sleepHours: sleepHours,
+    basalTemperatureC: basalTemperatureC,
+    temperatureDisturbed: temperatureDisturbed,
+    lhTest: lhTest,
+    cervicalMucus: cervicalMucus,
   );
 
   bool get hasDetails =>
-      isPeriod || symptoms.isNotEmpty || mood.isNotEmpty || note.isNotEmpty;
+      isPeriod ||
+      isSpotting ||
+      symptoms.isNotEmpty ||
+      mood.isNotEmpty ||
+      note.isNotEmpty ||
+      stressLevel != null ||
+      sleepHours != null ||
+      hasPhysiologyDetails;
+
+  bool get hasPhysiologyDetails =>
+      basalTemperatureC != null ||
+      temperatureDisturbed ||
+      lhTest.isNotEmpty ||
+      cervicalMucus.isNotEmpty;
+
+  Map<String, dynamic> toData() => {
+    'date': Timestamp.fromDate(date),
+    'isPeriod': isPeriod && !isSpotting,
+    'flow': isPeriod && !isSpotting ? flow : '',
+    'symptoms': symptoms,
+    'mood': mood,
+    'note': note,
+    'isSpotting': isSpotting,
+    'stressLevel': stressLevel,
+    'sleepHours': sleepHours,
+    'basalTemperatureC': basalTemperatureC,
+    'temperatureDisturbed': temperatureDisturbed,
+    'lhTest': lhTest,
+    'cervicalMucus': cervicalMucus,
+  };
 }
 
 class _PeriodEpisode {
@@ -161,8 +254,21 @@ class _PeriodEpisode {
 }
 
 List<_PeriodEpisode> _periodEpisodes(Iterable<CycleEntry> entries) {
-  final periodEntries = entries.where((entry) => entry.isPeriod).toList()
-    ..sort((first, second) => first.date.compareTo(second.date));
+  final dailyEntries = entries.toList();
+  final periodEntries =
+      dailyEntries
+          .where((entry) => entry.isPeriod && !entry.isSpotting)
+          .toList()
+        ..sort((first, second) => first.date.compareTo(second.date));
+  final periodDays = periodEntries
+      .map((entry) => cycleDateKey(entry.date))
+      .toSet();
+  final nonPeriodDays =
+      dailyEntries
+          .where((entry) => !entry.isPeriod || entry.isSpotting)
+          .map((entry) => cycleDateKey(entry.date))
+          .toSet()
+        ..removeAll(periodDays);
   final groups = <List<CycleEntry>>[];
   for (final entry in periodEntries) {
     if (groups.isEmpty) {
@@ -176,10 +282,14 @@ List<_PeriodEpisode> _periodEpisodes(Iterable<CycleEntry> entries) {
       current.last.date,
     );
 
-    // Allow one missed journal day inside an episode. Consecutive bleeding is
-    // never split, even when it lasts unusually long: doing so would invent a
-    // new cycle. After two unlogged days, a new bleeding episode starts.
-    if (gapFromPrevious <= 2) {
+    // Bridge one unlogged day, but respect an explicitly recorded day without
+    // bleeding. Never split consecutive bleeding into artificial cycles.
+    final bridgesUnloggedDay =
+        gapFromPrevious == 2 &&
+        !nonPeriodDays.contains(
+          cycleDateKey(_addCalendarDays(current.last.date, 1)),
+        );
+    if (gapFromPrevious <= 1 || bridgesUnloggedDay) {
       groups.last.add(entry);
     } else {
       groups.add([entry]);
@@ -209,16 +319,57 @@ int _median(List<int> values) {
 List<int> _recentValues(List<int> values, [int limit = 12]) =>
     values.length > limit ? values.sublist(values.length - limit) : values;
 
+int _recencyWeightedMedian(List<int> values) {
+  if (values.isEmpty) {
+    throw ArgumentError.value(values, 'values', 'Must not be empty');
+  }
+  // Halve the weight every three observed cycles. No single observation has
+  // half the total weight once the required three intervals are available.
+  final weighted = [
+    for (var index = 0; index < values.length; index++)
+      (
+        value: values[index],
+        weight: math.pow(0.5, (values.length - 1 - index) / 3).toDouble(),
+      ),
+  ]..sort((first, second) => first.value.compareTo(second.value));
+  final halfWeight = weighted.fold(0.0, (sum, item) => sum + item.weight) / 2;
+  var cumulativeWeight = 0.0;
+  for (var index = 0; index < weighted.length; index++) {
+    cumulativeWeight += weighted[index].weight;
+    if ((cumulativeWeight - halfWeight).abs() < 1e-9 &&
+        index + 1 < weighted.length) {
+      return ((weighted[index].value + weighted[index + 1].value) / 2).round();
+    }
+    if (cumulativeWeight > halfWeight) return weighted[index].value;
+  }
+  return weighted.last.value;
+}
+
 bool _containsPossibleTrackingGap(List<int> intervals) {
   if (intervals.length < 3) return false;
-  for (final shorter in intervals) {
-    if (shorter <= 0) continue;
-    for (final longer in intervals) {
-      if (longer < shorter * 1.75) continue;
-      final multiple = (longer / shorter).round();
-      if (multiple < 2 || multiple > 3) continue;
-      final tolerance = multiple + 1;
-      if ((longer - shorter * multiple).abs() <= tolerance) return true;
+  for (final baseline in intervals) {
+    var singleCycles = 0;
+    var multipleCycles = 0;
+    for (final interval in intervals) {
+      if ((interval - baseline).abs() <= 2) {
+        singleCycles++;
+        continue;
+      }
+      final multiple = (interval / baseline).round();
+      if (multiple >= 2 &&
+          multiple <= 3 &&
+          (interval - baseline * multiple).abs() <= multiple + 1) {
+        multipleCycles++;
+      }
+    }
+    // A coincidental ratio between two variable cycles is not enough. Require
+    // at least three supporting observations and a majority of the history.
+    final supportingCycles = singleCycles + multipleCycles;
+    if (singleCycles > 0 &&
+        multipleCycles > 0 &&
+        supportingCycles >= 3 &&
+        supportingCycles * 2 > intervals.length) {
+      return true;
     }
   }
   return false;
@@ -236,6 +387,11 @@ Iterable<DateTime> _datesInRange(DateTime start, DateTime end) sync* {
 enum CycleHistoryQuality { insufficient, limited, stable, veryStable }
 
 class CycleInsights {
+  final CyclePhysiologyInsights physiology;
+  final bool usedPhysiologyAdjustment;
+  final CyclePersonalContext personalContext;
+  final List<CycleSymptomPattern> symptomPatterns;
+  final bool usedSymptomAdjustment;
   final DateTime today;
   final List<DateTime> periodStarts;
   final int? typicalCycleLength;
@@ -257,6 +413,11 @@ class CycleInsights {
   final DateTime? nextPeriodLatest;
 
   CycleInsights._({
+    required this.physiology,
+    required this.usedPhysiologyAdjustment,
+    required this.personalContext,
+    required this.symptomPatterns,
+    required this.usedSymptomAdjustment,
     required this.today,
     required this.periodStarts,
     required this.typicalCycleLength,
@@ -281,11 +442,20 @@ class CycleInsights {
   factory CycleInsights.fromEntries(
     Iterable<CycleEntry> entries, {
     DateTime? now,
+    CyclePersonalContext personalContext = const CyclePersonalContext(),
   }) {
     final today = _dateOnly(now ?? DateTime.now());
-    final episodes = _periodEpisodes(
-      entries.where((entry) => !_dateOnly(entry.date).isAfter(today)),
-    );
+    final recordedEntries = entries
+        .where((entry) => !_dateOnly(entry.date).isAfter(today))
+        .toList();
+    // Segment by episode start, never by slicing the middle of an episode.
+    final episodes = _periodEpisodes(recordedEntries)
+        .where(
+          (episode) =>
+              personalContext.historyStart == null ||
+              !episode.start.isBefore(_dateOnly(personalContext.historyStart!)),
+        )
+        .toList();
     final starts = episodes.map((episode) => episode.start).toList();
     final allIntervals = <int>[];
     for (var index = 1; index < starts.length; index++) {
@@ -297,23 +467,33 @@ class CycleInsights {
     for (var index = 0; index < allIntervals.length; index++) {
       if (allIntervals[index] > 90) lastHistoryBreakIndex = index;
     }
-    final hasHistoryBreak = lastHistoryBreakIndex >= 0;
+    final hasHistoryBreak =
+        lastHistoryBreakIndex >= 0 || personalContext.historyStart != null;
     final segmentIntervals = lastHistoryBreakIndex < 0
         ? allIntervals
         : allIntervals.sublist(lastHistoryBreakIndex + 1);
-    final validIntervals = <int>[];
-    var followsVeryShortInterval = false;
-    for (final interval in segmentIntervals) {
+    // Bound the raw history before filtering, so recent invalid intervals do
+    // not silently pull older cycles back into the prediction.
+    final recentRawIntervals = _recentValues(segmentIntervals);
+    final windowStart = segmentIntervals.length - recentRawIntervals.length;
+    final recentIntervals = <int>[];
+    final observedCycles = <_ObservedCycle>[];
+    var followsVeryShortInterval =
+        windowStart > 0 && segmentIntervals[windowStart - 1] < 15;
+    for (var index = 0; index < recentRawIntervals.length; index++) {
+      final interval = recentRawIntervals[index];
       if (interval >= 15 && interval <= 90 && !followsVeryShortInterval) {
-        validIntervals.add(interval);
+        recentIntervals.add(interval);
+        final startIndex = lastHistoryBreakIndex + 1 + windowStart + index;
+        observedCycles.add(
+          _ObservedCycle(starts[startIndex], starts[startIndex + 1], interval),
+        );
       }
       // A bleeding episode less than 15 days after the previous start may be
       // intermenstrual bleeding. The interval immediately after it cannot be
       // assumed to represent a full cycle either.
       followsVeryShortInterval = interval < 15;
     }
-    final recentIntervals = _recentValues(validIntervals);
-    final recentRawIntervals = _recentValues(segmentIntervals);
     final hasOutOfRangeInterval = recentRawIntervals.any(
       (interval) => interval < 15 || interval > 90,
     );
@@ -329,8 +509,9 @@ class CycleInsights {
     final segmentEpisodes = lastHistoryBreakIndex < 0
         ? episodes
         : episodes.sublist(lastHistoryBreakIndex + 1);
-    final recentEpisodes = segmentEpisodes.length > 12
-        ? segmentEpisodes.sublist(segmentEpisodes.length - 12)
+    // Twelve completed episodes plus the current, potentially unfinished one.
+    final recentEpisodes = segmentEpisodes.length > 13
+        ? segmentEpisodes.sublist(segmentEpisodes.length - 13)
         : segmentEpisodes;
     final confirmedEpisodes = recentEpisodes.length < 2
         ? const <_PeriodEpisode>[]
@@ -349,11 +530,14 @@ class CycleInsights {
         ? null
         : _median(recentPeriodLengths).clamp(1, 10);
 
-    final hasEnoughHistory = recentIntervals.length >= 3;
+    final hasEnoughHistory =
+        recentIntervals.length >= personalContext.minimumCycles;
     final predictionSuspended =
-        hasRecentAmbiguousBleeding || hasPossibleTrackingGap;
+        hasRecentAmbiguousBleeding ||
+        hasPossibleTrackingGap ||
+        personalContext.suspensionReason != null;
     final typicalCycle = hasEnoughHistory && !predictionSuspended
-        ? _median(recentIntervals)
+        ? _recencyWeightedMedian(recentIntervals)
         : null;
     final sortedIntervals = List<int>.from(recentIntervals)..sort();
     final variation = sortedIntervals.isEmpty
@@ -362,6 +546,8 @@ class CycleInsights {
     final historyQuality = !hasEnoughHistory
         ? CycleHistoryQuality.insufficient
         : hasOutOfRangeInterval ||
+              personalContext.needsMoreHistory ||
+              personalContext.suspensionReason != null ||
               hasPossibleTrackingGap ||
               hasRecentAmbiguousBleeding ||
               hasAtypicalCycleFrequency ||
@@ -377,6 +563,11 @@ class CycleInsights {
     DateTime? nextStart;
     DateTime? earliest;
     DateTime? latest;
+    var usedSymptomAdjustment = false;
+    var usedPhysiologyAdjustment = false;
+    final symptomPatterns = personalContext.suspensionReason == null
+        ? _learnSymptomPatterns(observedCycles, recordedEntries)
+        : const <CycleSymptomPattern>[];
     if (lastStart != null && typicalCycle != null) {
       nextStart = _addCalendarDays(lastStart, typicalCycle);
       final earliestLength =
@@ -384,16 +575,82 @@ class CycleInsights {
                   ? sortedIntervals.first
                   : typicalCycle - 2)
               .clamp(15, 90);
-      final latestLength =
-          (sortedIntervals.last > typicalCycle + 2
-                  ? sortedIntervals.last
-                  : typicalCycle + 2)
-              .clamp(15, 92);
+      final latestLength = math.max(
+        earliestLength + 4,
+        (sortedIntervals.last > typicalCycle + 2
+                ? sortedIntervals.last
+                : typicalCycle + 2)
+            .clamp(15, 92),
+      );
       earliest = _addCalendarDays(lastStart, earliestLength);
       latest = _addCalendarDays(lastStart, latestLength);
     }
+    final baseline = nextStart;
+    final physiology = _analyzePhysiology(
+      cycles: observedCycles,
+      entries: recordedEntries,
+      today: today,
+      currentCycleStart: lastStart,
+      personalContext: personalContext,
+      baseline: baseline,
+      earliest: earliest,
+      latest: latest,
+    );
+    if (lastStart != null &&
+        baseline != null &&
+        earliest != null &&
+        latest != null) {
+      if (personalContext.canUseSymptomTiming && !today.isAfter(latest)) {
+        final candidates = <int>[];
+        for (final pattern in symptomPatterns.where(
+          (item) => item.canAdjustPrediction,
+        )) {
+          final currentSignal = _firstSignalDay(
+            recordedEntries,
+            pattern.signal,
+            lastStart,
+            _addCalendarDays(today, 1),
+          );
+          if (currentSignal == null ||
+              _calendarDayDifference(today, currentSignal) > 2) {
+            continue;
+          }
+          final candidate = _symptomAdjustedDate(
+            baseline,
+            earliest,
+            latest,
+            currentSignal,
+            pattern.leadDays,
+            today,
+          );
+          if (candidate != null) {
+            candidates.add(_calendarDayDifference(candidate, lastStart));
+          }
+        }
+        final hasSymptomCandidate = candidates.isNotEmpty;
+        for (final proposal in physiology.proposedPeriodStarts) {
+          candidates.add(_calendarDayDifference(proposal, lastStart));
+        }
+        // All proposals use the original calendar baseline. Combining signals
+        // must never stack their individual two-day adjustments.
+        if (candidates.isNotEmpty &&
+            candidates.reduce(math.max) - candidates.reduce(math.min) <= 2) {
+          final adjusted = _addCalendarDays(lastStart, _median(candidates));
+          final changed = !_sameDay(adjusted, baseline);
+          usedSymptomAdjustment = changed && hasSymptomCandidate;
+          usedPhysiologyAdjustment =
+              changed && physiology.proposedPeriodStarts.isNotEmpty;
+          nextStart = adjusted;
+        }
+      }
+    }
 
     return CycleInsights._(
+      physiology: physiology,
+      usedPhysiologyAdjustment: usedPhysiologyAdjustment,
+      personalContext: personalContext,
+      symptomPatterns: List.unmodifiable(symptomPatterns),
+      usedSymptomAdjustment: usedSymptomAdjustment,
       today: today,
       periodStarts: starts,
       typicalCycleLength: typicalCycle,
@@ -433,12 +690,14 @@ class CycleInsights {
       nextPeriodLatest != null;
 
   bool get isPredictionSuspended =>
-      hasRecentAmbiguousBleeding || hasPossibleTrackingGap;
+      hasRecentAmbiguousBleeding ||
+      hasPossibleTrackingGap ||
+      personalContext.suspensionReason != null;
 
   bool get hasHighVariability => (cycleVariationDays ?? 0) > 9;
 
   int get additionalCyclesNeeded {
-    final missingIntervals = 3 - cycleSampleCount;
+    final missingIntervals = personalContext.minimumCycles - cycleSampleCount;
     return missingIntervals > 0 ? missingIntervals : 0;
   }
 
@@ -486,6 +745,9 @@ class CycleTrackingPage extends StatefulWidget {
   final List<CycleEntry>? initialEntries;
   final CycleEntryCallback? onSaveEntry;
   final CycleDeleteCallback? onDeleteEntry;
+  final CyclePersonalContext? initialContext;
+  final Future<void> Function(CyclePersonalContext)? onSaveContext;
+  final CycleContextRepository? contextRepository;
 
   const CycleTrackingPage({
     super.key,
@@ -494,6 +756,9 @@ class CycleTrackingPage extends StatefulWidget {
     this.initialEntries,
     this.onSaveEntry,
     this.onDeleteEntry,
+    this.initialContext,
+    this.onSaveContext,
+    this.contextRepository,
   });
 
   @override
@@ -504,6 +769,11 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
   late DateTime _visibleMonth;
   late DateTime _selectedDate;
   List<CycleEntry>? _localEntries;
+  CyclePersonalContext _personalContext = const CyclePersonalContext();
+  bool _contextLoading = false;
+  bool _contextError = false;
+  CycleContextRepository get _contextRepository =>
+      widget.contextRepository ?? SupabaseCycleContextRepository();
 
   DateTime get _today => _dateOnly(widget.now ?? DateTime.now());
 
@@ -521,6 +791,76 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
     if (widget.initialEntries != null) {
       _localEntries = List<CycleEntry>.from(widget.initialEntries!);
     }
+    _personalContext = widget.initialContext ?? const CyclePersonalContext();
+    if (widget.contextRepository != null ||
+        (widget.initialEntries == null && widget.initialContext == null)) {
+      _loadContext();
+    }
+  }
+
+  @override
+  void didUpdateWidget(CycleTrackingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.patientId == widget.patientId) return;
+    _localEntries = widget.initialEntries == null
+        ? null
+        : List.of(widget.initialEntries!);
+    _personalContext = widget.initialContext ?? const CyclePersonalContext();
+    _contextError = false;
+    _contextLoading = false;
+    if (widget.contextRepository != null ||
+        (widget.initialEntries == null && widget.initialContext == null)) {
+      _loadContext();
+    }
+  }
+
+  Future<void> _loadContext() async {
+    final patientId = widget.patientId;
+    setState(() {
+      _contextLoading = true;
+      _contextError = false;
+    });
+    try {
+      final value = await _contextRepository.load(patientId);
+      if (mounted && widget.patientId == patientId) {
+        setState(() => _personalContext = value);
+      }
+    } catch (_) {
+      if (mounted && widget.patientId == patientId) {
+        setState(() => _contextError = true);
+      }
+    } finally {
+      if (mounted && widget.patientId == patientId) {
+        setState(() => _contextLoading = false);
+      }
+    }
+  }
+
+  Future<void> _openContextForm() {
+    final patientId = widget.patientId;
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => CycleContextForm(
+        initialContext: _personalContext,
+        today: _today,
+        onSave: (value) async {
+          if (!mounted || widget.patientId != patientId) {
+            throw StateError('Patient changed');
+          }
+          if (widget.onSaveContext != null) {
+            await widget.onSaveContext!(value);
+          } else if (_localEntries == null ||
+              widget.contextRepository != null) {
+            await _contextRepository.save(patientId, value);
+          }
+          if (mounted && widget.patientId == patientId) {
+            setState(() => _personalContext = value);
+          }
+        },
+      ),
+    );
   }
 
   void _changeMonth(int offset) {
@@ -543,7 +883,12 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
     List<CycleEntry> entries, {
     _PeriodEpisode? episode,
   }) async {
-    final insights = CycleInsights.fromEntries(entries, now: _today);
+    final patientId = widget.patientId;
+    final insights = CycleInsights.fromEntries(
+      entries,
+      now: _today,
+      personalContext: _personalContext,
+    );
     final result = await showModalBottomSheet<_PeriodRangeResult>(
       context: context,
       isScrollControlled: true,
@@ -555,15 +900,25 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
         suggestedLength: insights.suggestedPeriodLength,
       ),
     );
-    if (result == null || !mounted) return;
-    await _savePeriodRange(result, entries, previousEpisode: episode);
+    if (result == null || !mounted || widget.patientId != patientId) return;
+    await _savePeriodRange(
+      result,
+      entries,
+      patientId: patientId,
+      previousEpisode: episode,
+    );
   }
 
   Future<void> _savePeriodRange(
     _PeriodRangeResult range,
     List<CycleEntry> entries, {
+    required String patientId,
     _PeriodEpisode? previousEpisode,
   }) async {
+    bool samePatient() => mounted && widget.patientId == patientId;
+    if (!samePatient()) return;
+    final onSaveEntry = widget.onSaveEntry;
+    final onDeleteEntry = widget.onDeleteEntry;
     final newDates = range.delete
         ? <DateTime>[]
         : _datesInRange(range.start!, range.end!).toList();
@@ -593,10 +948,12 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
           final updated = oldEntry.copyWith(isPeriod: false, flow: '');
           updatedEntries.removeWhere((entry) => entry.id == oldEntry.id);
           if (updated.hasDetails) {
-            await widget.onSaveEntry?.call(updated);
+            await onSaveEntry?.call(updated);
+            if (!samePatient()) return;
             updatedEntries.add(updated);
           } else {
-            await widget.onDeleteEntry?.call(oldEntry);
+            await onDeleteEntry?.call(oldEntry);
+            if (!samePatient()) return;
           }
         }
 
@@ -605,14 +962,15 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
           final existing = entriesByDay[key];
           if (existing?.isPeriod ?? false) continue;
           final updated =
-              existing?.copyWith(isPeriod: true, flow: '') ??
+              existing?.copyWith(isPeriod: true, isSpotting: false, flow: '') ??
               CycleEntry(id: key, date: date, isPeriod: true);
-          await widget.onSaveEntry?.call(updated);
+          await onSaveEntry?.call(updated);
+          if (!samePatient()) return;
           updatedEntries.removeWhere((entry) => entry.id == updated.id);
           updatedEntries.add(updated);
         }
 
-        if (mounted) setState(() => _localEntries = updatedEntries);
+        if (samePatient()) setState(() => _localEntries = updatedEntries);
       } else {
         final batch = SupabaseDatabase.instance.batch();
         var hasWrites = false;
@@ -620,9 +978,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
         for (final oldEntry in oldEntries) {
           if (newKeys.contains(cycleDateKey(oldEntry.date))) continue;
           final reference = _entriesReference.doc(oldEntry.id);
-          if (oldEntry.symptoms.isNotEmpty ||
-              oldEntry.mood.isNotEmpty ||
-              oldEntry.note.isNotEmpty) {
+          if (oldEntry.copyWith(isPeriod: false, flow: '').hasDetails) {
             batch.update(reference, {
               'isPeriod': false,
               'flow': '',
@@ -653,6 +1009,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
           } else {
             batch.update(reference, {
               'isPeriod': true,
+              'isSpotting': false,
               'flow': '',
               'updatedAt': FieldValue.serverTimestamp(),
             });
@@ -662,7 +1019,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
 
         if (hasWrites) await batch.commit();
       }
-      if (mounted) {
+      if (samePatient()) {
         _showMessage(
           range.delete
               ? 'La période a été supprimée.'
@@ -672,7 +1029,7 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
         );
       }
     } on SupabaseDataException catch (error) {
-      if (mounted) {
+      if (samePatient()) {
         _showMessage(
           error.code.contains('permission')
               ? 'L’accès à votre suivi de cycle n’est pas autorisé.'
@@ -680,11 +1037,14 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
         );
       }
     } catch (_) {
-      if (mounted) _showMessage('Impossible d’enregistrer cette période.');
+      if (samePatient()) {
+        _showMessage('Impossible d’enregistrer cette période.');
+      }
     }
   }
 
   Future<void> _openEntryForm(DateTime date, List<CycleEntry> entries) async {
+    final patientId = widget.patientId;
     final normalizedDate = _dateOnly(date);
     if (normalizedDate.isAfter(_today)) {
       _showMessage(
@@ -696,80 +1056,90 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
       (entry) => entry != null && _sameDay(entry.date, normalizedDate),
       orElse: () => null,
     );
-    final result = await showModalBottomSheet<_EntryFormResult>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          _CycleEntryForm(date: normalizedDate, entry: existing),
+      builder: (context) => _CycleEntryForm(
+        date: normalizedDate,
+        entry: existing,
+        onSubmit: (result) async {
+          if (!mounted || widget.patientId != patientId) {
+            throw StateError('Patient changed');
+          }
+          if (result.delete && existing != null) {
+            await _deleteEntry(existing, patientId: patientId);
+          } else if (result.entry != null) {
+            await _saveEntry(
+              result.entry!,
+              existing != null,
+              patientId: patientId,
+            );
+          }
+        },
+      ),
     );
-    if (result == null || !mounted) return;
-
-    if (result.delete && existing != null) {
-      await _deleteEntry(existing);
-      return;
-    }
-    if (result.entry != null) await _saveEntry(result.entry!, existing != null);
   }
 
-  Future<void> _saveEntry(CycleEntry entry, bool alreadyExists) async {
-    try {
-      if (_localEntries != null) {
-        await widget.onSaveEntry?.call(entry);
-        setState(() {
-          _localEntries!.removeWhere((item) => _sameDay(item.date, entry.date));
-          if (entry.hasDetails) _localEntries!.add(entry);
-        });
-      } else if (entry.hasDetails) {
-        final data = <String, dynamic>{
-          'date': Timestamp.fromDate(entry.date),
-          'isPeriod': entry.isPeriod,
-          'flow': entry.isPeriod ? entry.flow : '',
-          'symptoms': entry.symptoms,
-          'mood': entry.mood,
-          'note': entry.note,
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (!alreadyExists) 'createdAt': FieldValue.serverTimestamp(),
-        };
-        if (alreadyExists) {
-          await _entriesReference.doc(entry.id).update(data);
-        } else {
-          await _entriesReference.doc(entry.id).set(data);
-        }
-      } else if (alreadyExists) {
-        await _entriesReference.doc(entry.id).delete();
+  Future<void> _saveEntry(
+    CycleEntry entry,
+    bool alreadyExists, {
+    required String patientId,
+  }) async {
+    void requireSamePatient() {
+      if (!mounted || widget.patientId != patientId) {
+        throw StateError('Patient changed');
       }
-      if (mounted) _showMessage('Votre journée a été enregistrée.');
-    } on SupabaseDataException catch (error) {
-      if (mounted) {
-        _showMessage(
-          error.code.contains('permission')
-              ? 'L’accès à votre suivi de cycle n’est pas autorisé.'
-              : 'Impossible d’enregistrer cette journée pour le moment.',
-        );
-      }
-    } catch (_) {
-      if (mounted) _showMessage('Impossible d’enregistrer cette journée.');
     }
-  }
 
-  Future<void> _deleteEntry(CycleEntry entry) async {
-    try {
-      if (_localEntries != null) {
-        await widget.onDeleteEntry?.call(entry);
-        setState(
-          () => _localEntries!.removeWhere((item) => item.id == entry.id),
-        );
+    requireSamePatient();
+    if (_localEntries != null) {
+      await widget.onSaveEntry?.call(entry);
+      requireSamePatient();
+      setState(() {
+        _localEntries!.removeWhere((item) => _sameDay(item.date, entry.date));
+        if (entry.hasDetails) _localEntries!.add(entry);
+      });
+    } else if (entry.hasDetails) {
+      final reference = _entriesReference.doc(entry.id);
+      final data = <String, dynamic>{
+        ...entry.toData(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (!alreadyExists) 'createdAt': FieldValue.serverTimestamp(),
+      };
+      if (alreadyExists) {
+        await reference.update(data);
       } else {
-        await _entriesReference.doc(entry.id).delete();
+        await reference.set(data);
       }
-      if (mounted) _showMessage('Journée supprimée du suivi.');
-    } on SupabaseDataException {
-      if (mounted) _showMessage('Impossible de supprimer cette journée.');
-    } catch (_) {
-      if (mounted) _showMessage('Impossible de supprimer cette journée.');
+    } else if (alreadyExists) {
+      await _entriesReference.doc(entry.id).delete();
     }
+    requireSamePatient();
+    _showMessage('Votre journée a été enregistrée.');
+  }
+
+  Future<void> _deleteEntry(
+    CycleEntry entry, {
+    required String patientId,
+  }) async {
+    void requireSamePatient() {
+      if (!mounted || widget.patientId != patientId) {
+        throw StateError('Patient changed');
+      }
+    }
+
+    requireSamePatient();
+    if (_localEntries != null) {
+      await widget.onDeleteEntry?.call(entry);
+      requireSamePatient();
+      setState(() => _localEntries!.removeWhere((item) => item.id == entry.id));
+    } else {
+      await _entriesReference.doc(entry.id).delete();
+    }
+    requireSamePatient();
+    _showMessage('Journée supprimée du suivi.');
   }
 
   void _showMessage(String message) {
@@ -786,17 +1156,42 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
       surfaceTintColor: Colors.transparent,
       title: const Text(
         'Suivi de cycle',
-        style: TextStyle(color: _navy, fontWeight: FontWeight.w800),
+        style: TextStyle(color: _navy, fontWeight: FontWeight.w600),
       ),
+      actions: [
+        IconButton(
+          key: const Key('cycle-edit-context'),
+          tooltip: 'Mon contexte',
+          onPressed: _contextLoading || _contextError ? null : _openContextForm,
+          icon: const Icon(Icons.tune_rounded),
+        ),
+      ],
     ),
     body: SafeArea(
       top: false,
-      child: _localEntries != null
+      child: _contextLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _contextError
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Contexte indisponible'),
+                  TextButton(
+                    key: const Key('cycle-retry-context'),
+                    onPressed: _loadContext,
+                    child: const Text('Réessayer'),
+                  ),
+                ],
+              ),
+            )
+          : _localEntries != null
           ? _buildDashboard(_localEntries!)
           : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              key: ValueKey(widget.patientId),
               stream: _entriesReference
                   .orderBy('date', descending: true)
-                  .limit(500)
+                  .limit(1000)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -827,7 +1222,11 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
   );
 
   Widget _buildDashboard(List<CycleEntry> entries) {
-    final insights = CycleInsights.fromEntries(entries, now: _today);
+    final insights = CycleInsights.fromEntries(
+      entries,
+      now: _today,
+      personalContext: _personalContext,
+    );
     final episodes = _periodEpisodes(
       entries.where((entry) => !_dateOnly(entry.date).isAfter(_today)),
     );
@@ -836,7 +1235,11 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
           (entry) =>
               entry.symptoms.isNotEmpty ||
               entry.mood.isNotEmpty ||
-              entry.note.isNotEmpty,
+              entry.note.isNotEmpty ||
+              entry.isSpotting ||
+              entry.stressLevel != null ||
+              entry.sleepHours != null ||
+              entry.hasPhysiologyDetails,
         )
         .toList();
     final entriesByDay = <String, CycleEntry>{
@@ -904,6 +1307,29 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
                 entry: selectedEntry,
                 onTap: () => _openEntryForm(_selectedDate, entries),
               ),
+              if (insights.physiology.positiveLhDate != null ||
+                  insights.physiology.thermalShiftStart != null) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  key: const Key('cycle-physiology-signals'),
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (insights.physiology.positiveLhDate != null)
+                      Chip(
+                        label: Text(
+                          'LH positif · ${_shortDate(insights.physiology.positiveLhDate!)}',
+                        ),
+                      ),
+                    if (insights.physiology.thermalShiftStart != null)
+                      Chip(
+                        label: Text(
+                          'Hausse thermique observée · ${_shortDate(insights.physiology.thermalShiftStart!)}',
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               if (episodes.isEmpty) ...[
                 const SizedBox(height: 18),
                 _GettingStarted(onStart: () => _openPeriodForm(entries)),
@@ -917,6 +1343,31 @@ class _CycleTrackingPageState extends State<CycleTrackingPage> {
               ],
               if (journalEntries.isNotEmpty) ...[
                 const SizedBox(height: 26),
+                if (insights.symptomPatterns.isNotEmpty) ...[
+                  const Text(
+                    'Vos tendances',
+                    style: TextStyle(
+                      color: _navy,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    key: const Key('cycle-symptom-patterns'),
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final pattern in insights.symptomPatterns.take(4))
+                        Chip(
+                          label: Text(
+                            '${_signalLabel(pattern.signal)} · ${pattern.leadDays} j avant les règles · ${pattern.observedCycles} cycles',
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                ],
                 _HistorySection(
                   entries: journalEntries,
                   onEntryTap: (entry) => _openEntryForm(entry.date, entries),
@@ -979,7 +1430,7 @@ class _CycleHero extends StatelessWidget {
                 style: TextStyle(
                   color: _purple,
                   fontSize: 11,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: .7,
                 ),
               ),
@@ -991,7 +1442,7 @@ class _CycleHero extends StatelessWidget {
                 color: _navy,
                 fontSize: 26,
                 height: 1.1,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 9),
@@ -1090,7 +1541,12 @@ class _CycleStatusCard extends StatelessWidget {
     final String subtitle;
     final IconData icon;
     final Key? titleKey;
-    if (!hasCycle) {
+    if (insights.personalContext.suspensionReason != null) {
+      title = 'Suivi sans prévision';
+      subtitle = insights.personalContext.suspensionReason!;
+      icon = Icons.pause_circle_outline_rounded;
+      titleKey = const Key('cycle-context-suspended');
+    } else if (!hasCycle) {
       title = 'Votre cycle en un coup d’œil';
       subtitle =
           'Ajoutez le premier jour de vos règles pour commencer votre historique.';
@@ -1164,7 +1620,7 @@ class _CycleStatusCard extends StatelessWidget {
                       style: const TextStyle(
                         color: _navy,
                         fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -1202,7 +1658,9 @@ class _CycleStatusCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (inPeriod && !insights.hasPrediction) ...[
+          if (inPeriod &&
+              !insights.hasPrediction &&
+              insights.personalContext.suspensionReason == null) ...[
             const SizedBox(height: 10),
             _InsightWarning(
               key: Key(
@@ -1424,7 +1882,7 @@ class _MetricChip extends StatelessWidget {
           style: TextStyle(
             color: color,
             fontSize: 13,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -1484,7 +1942,7 @@ class _CycleCalendar extends StatelessWidget {
                   style: const TextStyle(
                     color: _navy,
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1507,7 +1965,7 @@ class _CycleCalendar extends StatelessWidget {
                     style: const TextStyle(
                       color: _muted,
                       fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -1617,6 +2075,7 @@ class _CalendarDay extends StatelessWidget {
       if (selected) 'sélectionné',
       if (future) 'date future',
       if (period) 'règles enregistrées',
+      if (entry?.isSpotting ?? false) 'spotting enregistré',
       if (predictedPeriod && !period)
         'date possible du début des prochaines règles, estimation',
       if (hasDetails) 'informations enregistrées',
@@ -1671,7 +2130,7 @@ class _CalendarDay extends StatelessWidget {
                   color: foreground,
                   fontSize: 12,
                   fontWeight: today || period
-                      ? FontWeight.w900
+                      ? FontWeight.w700
                       : FontWeight.w600,
                 ),
               ),
@@ -1740,12 +2199,17 @@ class _SelectedDayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final details = <String>[
+      if (entry?.isSpotting ?? false) 'Spotting',
       if (entry?.isPeriod ?? false)
         'Règles${entry!.flow.isEmpty ? '' : ' · ${_flowLabel(entry!.flow)}'}',
       if (entry?.symptoms.isNotEmpty ?? false)
         entry!.symptoms.map(_symptomLabel).join(', '),
       if (entry?.mood.isNotEmpty ?? false)
         'Humeur : ${_moodLabel(entry!.mood)}',
+      if (entry?.stressLevel != null)
+        'Stress : ${_stressLabel(entry!.stressLevel!)}',
+      if (entry?.sleepHours != null) 'Sommeil : ${entry!.sleepHours} h',
+      if (entry != null) ..._physiologyDetails(entry!),
     ];
     return Material(
       color: Colors.white,
@@ -1775,7 +2239,7 @@ class _SelectedDayCard extends StatelessWidget {
                   style: TextStyle(
                     color: entry?.isPeriod ?? false ? _rose : _purple,
                     fontSize: 19,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1788,7 +2252,7 @@ class _SelectedDayCard extends StatelessWidget {
                       _longDate(date),
                       style: const TextStyle(
                         color: _navy,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1838,7 +2302,7 @@ class _GettingStarted extends StatelessWidget {
           style: TextStyle(
             color: _navy,
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 8),
@@ -1874,7 +2338,7 @@ class _PeriodHistorySection extends StatelessWidget {
           style: TextStyle(
             color: _navy,
             fontSize: 20,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 5),
@@ -1915,7 +2379,7 @@ class _PeriodHistorySection extends StatelessWidget {
                               : '${_shortDate(episode.start)} – ${_longDate(episode.end)}',
                           style: const TextStyle(
                             color: _navy,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -1965,7 +2429,7 @@ class _HistorySection extends StatelessWidget {
           style: TextStyle(
             color: _navy,
             fontSize: 20,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 12),
@@ -2004,7 +2468,7 @@ class _HistorySection extends StatelessWidget {
                                   _longDate(entry.date),
                                   style: const TextStyle(
                                     color: _navy,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 const SizedBox(height: 3),
@@ -2038,6 +2502,7 @@ class _HistorySection extends StatelessWidget {
 
 String _entrySummary(CycleEntry entry) {
   final details = <String>[];
+  if (entry.isSpotting) details.add('Spotting');
   if (entry.isPeriod) {
     details.add(
       'Règles${entry.flow.isEmpty ? '' : ' · ${_flowLabel(entry.flow)}'}',
@@ -2047,9 +2512,37 @@ String _entrySummary(CycleEntry entry) {
     details.add(entry.symptoms.map(_symptomLabel).join(', '));
   }
   if (entry.mood.isNotEmpty) details.add(_moodLabel(entry.mood));
+  if (entry.stressLevel != null) {
+    details.add('Stress : ${_stressLabel(entry.stressLevel!)}');
+  }
+  if (entry.sleepHours != null) details.add('Sommeil : ${entry.sleepHours} h');
+  details.addAll(_physiologyDetails(entry));
   if (entry.note.isNotEmpty) details.add(entry.note);
   return details.join(' · ');
 }
+
+List<String> _physiologyDetails(CycleEntry entry) => [
+  if (entry.basalTemperatureC != null)
+    '${entry.basalTemperatureC!.toStringAsFixed(2).replaceAll('.', ',')} °C${entry.temperatureDisturbed ? ' · mesure perturbée' : ''}',
+  if (entry.lhTest.isNotEmpty) 'LH : ${_lhTestLabel(entry.lhTest)}',
+  if (entry.cervicalMucus.isNotEmpty)
+    'Glaire : ${_mucusLabel(entry.cervicalMucus)}',
+];
+
+String _lhTestLabel(String value) => switch (value) {
+  'negative' => 'Négatif',
+  'positive' => 'Positif',
+  _ => value,
+};
+
+String _mucusLabel(String value) => switch (value) {
+  'dry' => 'Sèche',
+  'sticky' => 'Collante',
+  'creamy' => 'Crémeuse',
+  'watery' => 'Aqueuse',
+  'stretchy' => 'Filante',
+  _ => value,
+};
 
 class _MedicalNotice extends StatelessWidget {
   const _MedicalNotice();
@@ -2291,7 +2784,7 @@ class _PeriodRangeFormState extends State<_PeriodRangeForm> {
                         style: const TextStyle(
                           color: _navy,
                           fontSize: 23,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 5),
@@ -2346,7 +2839,7 @@ class _PeriodRangeFormState extends State<_PeriodRangeForm> {
                 activeTrackColor: _rose,
                 title: const Text(
                   'Mes règles sont toujours en cours',
-                  style: TextStyle(color: _navy, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: _navy, fontWeight: FontWeight.w600),
                 ),
                 subtitle: const Text(
                   'Vous pourrez modifier la date de fin lorsqu’elles seront terminées.',
@@ -2464,7 +2957,7 @@ class _RangeDateTile extends StatelessWidget {
                     value,
                     style: const TextStyle(
                       color: _navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -2490,8 +2983,13 @@ class _EntryFormResult {
 class _CycleEntryForm extends StatefulWidget {
   final DateTime date;
   final CycleEntry? entry;
+  final Future<void> Function(_EntryFormResult) onSubmit;
 
-  const _CycleEntryForm({required this.date, required this.entry});
+  const _CycleEntryForm({
+    required this.date,
+    required this.entry,
+    required this.onSubmit,
+  });
 
   @override
   State<_CycleEntryForm> createState() => _CycleEntryFormState();
@@ -2499,10 +2997,21 @@ class _CycleEntryForm extends StatefulWidget {
 
 class _CycleEntryFormState extends State<_CycleEntryForm> {
   late bool _isPeriod;
+  late bool _isSpotting;
+  late int? _stressLevel;
+  late final TextEditingController _sleepController;
+  String? _sleepError;
+  late final TextEditingController _temperatureController;
+  late bool _temperatureDisturbed;
+  late String _lhTest;
+  late String _cervicalMucus;
+  String? _temperatureError;
   late String _flow;
   late Set<String> _symptoms;
   late String _mood;
   late final TextEditingController _noteController;
+  bool _saving = false;
+  String? _saveError;
 
   static const _flows = ['light', 'medium', 'heavy'];
   static const _availableSymptoms = [
@@ -2521,6 +3030,17 @@ class _CycleEntryFormState extends State<_CycleEntryForm> {
   void initState() {
     super.initState();
     _isPeriod = widget.entry?.isPeriod ?? false;
+    _isSpotting = widget.entry?.isSpotting ?? false;
+    _stressLevel = widget.entry?.stressLevel;
+    _sleepController = TextEditingController(
+      text: widget.entry?.sleepHours?.toString() ?? '',
+    );
+    _temperatureController = TextEditingController(
+      text: widget.entry?.basalTemperatureC?.toString() ?? '',
+    );
+    _temperatureDisturbed = widget.entry?.temperatureDisturbed ?? false;
+    _lhTest = widget.entry?.lhTest ?? '';
+    _cervicalMucus = widget.entry?.cervicalMucus ?? '';
     _flow = widget.entry?.flow ?? 'medium';
     _symptoms = {...?widget.entry?.symptoms};
     _mood = widget.entry?.mood ?? '';
@@ -2530,12 +3050,42 @@ class _CycleEntryFormState extends State<_CycleEntryForm> {
   @override
   void dispose() {
     _noteController.dispose();
+    _sleepController.dispose();
+    _temperatureController.dispose();
     super.dispose();
   }
 
-  void _save() {
-    Navigator.pop(
-      context,
+  Future<void> _save() async {
+    if (_saving) return;
+    final temperatureText = _temperatureController.text.trim().replaceAll(
+      ',',
+      '.',
+    );
+    final temperature = temperatureText.isEmpty
+        ? null
+        : double.tryParse(temperatureText);
+    if (temperatureText.isNotEmpty &&
+        (temperature == null ||
+            !temperature.isFinite ||
+            temperature < 34 ||
+            temperature > 42)) {
+      setState(
+        () =>
+            _temperatureError = 'Saisissez une température entre 34 et 42 °C.',
+      );
+      return;
+    }
+    final sleepText = _sleepController.text.trim().replaceAll(',', '.');
+    final sleepHours = sleepText.isEmpty ? null : double.tryParse(sleepText);
+    if (sleepText.isNotEmpty &&
+        (sleepHours == null ||
+            !sleepHours.isFinite ||
+            sleepHours < 0 ||
+            sleepHours > 24)) {
+      setState(() => _sleepError = 'Saisissez une durée entre 0 et 24 h.');
+      return;
+    }
+    await _submit(
       _EntryFormResult.save(
         CycleEntry(
           id: widget.entry?.id ?? cycleDateKey(widget.date),
@@ -2545,12 +3095,50 @@ class _CycleEntryFormState extends State<_CycleEntryForm> {
           symptoms: _symptoms.toList()..sort(),
           mood: _mood,
           note: _noteController.text.trim(),
+          isSpotting: _isSpotting,
+          stressLevel: _stressLevel,
+          sleepHours: sleepHours,
+          basalTemperatureC: temperature,
+          temperatureDisturbed: temperature != null && _temperatureDisturbed,
+          lhTest: _lhTest,
+          cervicalMucus: _cervicalMucus,
         ),
       ),
     );
   }
 
+  Future<void> _submit(_EntryFormResult result) async {
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    try {
+      await widget.onSubmit(result);
+      if (mounted) {
+        setState(() => _saving = false);
+        Navigator.pop(context);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _saveError = error is StateError && error.message == 'Patient changed'
+              ? 'Le compte a changé. Fermez ce formulaire.'
+              : error is SupabaseDataException &&
+                    error.code.contains('permission')
+              ? 'L’accès à votre suivi de cycle n’est pas autorisé.'
+              : result.delete
+              ? 'Impossible de supprimer cette journée. Réessayez.'
+              : 'Enregistrement impossible. Réessayez.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _confirmDelete() async {
+    if (_saving) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2572,218 +3160,372 @@ class _CycleEntryFormState extends State<_CycleEntryForm> {
       ),
     );
     if (confirmed == true && mounted) {
-      Navigator.pop(context, const _EntryFormResult.delete());
+      await _submit(const _EntryFormResult.delete());
     }
   }
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: const BoxDecoration(
-      color: _canvas,
-      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-    ),
-    child: DraggableScrollableSheet(
-      initialChildSize: .9,
-      minChildSize: .65,
-      maxChildSize: .96,
-      expand: false,
-      builder: (context, scrollController) => Column(
-        children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 42,
-            height: 4,
-            decoration: BoxDecoration(
-              color: const Color(0xFFCCD3DE),
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(22, 17, 22, 30),
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_saving,
+    child: AbsorbPointer(
+      absorbing: _saving,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: _canvas,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: DraggableScrollableSheet(
+          initialChildSize: .9,
+          minChildSize: .65,
+          maxChildSize: .96,
+          expand: false,
+          builder: (context, scrollController) => Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCD3DE),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(22, 17, 22, 30),
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _longDate(widget.date),
-                            style: const TextStyle(
-                              color: _navy,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                            ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _longDate(widget.date),
+                                style: const TextStyle(
+                                  color: _navy,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Comment vous sentez-vous ?',
+                                style: TextStyle(color: _muted),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Comment vous sentez-vous ?',
-                            style: TextStyle(color: _muted),
+                        ),
+                        IconButton(
+                          tooltip: 'Fermer',
+                          onPressed: _saving
+                              ? null
+                              : () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: _border),
+                      ),
+                      child: SwitchListTile.adaptive(
+                        key: const Key('cycle-period-toggle'),
+                        value: _isPeriod,
+                        contentPadding: EdgeInsets.zero,
+                        activeTrackColor: _rose,
+                        title: const Text(
+                          'Inclure ce jour dans mes règles',
+                          style: TextStyle(
+                            color: _navy,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
+                        ),
+                        subtitle: const Text(
+                          'Correction ponctuelle d’un jour de la période.',
+                        ),
+                        secondary: const Icon(
+                          Icons.water_drop_outlined,
+                          color: _rose,
+                        ),
+                        onChanged: (value) => setState(() {
+                          _isPeriod = value;
+                          if (value) _isSpotting = false;
+                        }),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Fermer',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
+                    SwitchListTile.adaptive(
+                      key: const Key('cycle-spotting-toggle'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Spotting'),
+                      value: _isSpotting,
+                      onChanged: (value) => setState(() {
+                        _isSpotting = value;
+                        if (value) _isPeriod = false;
+                      }),
                     ),
+                    if (_isPeriod) ...[
+                      const SizedBox(height: 22),
+                      const _FormHeading('Intensité du flux'),
+                      const SizedBox(height: 9),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _flows
+                            .map(
+                              (flow) => ChoiceChip(
+                                key: Key('cycle-flow-$flow'),
+                                label: Text(_flowLabel(flow)),
+                                selected: _flow == flow,
+                                selectedColor: _roseSoft,
+                                side: BorderSide(
+                                  color: _flow == flow ? _rose : _border,
+                                ),
+                                onSelected: (_) => setState(() => _flow = flow),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    const _FormHeading('Symptômes'),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'Sélectionnez tout ce qui s’applique.',
+                      style: TextStyle(color: _muted, fontSize: 13),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _availableSymptoms
+                          .map(
+                            (symptom) => FilterChip(
+                              key: Key('cycle-symptom-$symptom'),
+                              label: Text(_symptomLabel(symptom)),
+                              selected: _symptoms.contains(symptom),
+                              selectedColor: _purpleSoft,
+                              checkmarkColor: _purple,
+                              side: BorderSide(
+                                color: _symptoms.contains(symptom)
+                                    ? _purple
+                                    : _border,
+                              ),
+                              onSelected: (selected) => setState(
+                                () => selected
+                                    ? _symptoms.add(symptom)
+                                    : _symptoms.remove(symptom),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 24),
+                    const _FormHeading('Humeur'),
+                    const SizedBox(height: 9),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _moods
+                          .map(
+                            (mood) => ChoiceChip(
+                              key: Key('cycle-mood-$mood'),
+                              label: Text(_moodLabel(mood)),
+                              selected: _mood == mood,
+                              selectedColor: _tealSoft,
+                              side: BorderSide(
+                                color: _mood == mood ? _teal : _border,
+                              ),
+                              onSelected: (selected) =>
+                                  setState(() => _mood = selected ? mood : ''),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 24),
+                    const _FormHeading('Stress'),
+                    const SizedBox(height: 9),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (var level = 0; level <= 3; level++)
+                          ChoiceChip(
+                            key: Key('cycle-stress-$level'),
+                            label: Text(_stressLabel(level)),
+                            selected: _stressLevel == level,
+                            onSelected: (selected) => setState(
+                              () => _stressLevel = selected ? level : null,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      key: const Key('cycle-sleep-hours'),
+                      controller: _sleepController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Sommeil',
+                        suffixText: 'heures',
+                        errorText: _sleepError,
+                      ),
+                      onChanged: (_) {
+                        if (_sleepError != null) {
+                          setState(() => _sleepError = null);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    ExpansionTile(
+                      key: const Key('cycle-physiology-fields'),
+                      tilePadding: EdgeInsets.zero,
+                      initiallyExpanded:
+                          widget.entry?.hasPhysiologyDetails ?? false,
+                      title: const _FormHeading('Observations du cycle'),
+                      children: [
+                        const SizedBox(height: 12),
+                        TextField(
+                          key: const Key('cycle-basal-temperature'),
+                          controller: _temperatureController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Température basale',
+                            suffixText: '°C',
+                            errorText: _temperatureError,
+                          ),
+                          onChanged: (_) {
+                            if (_temperatureError != null) {
+                              setState(() => _temperatureError = null);
+                            }
+                          },
+                        ),
+                        SwitchListTile.adaptive(
+                          key: const Key('cycle-temperature-disturbed'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Mesure perturbée'),
+                          value: _temperatureDisturbed,
+                          onChanged: (value) =>
+                              setState(() => _temperatureDisturbed = value),
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          key: const Key('cycle-lh-test'),
+                          initialValue: _lhTest,
+                          decoration: const InputDecoration(
+                            labelText: 'Test LH',
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: '',
+                              child: Text('Non renseigné'),
+                            ),
+                            for (final value in ['negative', 'positive'])
+                              DropdownMenuItem(
+                                value: value,
+                                child: Text(_lhTestLabel(value)),
+                              ),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _lhTest = value ?? ''),
+                        ),
+                        const SizedBox(height: 18),
+                        DropdownButtonFormField<String>(
+                          key: const Key('cycle-cervical-mucus'),
+                          initialValue: _cervicalMucus,
+                          decoration: const InputDecoration(
+                            labelText: 'Glaire cervicale',
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: '',
+                              child: Text('Non renseignée'),
+                            ),
+                            for (final value in [
+                              'dry',
+                              'sticky',
+                              'creamy',
+                              'watery',
+                              'stretchy',
+                            ])
+                              DropdownMenuItem(
+                                value: value,
+                                child: Text(_mucusLabel(value)),
+                              ),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _cervicalMucus = value ?? ''),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    const _FormHeading('Note personnelle'),
+                    const SizedBox(height: 9),
+                    TextField(
+                      key: const Key('cycle-note-field'),
+                      controller: _noteController,
+                      maxLength: 500,
+                      minLines: 3,
+                      maxLines: 5,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        hintText:
+                            'Douleur, énergie, sommeil ou autre observation…',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_saveError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _saveError!,
+                          key: const Key('cycle-entry-save-error'),
+                          style: const TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    FilledButton.icon(
+                      key: const Key('cycle-save-entry'),
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _purple,
+                        minimumSize: const Size.fromHeight(54),
+                      ),
+                      icon: const Icon(Icons.check_rounded),
+                      label: Text(
+                        _saving ? 'Enregistrement…' : 'Enregistrer la journée',
+                      ),
+                    ),
+                    if (widget.entry != null) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _saving ? null : _confirmDelete,
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('Supprimer cette journée'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 22),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 15,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: _border),
-                  ),
-                  child: SwitchListTile.adaptive(
-                    key: const Key('cycle-period-toggle'),
-                    value: _isPeriod,
-                    contentPadding: EdgeInsets.zero,
-                    activeTrackColor: _rose,
-                    title: const Text(
-                      'Inclure ce jour dans mes règles',
-                      style: TextStyle(
-                        color: _navy,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    subtitle: const Text(
-                      'Correction ponctuelle d’un jour de la période.',
-                    ),
-                    secondary: const Icon(
-                      Icons.water_drop_outlined,
-                      color: _rose,
-                    ),
-                    onChanged: (value) => setState(() => _isPeriod = value),
-                  ),
-                ),
-                if (_isPeriod) ...[
-                  const SizedBox(height: 22),
-                  const _FormHeading('Intensité du flux'),
-                  const SizedBox(height: 9),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _flows
-                        .map(
-                          (flow) => ChoiceChip(
-                            key: Key('cycle-flow-$flow'),
-                            label: Text(_flowLabel(flow)),
-                            selected: _flow == flow,
-                            selectedColor: _roseSoft,
-                            side: BorderSide(
-                              color: _flow == flow ? _rose : _border,
-                            ),
-                            onSelected: (_) => setState(() => _flow = flow),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                const _FormHeading('Symptômes'),
-                const SizedBox(height: 5),
-                const Text(
-                  'Sélectionnez tout ce qui s’applique.',
-                  style: TextStyle(color: _muted, fontSize: 13),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _availableSymptoms
-                      .map(
-                        (symptom) => FilterChip(
-                          key: Key('cycle-symptom-$symptom'),
-                          label: Text(_symptomLabel(symptom)),
-                          selected: _symptoms.contains(symptom),
-                          selectedColor: _purpleSoft,
-                          checkmarkColor: _purple,
-                          side: BorderSide(
-                            color: _symptoms.contains(symptom)
-                                ? _purple
-                                : _border,
-                          ),
-                          onSelected: (selected) => setState(
-                            () => selected
-                                ? _symptoms.add(symptom)
-                                : _symptoms.remove(symptom),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 24),
-                const _FormHeading('Humeur'),
-                const SizedBox(height: 9),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _moods
-                      .map(
-                        (mood) => ChoiceChip(
-                          key: Key('cycle-mood-$mood'),
-                          label: Text(_moodLabel(mood)),
-                          selected: _mood == mood,
-                          selectedColor: _tealSoft,
-                          side: BorderSide(
-                            color: _mood == mood ? _teal : _border,
-                          ),
-                          onSelected: (selected) =>
-                              setState(() => _mood = selected ? mood : ''),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 24),
-                const _FormHeading('Note personnelle'),
-                const SizedBox(height: 9),
-                TextField(
-                  key: const Key('cycle-note-field'),
-                  controller: _noteController,
-                  maxLength: 500,
-                  minLines: 3,
-                  maxLines: 5,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    hintText: 'Douleur, énergie, sommeil ou autre observation…',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  key: const Key('cycle-save-entry'),
-                  onPressed: _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _purple,
-                    minimumSize: const Size.fromHeight(54),
-                  ),
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('Enregistrer la journée'),
-                ),
-                if (widget.entry != null) ...[
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: _confirmDelete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    label: const Text('Supprimer cette journée'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -2799,7 +3541,7 @@ class _FormHeading extends StatelessWidget {
     style: const TextStyle(
       color: _navy,
       fontSize: 16,
-      fontWeight: FontWeight.w900,
+      fontWeight: FontWeight.w700,
     ),
   );
 }
@@ -2821,6 +3563,18 @@ String _symptomLabel(String value) => switch (value) {
   'nausea' => 'Nausée',
   'acne' => 'Acné',
   _ => value,
+};
+
+String _stressLabel(int value) =>
+    ['Faible', 'Modéré', 'Élevé', 'Très élevé'][value.clamp(0, 3)];
+
+String _signalLabel(String value) => switch (value) {
+  'highStress' => 'Stress élevé',
+  'shortSleep' => 'Sommeil court',
+  _ =>
+    value.startsWith('mood:')
+        ? _moodLabel(value.substring(5))
+        : _symptomLabel(value),
 };
 
 String _moodLabel(String value) => switch (value) {
@@ -2858,7 +3612,7 @@ class _PageFeedback extends StatelessWidget {
             style: const TextStyle(
               color: _navy,
               fontSize: 20,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),

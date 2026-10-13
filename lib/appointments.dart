@@ -834,7 +834,7 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
                                       color: selected
                                           ? Colors.white
                                           : _appointmentNavy,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ],
@@ -870,7 +870,7 @@ class _AppointmentBookingPageState extends State<AppointmentBookingPage> {
                               color: slot == _selectedSlot
                                   ? Colors.white
                                   : _appointmentNavy,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                             backgroundColor: Colors.white,
                             side: const BorderSide(color: _appointmentBorder),
@@ -991,7 +991,7 @@ class _BookingProviderCard extends StatelessWidget {
                 style: const TextStyle(
                   color: _appointmentNavy,
                   fontSize: 17,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 3),
@@ -1134,7 +1134,7 @@ class _AppointmentModeOption extends StatelessWidget {
                       mode.label,
                       style: const TextStyle(
                         color: _appointmentNavy,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1228,7 +1228,7 @@ class _PaymentMethodSelector extends StatelessWidget {
           selectedColor: _appointmentPrimary,
           labelStyle: TextStyle(
             color: selectedMethod == method ? Colors.white : _appointmentNavy,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
           backgroundColor: Colors.white,
           side: const BorderSide(color: _appointmentBorder),
@@ -1259,7 +1259,7 @@ class _BookingHeading extends StatelessWidget {
           number,
           style: const TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -1270,7 +1270,7 @@ class _BookingHeading extends StatelessWidget {
           style: const TextStyle(
             color: _appointmentNavy,
             fontSize: 18,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -1428,7 +1428,7 @@ class _PatientAppointmentEditPageState
                             selectedColor: _appointmentPrimary,
                             labelStyle: TextStyle(
                               color: selected ? Colors.white : _appointmentNavy,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                             backgroundColor: Colors.white,
                             side: const BorderSide(color: _appointmentBorder),
@@ -1456,7 +1456,7 @@ class _PatientAppointmentEditPageState
                               color: slot == _selectedSlot
                                   ? Colors.white
                                   : _appointmentNavy,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                             backgroundColor: Colors.white,
                             side: const BorderSide(color: _appointmentBorder),
@@ -1534,12 +1534,14 @@ class PatientAppointmentsPage extends StatefulWidget {
   final String patientId;
   final Stream<List<Appointment>>? appointmentStream;
   final PatientAppointmentRepository? repository;
+  final VoidCallback? onVideoCallsTap;
 
   const PatientAppointmentsPage({
     super.key,
     required this.patientId,
     this.appointmentStream,
     this.repository,
+    this.onVideoCallsTap,
   });
 
   @override
@@ -1694,12 +1696,29 @@ class _PatientAppointmentsPageState extends State<PatientAppointmentsPage> {
       key: const ValueKey('patient-appointments-page'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Rendez-vous',
-          style: TextStyle(
-            color: _appointmentNavy,
-            fontSize: 27,
-            fontWeight: FontWeight.w900,
+        SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 12,
+            children: [
+              const Text(
+                'Rendez-vous',
+                style: TextStyle(
+                  color: _appointmentNavy,
+                  fontSize: 27,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (widget.onVideoCallsTap != null)
+                OutlinedButton.icon(
+                  onPressed: widget.onVideoCallsTap,
+                  icon: const Icon(Icons.videocam_outlined),
+                  label: const Text('Appels vidéo'),
+                ),
+            ],
           ),
         ),
         const SizedBox(height: 7),
@@ -1851,7 +1870,7 @@ class _PatientAppointmentCard extends StatelessWidget {
                       style: const TextStyle(
                         color: _appointmentNavy,
                         fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (appointment.service.isNotEmpty)
@@ -1873,7 +1892,7 @@ class _PatientAppointmentCard extends StatelessWidget {
                   style: TextStyle(
                     color: statusColor,
                     fontSize: 11,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -2041,7 +2060,7 @@ class _AppointmentMessage extends StatelessWidget {
           style: const TextStyle(
             color: _appointmentNavy,
             fontSize: 17,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 5),

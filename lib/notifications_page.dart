@@ -494,7 +494,7 @@ class _NotificationSummary extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -647,7 +647,7 @@ class _NotificationTile extends StatelessWidget {
                           fontSize: 15.5,
                           fontWeight: notification.isRead
                               ? FontWeight.w700
-                              : FontWeight.w800,
+                              : FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 5),
@@ -686,7 +686,7 @@ class _NotificationTile extends StatelessWidget {
                                 style: const TextStyle(
                                   color: _primary,
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -776,7 +776,7 @@ class _EmptyNotifications extends StatelessWidget {
             style: const TextStyle(
               color: _navy,
               fontSize: 18,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 7),

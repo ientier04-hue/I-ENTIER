@@ -1039,63 +1039,69 @@ class _PathwayPickerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Que ressentez-vous ?')),
-    body: GridView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: MediaQuery.sizeOf(context).width >= 760 ? 3 : 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: MediaQuery.sizeOf(context).width < 360 ? .76 : .84,
-      ),
-      itemCount: pathways.length,
-      itemBuilder: (context, index) {
-        final pathway = pathways[index];
-        return Card(
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: Key('pathway-${pathway.id}'),
-            onTap: () => Navigator.of(context).pop(pathway),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: Container(
-                        width: 76,
-                        height: 76,
-                        decoration: BoxDecoration(
-                          color: pathway.color.withValues(alpha: .12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          pathway.icon,
-                          color: pathway.color,
-                          size: 38,
+    body: LayoutBuilder(
+      builder: (context, constraints) => GridView.builder(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: constraints.maxWidth >= 760
+              ? 3
+              : constraints.maxWidth >= 340
+              ? 2
+              : 1,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          mainAxisExtent: 124 + MediaQuery.textScalerOf(context).scale(100),
+        ),
+        itemCount: pathways.length,
+        itemBuilder: (context, index) {
+          final pathway = pathways[index];
+          return Card(
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: Key('pathway-${pathway.id}'),
+              onTap: () => Navigator.of(context).pop(pathway),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: Container(
+                          width: 76,
+                          height: 76,
+                          decoration: BoxDecoration(
+                            color: pathway.color.withValues(alpha: .12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            pathway.icon,
+                            color: pathway.color,
+                            size: 38,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Text(
-                    pathway.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    pathway.subtitle,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                    Text(
+                      pathway.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      pathway.subtitle,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     ),
   );
 }
@@ -1126,9 +1132,13 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   late SymptomAssessmentRecord _assessment = widget.initialAssessment;
   Set<String> _selectedOptionIds = {};
   bool _saving = false;
+  bool _showingEmergencyDecision = false;
+  bool _hasSyncError = false;
+  String? _editingQuestionId;
   final FlutterTts _tts = FlutterTts();
 
   AssessmentQuestion get _question =>
+      widget.pathway.questionById(_editingQuestionId) ??
       widget.pathway.questionById(_assessment.currentQuestionId) ??
       _engine.nextQuestion(widget.pathway, _assessment.answers) ??
       widget.pathway.questions.first;
@@ -1136,6 +1146,23 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   @override
   void initState() {
     super.initState();
+    final answers = _engine.reconcileAnswers(
+      widget.pathway,
+      _assessment.answers,
+    );
+    final savedQuestion = widget.pathway.questionById(
+      _assessment.currentQuestionId,
+    );
+    final current =
+        savedQuestion != null &&
+            savedQuestion.appliesTo(_engine.answerTags(widget.pathway, answers))
+        ? savedQuestion
+        : _engine.nextQuestion(widget.pathway, answers);
+    _assessment = _assessment.copyWith(
+      answers: answers,
+      currentQuestionId: current?.id,
+      clearCurrentQuestion: current == null,
+    );
     _selectedOptionIds = _decodeSelected(_assessment.answers[_question.id]);
     unawaited(_configureTts());
   }
@@ -1154,9 +1181,11 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   }
 
   bool _isNeutralOption(AssessmentOption option) =>
-      option.id == 'none' || option.tags.isEmpty;
+      const {'none', 'unsure', 'unknown'}.contains(option.id) ||
+      option.tags.isEmpty;
 
   void _toggleOption(AssessmentOption option) {
+    if (_saving) return;
     setState(() {
       if (!_question.allowMultiple) {
         _selectedOptionIds = {option.id};
@@ -1200,6 +1229,14 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
         .where((option) => _selectedOptionIds.contains(option.id))
         .toList(growable: false);
     final text = [
+      ..._engine.immediateActions(
+        widget.pathway,
+        _engine.reconcileAnswers(widget.pathway, {
+          ..._assessment.answers,
+          if (_selectedOptionIds.isNotEmpty)
+            _question.id: _encodeSelected(_question),
+        }),
+      ),
       _question.prompt,
       if (_question.allowMultiple) 'Plusieurs réponses sont possibles.',
       'Choix proposés.',
@@ -1228,13 +1265,17 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
 
   Future<void> _confirm() async {
     if (_selectedOptionIds.isEmpty || _saving) return;
-    final answers = Map<String, String>.of(_assessment.answers)
-      ..[_question.id] = _encodeSelected(_question);
+    final question = _question;
+    final answers = _engine.reconcileAnswers(widget.pathway, {
+      ..._assessment.answers,
+      question.id: _encodeSelected(question),
+    });
+    setState(() => _saving = true);
     final now = DateTime.now();
     final next = _engine.nextQuestion(
       widget.pathway,
       answers,
-      afterQuestionId: _question.id,
+      afterQuestionId: question.id,
     );
     final evaluated = _engine.evaluate(
       widget.pathway,
@@ -1254,18 +1295,22 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
     final becameEmergency =
         evaluated.urgency == AssessmentUrgency.emergency &&
         !previousWasEmergency;
+    final needsImmediateAdvice =
+        evaluated.immediateActions.isNotEmpty &&
+        _engine.immediateActions(widget.pathway, _assessment.answers).isEmpty;
 
     var stopNow = false;
-    if (becameEmergency) {
+    if (becameEmergency || needsImmediateAdvice) {
+      setState(() => _showingEmergencyDecision = true);
       final decision = await _showEmergencyDecision(
-        evaluated.redFlags,
+        evaluated,
         canContinue: next != null,
       );
       if (!mounted) return;
+      setState(() => _showingEmergencyDecision = false);
       stopNow = next == null || decision == _EmergencyDecision.stop;
     }
 
-    setState(() => _saving = true);
     final completed = stopNow || next == null;
     final result = completed ? evaluated : null;
     final updated = _assessment.copyWith(
@@ -1283,6 +1328,8 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
       setState(() {
         _assessment = updated;
         _saving = false;
+        _hasSyncError = false;
+        _editingQuestionId = null;
         _selectedOptionIds = next == null
             ? <String>{}
             : _decodeSelected(answers[next.id]);
@@ -1302,11 +1349,21 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _assessment = updated;
         _saving = false;
-        _selectedOptionIds = next == null
-            ? <String>{}
-            : _decodeSelected(answers[next.id]);
+        _hasSyncError = true;
+        if (completed) {
+          _assessment = updated;
+          _editingQuestionId = null;
+          _selectedOptionIds = {};
+        } else {
+          // Keep the confirmed answer locally, including any urgent signs,
+          // while staying on this question so the patient can retry the save.
+          _assessment = _assessment.copyWith(
+            answers: answers,
+            currentQuestionId: question.id,
+            clearResult: true,
+          );
+        }
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1333,7 +1390,7 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
   }
 
   Future<_EmergencyDecision> _showEmergencyDecision(
-    List<String> redFlags, {
+    AssessmentResult result, {
     required bool canContinue,
   }) async {
     final decision = await showDialog<_EmergencyDecision>(
@@ -1347,33 +1404,44 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
             color: Theme.of(dialogContext).colorScheme.error,
             size: 42,
           ),
-          title: const Text('Signe d’urgence détecté'),
-          content: Text(
-            'Une de vos réponses peut correspondre à une urgence médicale. '
-            'N’attendez pas si votre état est grave ou s’aggrave : appelez le '
-            '116 ou allez aux urgences.'
-            '${redFlags.isEmpty ? '' : '\n\nSigne d’alerte : ${redFlags.first}.'}'
-            '\n\nVous pouvez afficher l’orientation maintenant ou continuer '
-            'les questions sous votre responsabilité.',
+          title: Text(
+            result.urgency == AssessmentUrgency.emergency
+                ? 'Signe d’urgence détecté'
+                : 'Soins à obtenir sans attendre',
+          ),
+          content: SingleChildScrollView(
+            child: Text(
+              [
+                ...result.immediateActions,
+                if (result.urgency == AssessmentUrgency.emergency)
+                  'Une de vos réponses peut correspondre à une urgence médicale. Appelez le 116 ou allez aux urgences sans attendre.',
+                if (result.redFlags.isNotEmpty)
+                  'Signe d’alerte : ${result.redFlags.first}.',
+                'Vous pouvez afficher l’orientation maintenant ou continuer les questions sous votre responsabilité.',
+              ].join('\n\n'),
+            ),
           ),
           actions: [
-            TextButton.icon(
-              key: const Key('assessment-emergency-call'),
-              onPressed: () async {
-                final opened = await launchUrl(Uri(scheme: 'tel', path: '116'));
-                if (!opened && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Impossible d’ouvrir le téléphone. Composez manuellement le 116.',
-                      ),
-                    ),
+            if (result.urgency == AssessmentUrgency.emergency)
+              TextButton.icon(
+                key: const Key('assessment-emergency-call'),
+                onPressed: () async {
+                  final opened = await launchUrl(
+                    Uri(scheme: 'tel', path: '116'),
                   );
-                }
-              },
-              icon: const Icon(Icons.call_outlined),
-              label: const Text('Appeler le 116'),
-            ),
+                  if (!opened && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Impossible d’ouvrir le téléphone. Composez manuellement le 116.',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.call_outlined),
+                label: const Text('Appeler le 116'),
+              ),
             if (canContinue)
               TextButton(
                 key: const Key('assessment-emergency-continue'),
@@ -1460,60 +1528,110 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
     }
   }
 
-  Future<void> _goBackOneQuestion() async {
+  void _editAnswer(AssessmentQuestion question) {
     if (_saving) return;
-    final answered = widget.pathway.questions
-        .where((question) => _assessment.answers.containsKey(question.id))
-        .toList();
-    if (answered.isEmpty) {
+    setState(() {
+      _editingQuestionId = question.id;
+      _selectedOptionIds = _decodeSelected(_assessment.answers[question.id]);
+    });
+  }
+
+  void _goBackOneQuestion() {
+    if (_saving) return;
+    final answered = _engine.answeredQuestions(
+      widget.pathway,
+      _assessment.answers,
+    );
+    final currentIndex = answered.indexWhere((item) => item.id == _question.id);
+    if (answered.isEmpty || currentIndex == 0) {
       Navigator.of(context).maybePop();
-      return;
+    } else {
+      _editAnswer(
+        answered[currentIndex < 0 ? answered.length - 1 : currentIndex - 1],
+      );
     }
-    final currentIndex = widget.pathway.questions.indexWhere(
-      (item) => item.id == _question.id,
+  }
+
+  Future<void> _showAnswers() async {
+    final answered = _engine.answeredQuestions(
+      widget.pathway,
+      _assessment.answers,
     );
-    final previous = answered.lastWhere(
-      (item) =>
-          widget.pathway.questions.indexWhere((q) => q.id == item.id) <
-          currentIndex,
-      orElse: () => answered.last,
+    final selected = await showModalBottomSheet<AssessmentQuestion>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .65,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Text(
+                  'Mes réponses',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 20),
+                  itemCount: answered.length,
+                  separatorBuilder: (_, _) => const Divider(indent: 64),
+                  itemBuilder: (context, index) {
+                    final question = answered[index];
+                    final selectedIds = _decodeSelected(
+                      _assessment.answers[question.id],
+                    );
+                    return ListTile(
+                      key: Key('review-answer-${question.id}'),
+                      leading: CircleAvatar(
+                        backgroundColor: widget.pathway.color.withValues(
+                          alpha: .12,
+                        ),
+                        foregroundColor: widget.pathway.color,
+                        child: Text('${index + 1}'),
+                      ),
+                      title: Text(question.title),
+                      subtitle: Text(
+                        question.options
+                            .where((option) => selectedIds.contains(option.id))
+                            .map((option) => option.label)
+                            .join(' · '),
+                      ),
+                      trailing: const Icon(Icons.edit_outlined, size: 20),
+                      onTap: () => Navigator.of(context).pop(question),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-    final previousIndex = widget.pathway.questions.indexWhere(
-      (item) => item.id == previous.id,
-    );
-    final answers = Map<String, String>.of(_assessment.answers)
-      ..removeWhere((questionId, _) {
-        final index = widget.pathway.questions.indexWhere(
-          (question) => question.id == questionId,
-        );
-        return index >= previousIndex;
-      });
-    final updated = _assessment.copyWith(
-      status: 'draft',
-      currentQuestionId: previous.id,
-      answers: answers,
-      clearResult: true,
-      updatedAt: DateTime.now(),
-    );
-    setState(() => _saving = true);
-    try {
-      await widget.repository.save(updated);
-      if (!mounted) return;
-      setState(() {
-        _assessment = updated;
-        _selectedOptionIds = {};
-        _saving = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-    }
+    if (mounted && selected != null) _editAnswer(selected);
   }
 
   @override
   Widget build(BuildContext context) {
     final question = _question;
+    final immediateActions = _engine.immediateActions(
+      widget.pathway,
+      _engine.reconcileAnswers(widget.pathway, {
+        ..._assessment.answers,
+        if (_selectedOptionIds.isNotEmpty)
+          question.id: _encodeSelected(question),
+      }),
+    );
     final progress = _engine.progress(widget.pathway, _assessment.answers);
+    final isLastQuestion =
+        _selectedOptionIds.isNotEmpty &&
+        _engine.nextQuestion(widget.pathway, {
+              ..._assessment.answers,
+              question.id: _encodeSelected(question),
+            }, afterQuestionId: question.id) ==
+            null;
     final hasEmergencyAnswer =
         _assessment.answers.isNotEmpty &&
         _engine
@@ -1535,7 +1653,14 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
           ),
           title: Text(widget.pathway.title),
           actions: [
-            if (_saving)
+            if (_assessment.answers.isNotEmpty)
+              IconButton(
+                key: const Key('assessment-review-answers'),
+                tooltip: 'Mes réponses',
+                onPressed: _saving ? null : _showAnswers,
+                icon: const Icon(Icons.account_tree_outlined),
+              ),
+            if (_saving && !_showingEmergencyDecision)
               const Padding(
                 padding: EdgeInsets.only(right: 18),
                 child: SizedBox.square(
@@ -1544,23 +1669,30 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                 ),
               )
             else
-              const Padding(
-                padding: EdgeInsets.only(right: 16),
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
                 child: Tooltip(
-                  message: 'Progression synchronisée',
+                  message: _hasSyncError
+                      ? 'Réponse non synchronisée'
+                      : 'Progression synchronisée',
                   child: Icon(
-                    Icons.cloud_done_outlined,
-                    color: AppColors.success,
+                    _hasSyncError
+                        ? Icons.cloud_off_outlined
+                        : Icons.cloud_done_outlined,
+                    color: _hasSyncError
+                        ? Theme.of(context).colorScheme.error
+                        : AppColors.success,
                   ),
                 ),
               ),
           ],
         ),
         body: SafeArea(
+          bottom: false,
           child: Column(
             children: [
               LinearProgressIndicator(
-                value: progress == 0 ? .04 : progress / 100,
+                value: progress / 100,
                 minHeight: 7,
                 color: widget.pathway.color,
                 backgroundColor: widget.pathway.color.withValues(alpha: .12),
@@ -1570,7 +1702,7 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                 child: Row(
                   children: [
                     Text(
-                      'Progression : ${math.max(1, progress)} %',
+                      'Progression : $progress %',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const Spacer(),
@@ -1605,6 +1737,18 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                     key: ValueKey(question.id),
                     padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
                     children: [
+                      for (final action in immediateActions)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            action,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1670,7 +1814,7 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                           color: widget.pathway.color,
                           selected: _selectedOptionIds.contains(option.id),
                           multiSelect: question.allowMultiple,
-                          onTap: () => _toggleOption(option),
+                          onTap: _saving ? null : () => _toggleOption(option),
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -1678,26 +1822,31 @@ class _QuestionnairePageState extends State<_QuestionnairePage> {
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-                decoration: const BoxDecoration(
-                  color: AppColors.surface,
-                  border: Border(top: BorderSide(color: AppColors.border)),
-                ),
-                child: FilledButton.icon(
-                  key: const Key('assessment-confirm-answer'),
-                  onPressed: _selectedOptionIds.isEmpty || _saving
-                      ? null
-                      : _confirm,
-                  icon: const Icon(Icons.check_rounded),
-                  label: Text(
-                    _selectedOptionIds.isEmpty
-                        ? 'Choisissez une réponse'
-                        : 'Confirmer et continuer',
-                  ),
-                ),
-              ),
             ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(top: BorderSide(color: AppColors.border)),
+            ),
+            child: FilledButton.icon(
+              key: const Key('assessment-confirm-answer'),
+              onPressed: _selectedOptionIds.isEmpty || _saving
+                  ? null
+                  : _confirm,
+              icon: const Icon(Icons.check_rounded),
+              label: Text(
+                _selectedOptionIds.isEmpty
+                    ? 'Choisissez une réponse'
+                    : isLastQuestion
+                    ? 'Voir l’orientation'
+                    : 'Confirmer et continuer',
+              ),
+            ),
           ),
         ),
       ),
@@ -1749,7 +1898,7 @@ class _AnswerOptionCard extends StatelessWidget {
   final Color color;
   final bool selected;
   final bool multiSelect;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _AnswerOptionCard({
     super.key,
     required this.option,
@@ -1844,14 +1993,19 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
     final result = widget.result;
     final text = [
       result.urgency.label,
-      result.urgency.description,
+      result.summary ?? result.urgency.description,
+      ...result.immediateActions,
       if (result.redFlags.isNotEmpty) 'Signes d’alerte.',
       ...result.redFlags,
-      'Possibilités compatibles.',
-      for (final match in result.matches)
-        '${match.title}, ${match.compatibilityLabel}. ${match.explanation}',
       'Prochaines étapes.',
       ...result.nextSteps,
+      'Possibilités à vérifier.',
+      for (final match in result.matches)
+        '${match.title}, ${match.compatibilityLabel}. ${match.explanation}. ${match.supportingAnswers.join('. ')}',
+      if (result.selfCare.isNotEmpty) 'En attendant.',
+      ...result.selfCare,
+      if (result.pharmacyAdvice.isNotEmpty) 'Conseils en pharmacie.',
+      ...result.pharmacyAdvice,
     ].join('. ');
     try {
       if (widget.onSpeak != null) {
@@ -1940,7 +2094,14 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
                   ).textTheme.headlineSmall?.copyWith(color: urgencyColor),
                 ),
                 const SizedBox(height: 7),
-                Text(result.urgency.description),
+                Text(result.summary ?? result.urgency.description),
+                for (final action in result.immediateActions) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    action,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
                 if (result.urgency == AssessmentUrgency.emergency) ...[
                   const SizedBox(height: 16),
                   FilledButton.icon(
@@ -1962,8 +2123,15 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
               icon: Icons.report_gmailerrorred_outlined,
               title: 'Signes d’alerte détectés',
               items: result.redFlags,
+              color: urgencyColor,
             ),
           ],
+          _ResultSection(
+            icon: Icons.route_outlined,
+            title: 'Ce que vous devriez faire',
+            items: result.nextSteps,
+          ),
+          const SizedBox(height: 24),
           Text(
             'Possibilités à vérifier',
             style: Theme.of(context).textTheme.titleLarge,
@@ -1978,11 +2146,6 @@ class _AssessmentResultPageState extends State<_AssessmentResultPage> {
             _CompatibilityCard(match: match),
             const SizedBox(height: 10),
           ],
-          _ResultSection(
-            icon: Icons.route_outlined,
-            title: 'Ce que vous devriez faire',
-            items: result.nextSteps,
-          ),
           if (result.contextNotes.isNotEmpty)
             _ResultSection(
               icon: Icons.manage_accounts_outlined,
@@ -2040,14 +2203,9 @@ class _CompatibilityCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Text(match.title, style: Theme.of(context).textTheme.titleMedium),
+          Wrap(
             children: [
-              Expanded(
-                child: Text(
-                  match.title,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
               Chip(
                 avatar: Icon(
                   match.urgentReason
@@ -2061,6 +2219,10 @@ class _CompatibilityCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(match.explanation),
+          for (final answer in match.supportingAnswers) ...[
+            const SizedBox(height: 8),
+            Text('• $answer', style: Theme.of(context).textTheme.bodySmall),
+          ],
         ],
       ),
     ),
@@ -2071,10 +2233,12 @@ class _ResultSection extends StatelessWidget {
   final IconData icon;
   final String title;
   final List<String> items;
+  final Color? color;
   const _ResultSection({
     required this.icon,
     required this.title,
     required this.items,
+    this.color,
   });
 
   @override
@@ -2085,7 +2249,7 @@ class _ResultSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, color: AppColors.primary),
+            Icon(icon, color: color ?? AppColors.primary),
             const SizedBox(width: 9),
             Expanded(
               child: Text(title, style: Theme.of(context).textTheme.titleLarge),
@@ -2102,12 +2266,14 @@ class _ResultSection extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.only(top: 3),
                         child: Icon(
-                          Icons.check_circle_outline,
+                          color != null
+                              ? Icons.warning_amber_rounded
+                              : Icons.chevron_right_rounded,
                           size: 20,
-                          color: AppColors.success,
+                          color: color ?? AppColors.primary,
                         ),
                       ),
                       const SizedBox(width: 10),
