@@ -103,6 +103,15 @@ class _PatientVaultPageState extends State<PatientVaultPage> {
               icon: const Icon(Icons.download),
               label: const Text('Télécharger ma carte privée'),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Mémoriser sur cet appareil'),
+              value: vault.deviceRemembered,
+              onChanged: _busy
+                  ? null
+                  : (remember) =>
+                        _run(() => vault.setDeviceRemembered(remember)),
+            ),
             const SizedBox(height: 28),
             Text(
               'Autoriser une consultation',

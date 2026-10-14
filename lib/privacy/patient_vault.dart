@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'vault_crypto.dart';
+import 'vault_device_store.dart';
 import 'vault_schema.dart';
 
 class VaultLocked implements Exception {
@@ -15,7 +15,7 @@ class VaultLocked implements Exception {
 }
 
 class PatientVault {
-  PatientVault._(this.client) {
+  PatientVault._(this.client, this._deviceStore) {
     client.auth.onAuthStateChange.listen((event) {
       if (event.event == AuthChangeEvent.signedOut ||
           event.session?.user.id != _recovery?.patientId) {
@@ -24,18 +24,19 @@ class PatientVault {
     });
   }
   static final _instances = Expando<PatientVault>();
-  factory PatientVault(SupabaseClient client) =>
-      _instances[client] ??= PatientVault._(client);
-  final SupabaseClient client;
-  static const _storage = FlutterSecureStorage(
-    iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.unlocked_this_device,
-    ),
-    mOptions: MacOsOptions(
-      accessibility: KeychainAccessibility.unlocked_this_device,
-    ),
+  factory PatientVault(
+    SupabaseClient client, {
+    VaultDeviceStore? deviceStore,
+  }) => _instances[client] ??= PatientVault._(
+    client,
+    deviceStore ?? VaultDeviceStore.create(),
   );
+  final SupabaseClient client;
+  final VaultDeviceStore _deviceStore;
   VaultRecovery? _recovery;
+  bool _deviceRemembered = false;
+  bool deviceStorageFailed = false;
+  bool get deviceRemembered => unlocked && _deviceRemembered;
   final changes = StreamController<void>.broadcast();
   final _queues = <String, Future<void>>{};
   String get userId =>
@@ -47,6 +48,7 @@ class PatientVault {
   void lock() {
     _recovery?.destroy();
     _recovery = null;
+    _deviceRemembered = false;
     changes.add(null);
   }
 
@@ -71,16 +73,46 @@ class PatientVault {
 
   Future<bool> restoreDevice() async {
     if (unlocked) return true;
-    // A browser never persists the recovery secret (including localStorage).
-    if (kIsWeb) return false;
     final id = userId;
-    final code = await _storage.read(key: 'ientier.vault.v1.$id');
-    if (code == null || userId != id) return false;
-    await unlock(code);
-    return true;
+    try {
+      final code = await _deviceStore.read(id);
+      if (code == null || userId != id) return false;
+      await _openCard(code);
+      if (!unlocked || userId != id) return false;
+      _deviceRemembered = true;
+      return true;
+    } catch (_) {
+      // Private browsing, cleared storage, stale cards and temporary network
+      // failures fall back to the card without deleting its local copy.
+      return false;
+    }
   }
 
-  Future<void> unlock(String code) async {
+  Future<void> setDeviceRemembered(bool remember) async {
+    final card = recovery;
+    if (remember) {
+      await _deviceStore.write(card.patientId, card.code);
+    } else {
+      await _deviceStore.delete(card.patientId);
+    }
+    _check(card);
+    _deviceRemembered = remember;
+    changes.add(null);
+  }
+
+  Future<void> unlock(String code, {bool? rememberDevice}) async {
+    await _openCard(code);
+    deviceStorageFailed = false;
+    try {
+      await setDeviceRemembered(rememberDevice ?? !kIsWeb);
+    } catch (_) {
+      // A storage failure must not reject a valid card or block this session.
+      deviceStorageFailed = true;
+    }
+    if (!unlocked) throw const VaultLocked();
+  }
+
+  Future<void> _openCard(String code) async {
     final card = VaultRecovery.parse(code);
     try {
       if (card.patientId != userId) throw const VaultLocked();
@@ -98,12 +130,6 @@ class PatientVault {
       }
       lock();
       _recovery = card;
-      if (!kIsWeb) {
-        await _storage.write(
-          key: 'ientier.vault.v1.${card.patientId}',
-          value: card.code,
-        );
-      }
       _check(card);
       changes.add(null);
     } catch (_) {
@@ -114,7 +140,7 @@ class PatientVault {
 
   /// Activation encrypts locally, then atomically replaces the exported legacy
   /// snapshot. A changed snapshot aborts the transaction, without deleting data.
-  Future<void> activate(VaultRecovery card) async {
+  Future<void> activate(VaultRecovery card, {bool? rememberDevice}) async {
     if (card.patientId != userId) throw const VaultLocked();
     final exported = Map<String, dynamic>.from(
       await client.schema('ientier').rpc('vault_export_legacy'),
@@ -178,8 +204,17 @@ class PatientVault {
             'p_collections': sealed,
           },
         );
-    await unlock(card.code);
-    await removeLegacyFiles();
+    await unlock(card.code, rememberDevice: rememberDevice);
+    await retryLegacyFileCleanup();
+  }
+
+  /// Failed deletion is retried next time; it must never relock a valid vault.
+  Future<void> retryLegacyFileCleanup() async {
+    try {
+      await removeLegacyFiles();
+    } catch (_) {
+      // The verified encrypted copy remains authoritative.
+    }
   }
 
   Future<void> removeLegacyFiles() async {

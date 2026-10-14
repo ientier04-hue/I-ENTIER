@@ -30,6 +30,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Verify encrypted vault
+        run: |
+          flutter test test/patient_vault_test.dart test/vault_workflow_test.dart test/vault_crypto_test.dart
+          flutter test --platform chrome test/vault_device_store_web_test.dart
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:

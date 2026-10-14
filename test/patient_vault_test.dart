@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:i_entier/privacy/patient_vault.dart';
 import 'package:i_entier/privacy/vault_crypto.dart';
+import 'package:i_entier/privacy/vault_device_store.dart';
 import 'package:i_entier/privacy/vault_table.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -143,4 +144,147 @@ void main() {
       );
     },
   );
+  test(
+    'remembered device survives reopening and token refresh, and can be forgotten',
+    () async {
+      final card = VaultRecovery.create(patient);
+      final check = await VaultCrypto.seal(
+        'ientier-vault-v1',
+        card.key,
+        '$patient:${card.vaultId}:key-check',
+      );
+      Future<http.Response> handler(http.Request r) async {
+        expect(r.body, isNot(contains(card.code)));
+        expect(r.url.path, endsWith('/patient_vaults'));
+        return http.Response(
+          jsonEncode([
+            {
+              'patient_id': patient,
+              'vault_id': card.vaultId,
+              'key_check': check,
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      final firstClient = await clientFor(handler);
+      addTearDown(firstClient.dispose);
+      final first = PatientVault(firstClient);
+      await first.unlock(card.code, rememberDevice: true);
+      expect(first.deviceRemembered, true);
+      final inMemoryKey = first.recovery;
+      await firstClient.auth.refreshSession();
+      expect(first.recovery, same(inMemoryKey));
+      first.lock();
+
+      // A new client/vault has no previous in-memory recovery key.
+      final nextClient = await clientFor(handler);
+      addTearDown(nextClient.dispose);
+      final next = PatientVault(nextClient);
+      expect(next.unlocked, false);
+      expect(await next.restoreDevice(), true);
+      expect(next.recovery.code, card.code);
+      expect(next.deviceRemembered, true);
+      await next.setDeviceRemembered(false);
+      expect(next.unlocked, true);
+      next.lock();
+      expect(await next.restoreDevice(), false);
+      expect(next.unlocked, false);
+    },
+  );
+  test(
+    'unavailable local storage still permits a valid card for the session',
+    () async {
+      final card = VaultRecovery.create(patient);
+      final check = await VaultCrypto.seal(
+        'ientier-vault-v1',
+        card.key,
+        '$patient:${card.vaultId}:key-check',
+      );
+      final client = await clientFor(
+        (r) async => http.Response(
+          jsonEncode([
+            {
+              'patient_id': patient,
+              'vault_id': card.vaultId,
+              'key_check': check,
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+      addTearDown(client.dispose);
+      final vault = PatientVault(
+        client,
+        deviceStore: _UnavailableDeviceStore(),
+      );
+      expect(await vault.restoreDevice(), false);
+      await vault.unlock(card.code, rememberDevice: true);
+      expect(vault.unlocked, true);
+      expect(vault.deviceRemembered, false);
+      expect(vault.deviceStorageFailed, true);
+    },
+  );
+  test(
+    'legacy attachment cleanup failure does not require the card again',
+    () async {
+      final card = VaultRecovery.create(patient);
+      final check = await VaultCrypto.seal(
+        'ientier-vault-v1',
+        card.key,
+        '$patient:${card.vaultId}:key-check',
+      );
+      final files = await VaultCrypto.seal(
+        [
+          {'path': 'prescriptions/$patient/legacy.pdf', 'bytes': 'YWJj'},
+        ],
+        card.key,
+        '$patient:${card.vaultId}:files',
+      );
+      var deleteAttempts = 0;
+      final client = await clientFor((r) async {
+        if (r.method == 'DELETE') {
+          deleteAttempts++;
+          return http.Response('{"error":"Unavailable"}', 503);
+        }
+        final rows = r.url.path.endsWith('/patient_vaults')
+            ? [
+                {
+                  'patient_id': patient,
+                  'vault_id': card.vaultId,
+                  'key_check': check,
+                },
+              ]
+            : [
+                {'payload': files, 'revision': 1},
+              ];
+        return http.Response(
+          jsonEncode(rows),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      addTearDown(client.dispose);
+      final vault = PatientVault(client);
+      await vault.unlock(card.code, rememberDevice: false);
+      await vault.retryLegacyFileCleanup();
+      await vault.retryLegacyFileCleanup();
+      expect(deleteAttempts, 2);
+      expect(vault.unlocked, true);
+      expect(await VaultDeviceStore.create().read(patient), isNull);
+    },
+  );
+}
+
+class _UnavailableDeviceStore implements VaultDeviceStore {
+  @override
+  Future<String?> read(String patientId) async => throw StateError('blocked');
+  @override
+  Future<void> write(String patientId, String code) async =>
+      throw StateError('quota');
+  @override
+  Future<void> delete(String patientId) async => throw StateError('blocked');
 }

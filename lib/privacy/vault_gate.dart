@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -18,6 +19,7 @@ class _VaultGateState extends State<VaultGate> {
   final _code = TextEditingController();
   VaultRecovery? _newCard;
   bool _loading = true, _exists = true, _busy = false, _downloaded = false;
+  bool _rememberDevice = !kIsWeb;
   String? _error;
   @override
   void initState() {
@@ -34,14 +36,34 @@ class _VaultGateState extends State<VaultGate> {
 
   Future<void> _load() async {
     try {
-      _exists = await vault.metadata() != null;
+      _exists = vault.unlocked || await vault.metadata() != null;
       if (_exists) await vault.restoreDevice();
-      if (vault.unlocked) await vault.removeLegacyFiles();
+      if (vault.unlocked) await vault.retryLegacyFileCleanup();
       if (!_exists) _newCard = VaultRecovery.create(vault.userId);
     } catch (_) {
       _error = 'Accès au coffre impossible. Réessayez.';
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  Widget _rememberChoice() => CheckboxListTile(
+    contentPadding: EdgeInsets.zero,
+    controlAffinity: ListTileControlAffinity.leading,
+    title: const Text('Mémoriser sur cet appareil'),
+    value: _rememberDevice,
+    onChanged: _busy
+        ? null
+        : (value) => setState(() => _rememberDevice = value!),
+  );
+
+  void _storageFeedback() {
+    if (mounted && vault.deviceStorageFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mémorisation indisponible sur cet appareil.'),
+        ),
+      );
+    }
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -66,7 +88,7 @@ class _VaultGateState extends State<VaultGate> {
     return StreamBuilder<void>(
       stream: vault.changes.stream,
       builder: (context, _) {
-        if (vault.unlocked && _error == null) return widget.child;
+        if (vault.unlocked) return widget.child;
         return Scaffold(
           appBar: AppBar(
             title: const Text('Mon coffre'),
@@ -148,6 +170,7 @@ class _VaultGateState extends State<VaultGate> {
                                 '6 derniers caractères du code de la carte',
                           ),
                         ),
+                        if (kIsWeb) _rememberChoice(),
                         const SizedBox(height: 12),
                         FilledButton(
                           onPressed: _busy
@@ -158,7 +181,11 @@ class _VaultGateState extends State<VaultGate> {
                                       code.substring(code.length - 6)) {
                                     throw const FormatException();
                                   }
-                                  await vault.activate(_newCard!);
+                                  await vault.activate(
+                                    _newCard!,
+                                    rememberDevice: _rememberDevice,
+                                  );
+                                  _storageFeedback();
                                 }),
                           child: const Text('Activer mon coffre'),
                         ),
@@ -173,13 +200,18 @@ class _VaultGateState extends State<VaultGate> {
                           labelText: 'Code de ma carte privée',
                         ),
                       ),
+                      if (kIsWeb) _rememberChoice(),
                       const SizedBox(height: 16),
                       FilledButton(
                         onPressed: _busy
                             ? null
                             : () => _run(() async {
-                                await vault.unlock(_code.text);
-                                await vault.removeLegacyFiles();
+                                await vault.unlock(
+                                  _code.text,
+                                  rememberDevice: _rememberDevice,
+                                );
+                                _storageFeedback();
+                                await vault.retryLegacyFileCleanup();
                               }),
                         child: const Text('Déverrouiller'),
                       ),
