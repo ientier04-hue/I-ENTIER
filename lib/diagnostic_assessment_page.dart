@@ -1,3 +1,4 @@
+import 'privacy/vault_table.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -142,23 +143,23 @@ class SupabaseSymptomAssessmentRepository
   SupabaseClient get _client => SupabaseConfig.client;
 
   @override
-  Stream<List<SymptomAssessmentRecord>> watch(String patientId) => _client
-      .schema('ientier')
-      .from('symptom_assessments')
-      .stream(primaryKey: ['assessment_id'])
-      .eq('patient_id', patientId)
-      .order('started_at', ascending: false)
-      .map(
-        (rows) =>
-            rows.map(SymptomAssessmentRecord.fromRow).toList(growable: false),
-      );
+  Stream<List<SymptomAssessmentRecord>> watch(String patientId) =>
+      VaultTable(_client, 'symptom_assessments')
+          .stream(primaryKey: ['assessment_id'])
+          .eq('patient_id', patientId)
+          .order('started_at', ascending: false)
+          .map(
+            (rows) => rows
+                .map(SymptomAssessmentRecord.fromRow)
+                .toList(growable: false),
+          );
 
   @override
   Future<void> save(SymptomAssessmentRecord assessment) async {
-    await _client
-        .schema('ientier')
-        .from('symptom_assessments')
-        .upsert(assessment.toRow(), onConflict: 'assessment_id');
+    await VaultTable(
+      _client,
+      'symptom_assessments',
+    ).upsert(assessment.toRow(), onConflict: 'assessment_id');
   }
 
   @override
@@ -185,9 +186,7 @@ class SupabaseSymptomAssessmentRepository
 
     if (consents['measurements'] == true) {
       final rows = List<Map<String, dynamic>>.from(
-        await _client
-            .schema('ientier')
-            .from('health_measurements')
+        await VaultTable(_client, 'health_measurements')
             .select('kind,value,secondary_value,unit,measured_at')
             .eq('patient_id', patientId)
             .order('measured_at', ascending: false)
@@ -214,9 +213,7 @@ class SupabaseSymptomAssessmentRepository
 
     if (consents['cycle'] == true) {
       context['recentCycleEntries'] = List<Map<String, dynamic>>.from(
-        await _client
-            .schema('ientier')
-            .from('cycle_entries')
+        await VaultTable(_client, 'cycle_entries')
             .select('entry_date,is_period,flow,mood')
             .eq('patient_id', patientId)
             .order('entry_date', ascending: false)
@@ -226,9 +223,7 @@ class SupabaseSymptomAssessmentRepository
 
     if (consents['mood'] == true) {
       context['recentMoodEntries'] = List<Map<String, dynamic>>.from(
-        await _client
-            .schema('ientier')
-            .from('mental_health_entries')
+        await VaultTable(_client, 'mental_health_entries')
             .select('mood,mood_score,created_at')
             .eq('patient_id', patientId)
             .order('created_at', ascending: false)

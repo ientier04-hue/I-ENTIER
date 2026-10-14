@@ -1,3 +1,4 @@
+import '../privacy/vault_table.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -34,9 +35,7 @@ class _ConsultationDocumentsPageState extends State<ConsultationDocumentsPage> {
         client.auth.currentUser?.id != widget.patientId) {
       throw StateError('Session requise');
     }
-    var query = client
-        .schema('ientier')
-        .from('consultation_documents')
+    var query = VaultTable(client, 'consultation_documents')
         .select(
           'document_id,patient_name,provider_name,kind,payload,created_at',
         )
@@ -63,7 +62,9 @@ class _ConsultationDocumentsPageState extends State<ConsultationDocumentsPage> {
 
   Future<void> _refresh() async {
     final future = _load();
-    setState(() { _documents = future; });
+    setState(() {
+      _documents = future;
+    });
     try {
       await future;
     } catch (_) {

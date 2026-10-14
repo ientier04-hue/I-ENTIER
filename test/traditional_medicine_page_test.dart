@@ -127,6 +127,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(900, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _FakeRepository();
+    var accessOpened = false;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -134,6 +135,7 @@ void main() {
           patientId: 'patient-1',
           patientName: 'Marie Patient',
           repository: repository,
+          onManageAccess: () => accessOpened = true,
         ),
       ),
     );
@@ -157,7 +159,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('traditional-share-journal')));
     await tester.pumpAndSettle();
-    expect(repository.sharingEnabled, isTrue);
+    expect(accessOpened, isTrue);
+    expect(repository.sharingEnabled, isNull);
 
     await tester.tap(find.byKey(const Key('traditional-book-practitioner')));
     await tester.pumpAndSettle();
@@ -188,7 +191,7 @@ void main() {
 
     await tester.tap(find.text('Mon carnet'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Privé par défaut'), findsOneWidget);
+    expect(find.text('Gérer les autorisations'), findsOneWidget);
     await tester.tap(find.byKey(const Key('traditional-add-journal-entry')));
     await tester.pumpAndSettle();
     await tester.enterText(

@@ -1,3 +1,6 @@
+import 'privacy/vault_page.dart';
+import 'privacy/vault_crypto.dart';
+import 'privacy/vault_table.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -356,9 +359,7 @@ class SupabaseTraditionalMedicineRepository
 
   @override
   Stream<List<NaturalHealthJournalEntry>> watchJournal(String patientId) =>
-      client
-          .schema('ientier')
-          .from('natural_health_journal_entries')
+      VaultTable(client, 'natural_health_journal_entries')
           .stream(primaryKey: ['entry_id'])
           .eq('patient_id', patientId)
           .order('occurred_at', ascending: false)
@@ -406,9 +407,7 @@ class SupabaseTraditionalMedicineRepository
   @override
   Stream<List<TraditionalPatientRecommendation>> watchRecommendations(
     String patientId,
-  ) => client
-      .schema('ientier')
-      .from('traditional_prevention_recommendations')
+  ) => VaultTable(client, 'traditional_prevention_recommendations')
       .stream(primaryKey: ['recommendation_id'])
       .eq('patient_id', patientId)
       .order('created_at', ascending: false)
@@ -421,9 +420,7 @@ class SupabaseTraditionalMedicineRepository
   @override
   Stream<List<TraditionalCareOrientation>> watchOrientations(
     String patientId,
-  ) => client
-      .schema('ientier')
-      .from('traditional_care_orientations')
+  ) => VaultTable(client, 'traditional_care_orientations')
       .stream(primaryKey: ['orientation_id'])
       .eq('patient_id', patientId)
       .order('created_at', ascending: false)
@@ -441,7 +438,7 @@ class SupabaseTraditionalMedicineRepository
     String details,
     String productName,
     int? wellnessRating,
-  ) => client.schema('ientier').from('natural_health_journal_entries').insert({
+  ) => VaultTable(client, 'natural_health_journal_entries').insert({
     'patient_id': patientId,
     'entry_type': type.databaseValue,
     'title': title,
@@ -460,22 +457,30 @@ class SupabaseTraditionalMedicineRepository
     required bool video,
     required DateTime scheduledAt,
     required String note,
-  }) => client.schema('ientier').from('appointments').insert({
-    'patient_id': patientId,
-    'patient_name_snapshot': patientName,
-    'provider_id': practitioner.id,
-    'provider_type_snapshot': 'professional',
-    'provider_name_snapshot': practitioner.name,
-    'service_name_snapshot': 'Accompagnement traditionnel de bien-être',
-    'mode': video ? 'video' : 'inPerson',
-    'location': video ? 'À distance dans I-Entier' : practitioner.address,
-    'scheduled_at': scheduledAt.toUtc().toIso8601String(),
-    'schedule_label': practitioner.schedule.isEmpty
-        ? 'Créneau demandé par le patient'
-        : practitioner.schedule,
-    'status': 'pending',
-    'patient_note': note,
-  });
+  }) async {
+    final id = VaultCrypto.newId();
+    await VaultTable(
+      client,
+      'appointment_notes',
+    ).upsert({'appointment_id': id, 'patient_note': note});
+    await client.schema('ientier').from('appointments').insert({
+      'appointment_id': id,
+      'patient_id': patientId,
+      'patient_name_snapshot': patientName,
+      'provider_id': practitioner.id,
+      'provider_type_snapshot': 'professional',
+      'provider_name_snapshot': practitioner.name,
+      'service_name_snapshot': 'Accompagnement traditionnel de bien-être',
+      'mode': video ? 'video' : 'inPerson',
+      'location': video ? 'À distance dans I-Entier' : practitioner.address,
+      'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+      'schedule_label': practitioner.schedule.isEmpty
+          ? 'Créneau demandé par le patient'
+          : practitioner.schedule,
+      'status': 'pending',
+      'patient_note': '',
+    });
+  }
 
   @override
   Future<void> setJournalSharing({
@@ -491,16 +496,8 @@ class SupabaseTraditionalMedicineRepository
         .eq('practitioner_id', practitionerId)
         .filter('revoked_at', 'is', null)
         .maybeSingle();
-    if (enabled && active == null) {
-      await client
-          .schema('ientier')
-          .from('natural_health_sharing_grants')
-          .insert({
-            'patient_id': patientId,
-            'practitioner_id': practitionerId,
-            'can_view_journal': true,
-          });
-    } else if (!enabled && active != null) {
+    if (enabled) throw StateError('Une autorisation temporaire est requise.');
+    if (active != null) {
       await client
           .schema('ientier')
           .from('natural_health_sharing_grants')
@@ -524,9 +521,7 @@ class SupabaseTraditionalMedicineRepository
 
   @override
   Future<void> acceptOrientation(String orientationId, {bool booked = false}) =>
-      client
-          .schema('ientier')
-          .from('traditional_care_orientations')
+      VaultTable(client, 'traditional_care_orientations')
           .update({'status': booked ? 'booked' : 'accepted'})
           .eq('orientation_id', orientationId);
 }
@@ -545,6 +540,7 @@ class TraditionalMedicinePage extends StatefulWidget {
   final VoidCallback? onOpenCareDirectory;
   final VoidCallback? onOpenMobileClinic;
   final VoidCallback? onEmergency;
+  final VoidCallback? onManageAccess;
 
   const TraditionalMedicinePage({
     super.key,
@@ -561,6 +557,7 @@ class TraditionalMedicinePage extends StatefulWidget {
     this.onOpenCareDirectory,
     this.onOpenMobileClinic,
     this.onEmergency,
+    this.onManageAccess,
   });
 
   @override
@@ -676,7 +673,7 @@ class _TraditionalMedicinePageState extends State<TraditionalMedicinePage> {
                       recommendationStream: _recommendations,
                       grants: sharingSnapshot.data ?? const [],
                       onAdd: _addJournalEntry,
-                      onRevoke: _revokeGrant,
+                      onManageAccess: _manageAccess,
                     ),
                     2 => _PreventionSection(stream: _prevention),
                     _ => _OrientationsSection(
@@ -739,18 +736,7 @@ class _TraditionalMedicinePageState extends State<TraditionalMedicinePage> {
           Navigator.pop(context);
           _bookPractitioner(practitioner);
         },
-        onSharingChanged: (enabled) => _run(
-          () =>
-              _repository?.setJournalSharing(
-                patientId: widget.patientId,
-                practitionerId: practitioner.id,
-                enabled: enabled,
-              ) ??
-              Future.value(),
-          enabled
-              ? 'Partage du carnet activé. Vous pouvez le révoquer à tout moment.'
-              : 'Accès au carnet révoqué.',
-        ),
+        onManageAccess: _manageAccess,
         onReport: () {
           Navigator.pop(context);
           _reportPractitioner(practitioner);
@@ -832,16 +818,17 @@ class _TraditionalMedicinePageState extends State<TraditionalMedicinePage> {
     }
   }
 
-  Future<void> _revokeGrant(NaturalHealthSharingGrant grant) => _run(
-    () =>
-        _repository?.setJournalSharing(
-          patientId: widget.patientId,
-          practitionerId: grant.practitionerId,
-          enabled: false,
-        ) ??
-        Future.value(),
-    'Accès au carnet révoqué.',
-  );
+  void _manageAccess() {
+    if (widget.onManageAccess != null) {
+      widget.onManageAccess!();
+    } else if (SupabaseConfig.isInitialized) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PatientVaultPage(client: SupabaseConfig.client),
+        ),
+      );
+    }
+  }
 
   Future<void> _reportPractitioner(TraditionalPractitioner practitioner) async {
     final report = await showDialog<_ReportDraft>(
@@ -1311,21 +1298,25 @@ class _JournalSection extends StatelessWidget {
   final Stream<List<TraditionalPatientRecommendation>> recommendationStream;
   final List<NaturalHealthSharingGrant> grants;
   final VoidCallback onAdd;
-  final ValueChanged<NaturalHealthSharingGrant> onRevoke;
+  final VoidCallback onManageAccess;
 
   const _JournalSection({
     required this.stream,
     required this.recommendationStream,
     required this.grants,
     required this.onAdd,
-    required this.onRevoke,
+    required this.onManageAccess,
   });
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _PrivacyPanel(grants: grants, onRevoke: onRevoke),
+      OutlinedButton.icon(
+        onPressed: onManageAccess,
+        icon: const Icon(Icons.lock_outline),
+        label: const Text('Gérer les autorisations'),
+      ),
       const SizedBox(height: 16),
       Row(
         children: [
@@ -1467,66 +1458,6 @@ class _RecommendationCard extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
-class _PrivacyPanel extends StatelessWidget {
-  final List<NaturalHealthSharingGrant> grants;
-  final ValueChanged<NaturalHealthSharingGrant> onRevoke;
-  const _PrivacyPanel({required this.grants, required this.onRevoke});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(17),
-    decoration: BoxDecoration(
-      color: const Color(0xFFEAF0FF),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFFC8D5F5)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Row(
-          children: [
-            Icon(Icons.lock_rounded, color: Color(0xFF2457D6)),
-            SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                'Privé par défaut, partagé par vous uniquement',
-                style: TextStyle(
-                  color: Color(0xFF183B91),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-        Text(
-          grants.isEmpty
-              ? 'Aucun praticien n’a actuellement accès à votre carnet.'
-              : '${grants.length} accès actif${grants.length > 1 ? 's' : ''}. Vous pouvez les révoquer immédiatement.',
-          style: const TextStyle(color: Color(0xFF3E5796)),
-        ),
-        if (grants.isNotEmpty) ...[
-          const SizedBox(height: 9),
-          Wrap(
-            spacing: 8,
-            children: grants
-                .map(
-                  (grant) => ActionChip(
-                    key: ValueKey('revoke-sharing-${grant.practitionerId}'),
-                    avatar: const Icon(Icons.person_remove_outlined, size: 18),
-                    label: const Text('Révoquer un accès'),
-                    onPressed: () => onRevoke(grant),
-                  ),
-                )
-                .toList(growable: false),
           ),
         ],
       ],
@@ -1851,14 +1782,14 @@ class _PractitionerSheet extends StatefulWidget {
   final TraditionalPractitioner practitioner;
   final bool sharingEnabled;
   final VoidCallback onBook;
-  final ValueChanged<bool> onSharingChanged;
+  final VoidCallback onManageAccess;
   final VoidCallback onReport;
 
   const _PractitionerSheet({
     required this.practitioner,
     required this.sharingEnabled,
     required this.onBook,
-    required this.onSharingChanged,
+    required this.onManageAccess,
     required this.onReport,
   });
 
@@ -1867,8 +1798,6 @@ class _PractitionerSheet extends StatefulWidget {
 }
 
 class _PractitionerSheetState extends State<_PractitionerSheet> {
-  late bool _sharing = widget.sharingEnabled;
-
   @override
   Widget build(BuildContext context) {
     final p = widget.practitioner;
@@ -1982,22 +1911,11 @@ class _PractitionerSheetState extends State<_PractitionerSheet> {
               icon: Icons.person_outline,
             ),
           const SizedBox(height: 5),
-          SwitchListTile.adaptive(
+          OutlinedButton.icon(
             key: const ValueKey('traditional-share-journal'),
-            value: _sharing,
-            onChanged: (value) {
-              setState(() => _sharing = value);
-              widget.onSharingChanged(value);
-            },
-            activeTrackColor: _traditionalGreen,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            title: const Text(
-              'Partager mon carnet',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            subtitle: const Text(
-              'Accès révocable à tout moment depuis Mon carnet.',
-            ),
+            onPressed: widget.onManageAccess,
+            icon: const Icon(Icons.lock_outline),
+            label: const Text('Autoriser une consultation'),
           ),
           const SizedBox(height: 10),
           Container(

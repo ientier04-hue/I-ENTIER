@@ -48,6 +48,12 @@ dependencies:
   web: ^1.1.1
   webview_flutter_android: ^4.12.0
   livekit_client: 2.13.1
+  cryptography: 2.9.0
+  flutter_secure_storage: 11.2.0
+  pdf: 3.12.0
+  printing: 5.14.3
+  # Compatible with the archive version resolved by the application.
+  image: 4.5.4
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +65,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  http: 1.6.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

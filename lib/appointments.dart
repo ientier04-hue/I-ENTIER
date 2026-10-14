@@ -1,3 +1,4 @@
+import 'privacy/vault_table.dart';
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
@@ -342,6 +343,10 @@ class SupabasePatientAppointmentRepository
     required AppointmentPaymentMethod paymentMethod,
     required String location,
   }) async {
+    await VaultTable(SupabaseConfig.client, 'appointment_notes').upsert({
+      'appointment_id': appointment.id,
+      'patient_note': patientNote.trim(),
+    });
     await SupabaseConfig.client
         .schema('ientier')
         .rpc(
@@ -349,7 +354,7 @@ class SupabasePatientAppointmentRepository
           params: {
             'p_appointment_id': appointment.id,
             'p_scheduled_at': scheduledAt.toUtc().toIso8601String(),
-            'p_patient_note': patientNote.trim(),
+            'p_patient_note': '',
             'p_payment_method': paymentMethod.storageValue,
             'p_location': location.trim(),
           },
@@ -361,14 +366,15 @@ class SupabasePatientAppointmentRepository
     required Appointment appointment,
     required String reason,
   }) async {
+    await VaultTable(SupabaseConfig.client, 'appointment_notes').upsert({
+      'appointment_id': appointment.id,
+      'cancellation_note': reason.trim(),
+    });
     await SupabaseConfig.client
         .schema('ientier')
         .rpc(
           'patient_cancel_appointment',
-          params: {
-            'p_appointment_id': appointment.id,
-            'p_reason': reason.trim(),
-          },
+          params: {'p_appointment_id': appointment.id, 'p_reason': '[Chiffré]'},
         );
   }
 

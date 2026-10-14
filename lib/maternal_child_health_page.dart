@@ -1,3 +1,4 @@
+import 'privacy/vault_table.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -381,38 +382,28 @@ class SupabaseMaternalChildRepository implements MaternalChildRepository {
   @override
   Future<MaternalChildSnapshot> load(String patientId) async {
     final responses = await Future.wait<dynamic>([
-      _client
-          .schema('ientier')
-          .from('pregnancy_profiles')
+      VaultTable(_client, 'pregnancy_profiles')
           .select()
           .eq('patient_id', patientId)
           .eq('status', 'active')
           .order('updated_at', ascending: false)
           .limit(1),
-      _client
-          .schema('ientier')
-          .from('pregnancy_reminders')
-          .select()
-          .eq('patient_id', patientId)
-          .order('due_at'),
-      _client
-          .schema('ientier')
-          .from('child_profiles')
+      VaultTable(
+        _client,
+        'pregnancy_reminders',
+      ).select().eq('patient_id', patientId).order('due_at'),
+      VaultTable(_client, 'child_profiles')
           .select()
           .eq('guardian_patient_id', patientId)
           .order('birth_date', ascending: false),
-      _client
-          .schema('ientier')
-          .from('child_growth_records')
+      VaultTable(_client, 'child_growth_records')
           .select()
           .eq('guardian_patient_id', patientId)
           .order('measured_at', ascending: false),
-      _client
-          .schema('ientier')
-          .from('child_vaccination_records')
-          .select()
-          .eq('guardian_patient_id', patientId)
-          .order('due_on'),
+      VaultTable(
+        _client,
+        'child_vaccination_records',
+      ).select().eq('guardian_patient_id', patientId).order('due_on'),
     ]);
 
     List<Map<String, dynamic>> rows(int index) =>
@@ -430,28 +421,26 @@ class SupabaseMaternalChildRepository implements MaternalChildRepository {
   }
 
   @override
-  Future<void> savePregnancy(PregnancyProfile profile) => _client
-      .schema('ientier')
-      .from('pregnancy_profiles')
-      .upsert(profile.toRow(), onConflict: 'pregnancy_id');
+  Future<void> savePregnancy(PregnancyProfile profile) => VaultTable(
+    _client,
+    'pregnancy_profiles',
+  ).upsert(profile.toRow(), onConflict: 'pregnancy_id');
 
   @override
   Future<void> saveReminder(PregnancyReminder reminder) async {
-    await _client
-        .schema('ientier')
-        .from('pregnancy_reminders')
-        .upsert(reminder.toRow(), onConflict: 'reminder_id');
+    await VaultTable(
+      _client,
+      'pregnancy_reminders',
+    ).upsert(reminder.toRow(), onConflict: 'reminder_id');
     if (reminder.completed) {
-      await _client
-          .schema('ientier')
-          .from('notifications')
+      await VaultTable(_client, 'notifications')
           .delete()
           .eq('notification_id', reminder.id)
           .eq('patient_id', reminder.patientId);
       return;
     }
     final alertAt = reminder.dueAt.subtract(const Duration(days: 2));
-    await _client.schema('ientier').from('notifications').upsert({
+    await VaultTable(_client, 'notifications').upsert({
       'notification_id': reminder.id,
       'patient_id': reminder.patientId,
       'title': reminder.title,
@@ -467,34 +456,32 @@ class SupabaseMaternalChildRepository implements MaternalChildRepository {
   }
 
   @override
-  Future<void> saveChild(ChildProfile child) => _client
-      .schema('ientier')
-      .from('child_profiles')
-      .upsert(child.toRow(), onConflict: 'child_id');
+  Future<void> saveChild(ChildProfile child) => VaultTable(
+    _client,
+    'child_profiles',
+  ).upsert(child.toRow(), onConflict: 'child_id');
 
   @override
-  Future<void> saveGrowth(ChildGrowthRecord record) => _client
-      .schema('ientier')
-      .from('child_growth_records')
-      .upsert(record.toRow(), onConflict: 'growth_record_id');
+  Future<void> saveGrowth(ChildGrowthRecord record) => VaultTable(
+    _client,
+    'child_growth_records',
+  ).upsert(record.toRow(), onConflict: 'growth_record_id');
 
   @override
   Future<void> saveVaccination(ChildVaccinationRecord record) async {
-    await _client
-        .schema('ientier')
-        .from('child_vaccination_records')
-        .upsert(record.toRow(), onConflict: 'vaccination_record_id');
+    await VaultTable(
+      _client,
+      'child_vaccination_records',
+    ).upsert(record.toRow(), onConflict: 'vaccination_record_id');
     if (record.completed) {
-      await _client
-          .schema('ientier')
-          .from('notifications')
+      await VaultTable(_client, 'notifications')
           .delete()
           .eq('notification_id', record.id)
           .eq('patient_id', record.guardianPatientId);
       return;
     }
     final alertAt = record.dueOn.subtract(const Duration(days: 7));
-    await _client.schema('ientier').from('notifications').upsert({
+    await VaultTable(_client, 'notifications').upsert({
       'notification_id': record.id,
       'patient_id': record.guardianPatientId,
       'title': 'Vaccin à vérifier : ${record.vaccineName}',

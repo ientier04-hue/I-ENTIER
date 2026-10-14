@@ -1,3 +1,5 @@
+import 'privacy/vault_gate.dart';
+import 'privacy/vault_page.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -172,7 +174,11 @@ class _AccountBootstrapState extends State<AccountBootstrap> {
       if (snapshot.hasError) {
         return const _AccountAccessError();
       }
-      return PatientProfileGate(user: widget.user, account: snapshot.data!);
+      return VaultGate(
+        key: ValueKey('vault-${widget.user.uid}'),
+        client: SupabaseConfig.client,
+        child: PatientProfileGate(user: widget.user, account: snapshot.data!),
+      );
     },
   );
 }
@@ -2003,6 +2009,17 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             ),
                     ),
                     if (!widget.isOnboarding) ...[
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                PatientVaultPage(client: SupabaseConfig.client),
+                          ),
+                        ),
+                        icon: const Icon(Icons.lock_outline),
+                        label: const Text('Mon coffre'),
+                      ),
                       const SizedBox(height: 14),
                       OutlinedButton.icon(
                         onPressed: _signingOut ? null : _signOut,

@@ -1,3 +1,6 @@
+import 'privacy/vault_table.dart';
+import 'privacy/patient_vault.dart';
+import 'privacy/vault_schema.dart';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -88,12 +91,16 @@ class SupabaseDatabase {
 
   WriteBatch batch() => WriteBatch._();
 
+  dynamic _table(String table) => vaultPrimaryKeys.containsKey(table)
+      ? VaultTable(_client, table)
+      : _client.schema('ientier').from(table);
+
   Future<List<Map<String, dynamic>>> _loadRows(
     _CollectionSpec spec, {
     String? documentId,
   }) async {
     try {
-      dynamic query = _client.schema('ientier').from(spec.table).select();
+      dynamic query = _table(spec.table).select();
       if (spec.parentId != null) {
         query = query.eq(spec.parentColumn!, spec.parentId!);
       }
@@ -115,11 +122,10 @@ class SupabaseDatabase {
     int? limit,
   }) {
     try {
-      final filterBuilder = _client
-          .schema('ientier')
-          .from(spec.table)
-          .stream(primaryKey: [spec.primaryKey]);
-      late SupabaseStreamBuilder stream;
+      final filterBuilder = _table(
+        spec.table,
+      ).stream(primaryKey: [spec.primaryKey]);
+      late dynamic stream;
 
       if (spec.parentId != null) {
         stream = filterBuilder.eq(spec.parentColumn!, spec.parentId!);
@@ -141,7 +147,9 @@ class SupabaseDatabase {
       }
       if (limit != null) stream = stream.limit(limit);
 
-      return stream.asyncMap((rawRows) async {
+      return (stream as Stream<List<Map<String, dynamic>>>).asyncMap((
+        rawRows,
+      ) async {
         var rows = List<Map<String, dynamic>>.from(rawRows);
         if (spec.kind == _CollectionKind.publicProfessionals ||
             spec.kind == _CollectionKind.publicInstitutions) {
@@ -174,16 +182,21 @@ class SupabaseDatabase {
     _CollectionSpec spec,
     Map<String, dynamic> row,
   ) async {
+    if (spec.kind == _CollectionKind.appointments) {
+      final notes = await VaultTable(
+        _client,
+        'appointment_notes',
+      ).select().eq('appointment_id', row['appointment_id']).maybeSingle();
+      if (notes != null) row = {...row, ...notes};
+    }
     final converted = spec.fromRow(row);
     try {
       if (spec.kind == _CollectionKind.patientProfiles) {
         final patientId = row['patient_id'].toString();
-        final emergency = await _client
-            .schema('ientier')
-            .from('patient_emergency_contacts')
-            .select()
-            .eq('patient_id', patientId)
-            .maybeSingle();
+        final emergency = await VaultTable(
+          _client,
+          'patient_emergency_contacts',
+        ).select().eq('patient_id', patientId).maybeSingle();
         if (emergency is Map<String, dynamic>) {
           converted['emergencyContact'] = {
             'name': emergency['contact_name'] ?? '',
@@ -191,9 +204,7 @@ class SupabaseDatabase {
             'phone': emergency['phone'] ?? '',
           };
         }
-        final itemResponse = await _client
-            .schema('ientier')
-            .from('patient_medical_items')
+        final itemResponse = await VaultTable(_client, 'patient_medical_items')
             .select('item_type,label')
             .eq('patient_id', patientId)
             .eq('active', true);
@@ -210,23 +221,20 @@ class SupabaseDatabase {
               .toList(growable: false);
         }
       } else if (spec.kind == _CollectionKind.cycleEntries) {
-        final symptoms = await _client
-            .schema('ientier')
-            .from('cycle_entry_symptoms')
+        final symptoms = await VaultTable(_client, 'cycle_entry_symptoms')
             .select('symptom')
             .eq('cycle_entry_id', row['cycle_entry_id'].toString());
         converted['symptoms'] = List<Map<String, dynamic>>.from(
           symptoms,
         ).map((item) => item['symptom'].toString()).toList(growable: false);
       } else if (spec.kind == _CollectionKind.mentalHealthEntries) {
-        final feelings = await _client
-            .schema('ientier')
-            .from('mental_health_entry_feelings')
-            .select('feeling')
-            .eq(
-              'mental_health_entry_id',
-              row['mental_health_entry_id'].toString(),
-            );
+        final feelings =
+            await VaultTable(_client, 'mental_health_entry_feelings')
+                .select('feeling')
+                .eq(
+                  'mental_health_entry_id',
+                  row['mental_health_entry_id'].toString(),
+                );
         converted['feelings'] = List<Map<String, dynamic>>.from(
           feelings,
         ).map((item) => item['feeling'].toString()).toList(growable: false);
@@ -237,6 +245,26 @@ class SupabaseDatabase {
     return converted;
   }
 
+  Future<void> _sealAppointmentNotes(
+    _CollectionSpec spec,
+    String id,
+    Map<String, dynamic> row,
+  ) async {
+    if (spec.kind != _CollectionKind.appointments) return;
+    final notes = <String, dynamic>{
+      for (final key in ['patient_note', 'response_note', 'cancellation_note'])
+        if (row.containsKey(key)) key: row[key],
+    };
+    if (notes.isEmpty) return;
+    await VaultTable(
+      _client,
+      'appointment_notes',
+    ).upsert({'appointment_id': id, ...notes});
+    for (final key in notes.keys) {
+      row[key] = '';
+    }
+  }
+
   Future<void> _setDocument(
     _CollectionSpec spec,
     String id,
@@ -245,10 +273,8 @@ class SupabaseDatabase {
   }) async {
     try {
       final row = spec.toRow(id, data);
-      await _client
-          .schema('ientier')
-          .from(spec.table)
-          .upsert(row, onConflict: spec.primaryKey);
+      await _sealAppointmentNotes(spec, id, row);
+      await _table(spec.table).upsert(row, onConflict: spec.primaryKey);
       await _writeRelations(spec, id, data);
     } catch (error) {
       throw _translateError(error);
@@ -262,12 +288,9 @@ class SupabaseDatabase {
   ) async {
     try {
       final row = spec.toRow(id, data)..remove(spec.primaryKey);
+      await _sealAppointmentNotes(spec, id, row);
       if (row.isNotEmpty) {
-        await _client
-            .schema('ientier')
-            .from(spec.table)
-            .update(row)
-            .eq(spec.primaryKey, id);
+        await _table(spec.table).update(row).eq(spec.primaryKey, id);
       }
       await _writeRelations(spec, id, data);
     } catch (error) {
@@ -283,15 +306,12 @@ class SupabaseDatabase {
     if (spec.kind == _CollectionKind.patientProfiles) {
       final emergency = data['emergencyContact'];
       if (emergency is Map) {
-        await _client
-            .schema('ientier')
-            .from('patient_emergency_contacts')
-            .upsert({
-              'patient_id': id,
-              'contact_name': emergency['name']?.toString() ?? '',
-              'relationship': emergency['relationship']?.toString() ?? '',
-              'phone': emergency['phone']?.toString() ?? '',
-            }, onConflict: 'patient_id');
+        await VaultTable(_client, 'patient_emergency_contacts').upsert({
+          'patient_id': id,
+          'contact_name': emergency['name']?.toString() ?? '',
+          'relationship': emergency['relationship']?.toString() ?? '',
+          'phone': emergency['phone']?.toString() ?? '',
+        }, onConflict: 'patient_id');
       }
       for (final entry in const {
         'medicalConditions': 'condition',
@@ -300,12 +320,10 @@ class SupabaseDatabase {
         'previousSurgeries': 'surgery',
       }.entries) {
         if (!data.containsKey(entry.key)) continue;
-        await _client
-            .schema('ientier')
-            .from('patient_medical_items')
-            .delete()
-            .eq('patient_id', id)
-            .eq('item_type', entry.value);
+        await VaultTable(
+          _client,
+          'patient_medical_items',
+        ).delete().eq('patient_id', id).eq('item_type', entry.value);
         final values = data[entry.key];
         if (values is Iterable) {
           final rows = values
@@ -320,20 +338,16 @@ class SupabaseDatabase {
               )
               .toList();
           if (rows.isNotEmpty) {
-            await _client
-                .schema('ientier')
-                .from('patient_medical_items')
-                .insert(rows);
+            await VaultTable(_client, 'patient_medical_items').insert(rows);
           }
         }
       }
     } else if (spec.kind == _CollectionKind.cycleEntries &&
         data.containsKey('symptoms')) {
-      await _client
-          .schema('ientier')
-          .from('cycle_entry_symptoms')
-          .delete()
-          .eq('cycle_entry_id', id);
+      await VaultTable(
+        _client,
+        'cycle_entry_symptoms',
+      ).delete().eq('cycle_entry_id', id);
       final symptoms = data['symptoms'];
       if (symptoms is Iterable) {
         final rows = symptoms
@@ -342,19 +356,15 @@ class SupabaseDatabase {
             .map((symptom) => {'cycle_entry_id': id, 'symptom': symptom})
             .toList();
         if (rows.isNotEmpty) {
-          await _client
-              .schema('ientier')
-              .from('cycle_entry_symptoms')
-              .insert(rows);
+          await VaultTable(_client, 'cycle_entry_symptoms').insert(rows);
         }
       }
     } else if (spec.kind == _CollectionKind.mentalHealthEntries &&
         data.containsKey('feelings')) {
-      await _client
-          .schema('ientier')
-          .from('mental_health_entry_feelings')
-          .delete()
-          .eq('mental_health_entry_id', id);
+      await VaultTable(
+        _client,
+        'mental_health_entry_feelings',
+      ).delete().eq('mental_health_entry_id', id);
       final feelings = data['feelings'];
       if (feelings is Iterable) {
         final rows = feelings
@@ -365,10 +375,10 @@ class SupabaseDatabase {
             )
             .toList();
         if (rows.isNotEmpty) {
-          await _client
-              .schema('ientier')
-              .from('mental_health_entry_feelings')
-              .insert(rows);
+          await VaultTable(
+            _client,
+            'mental_health_entry_feelings',
+          ).insert(rows);
         }
       }
     }
@@ -376,11 +386,7 @@ class SupabaseDatabase {
 
   Future<void> _deleteDocument(_CollectionSpec spec, String id) async {
     try {
-      await _client
-          .schema('ientier')
-          .from(spec.table)
-          .delete()
-          .eq(spec.primaryKey, id);
+      await _table(spec.table).delete().eq(spec.primaryKey, id);
     } catch (error) {
       throw _translateError(error);
     }
@@ -576,6 +582,10 @@ class StorageReference {
 
   Future<void> putData(Uint8List bytes, [SettableMetadata? metadata]) async {
     try {
+      if (_bucket == 'prescriptions') {
+        await PatientVault(SupabaseConfig.client).putFile(fullPath, bytes);
+        return;
+      }
       await SupabaseConfig.client.storage
           .from(_bucket)
           .uploadBinary(
@@ -594,6 +604,10 @@ class StorageReference {
 
   Future<void> delete() async {
     try {
+      if (_bucket == 'prescriptions') {
+        await PatientVault(SupabaseConfig.client).deleteFile(fullPath);
+        return;
+      }
       await SupabaseConfig.client.storage.from(_bucket).remove([_objectPath]);
     } catch (error) {
       throw _translateError(error);
@@ -602,6 +616,7 @@ class StorageReference {
 
   Future<String> getDownloadURL() async {
     try {
+      if (_bucket == 'prescriptions') throw const VaultLocked();
       return await SupabaseConfig.client.storage
           .from(_bucket)
           .createSignedUrl(_objectPath, 3600);
@@ -612,6 +627,10 @@ class StorageReference {
 
   Future<Uint8List?> getData(int maxSize) async {
     try {
+      if (_bucket == 'prescriptions') {
+        final bytes = await PatientVault(SupabaseConfig.client).file(fullPath);
+        return bytes != null && bytes.length <= maxSize ? bytes : null;
+      }
       final bytes = await SupabaseConfig.client.storage
           .from(_bucket)
           .download(_objectPath);

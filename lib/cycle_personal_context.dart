@@ -1,3 +1,4 @@
+import 'privacy/vault_table.dart';
 import 'supabase_config.dart';
 
 enum CycleLifeStage {
@@ -115,32 +116,25 @@ abstract class CycleContextRepository {
 class SupabaseCycleContextRepository implements CycleContextRepository {
   @override
   Future<CyclePersonalContext> load(String patientId) async {
-    final row = await SupabaseConfig.client
-        .schema('ientier')
-        .from('cycle_personal_contexts')
-        .select()
-        .eq('patient_id', patientId)
-        .maybeSingle();
+    final row = await VaultTable(
+      SupabaseConfig.client,
+      'cycle_personal_contexts',
+    ).select().eq('patient_id', patientId).maybeSingle();
     if (row != null) return CyclePersonalContext.fromRow(row);
     // Reuse an explicitly recorded pregnancy when setting up cycle tracking.
     // A subsequently saved cycle context remains the user's current choice.
-    final profile = await SupabaseConfig.client
-        .schema('ientier')
-        .from('patient_profiles')
-        .select('pregnancy_status')
-        .eq('patient_id', patientId)
-        .maybeSingle();
+    final profile = await VaultTable(
+      SupabaseConfig.client,
+      'patient_profiles',
+    ).select('pregnancy_status').eq('patient_id', patientId).maybeSingle();
     return CyclePersonalContext.fromPatientProfile(profile ?? const {});
   }
 
   @override
   Future<void> save(String patientId, CyclePersonalContext context) async {
-    await SupabaseConfig.client
-        .schema('ientier')
-        .from('cycle_personal_contexts')
-        .upsert({
-          'patient_id': patientId,
-          ...context.toRow(),
-        }, onConflict: 'patient_id');
+    await VaultTable(SupabaseConfig.client, 'cycle_personal_contexts').upsert({
+      'patient_id': patientId,
+      ...context.toRow(),
+    }, onConflict: 'patient_id');
   }
 }

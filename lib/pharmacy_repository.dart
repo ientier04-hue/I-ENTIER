@@ -1,3 +1,4 @@
+import 'privacy/vault_table.dart';
 import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -138,9 +139,7 @@ class SupabasePatientPharmacyRepository implements PatientPharmacyRepository {
   Future<List<PatientPrescriptionOption>> listPrescriptions(
     String patientId,
   ) async {
-    final rows = await client
-        .schema('ientier')
-        .from('prescriptions')
+    final rows = await VaultTable(client, 'prescriptions')
         .select('prescription_id,file_name,doctor_name_snapshot,created_at')
         .eq('patient_id', patientId)
         .eq('status', 'available')
@@ -169,6 +168,20 @@ class SupabasePatientPharmacyRepository implements PatientPharmacyRepository {
     String? prescriptionId,
     String note = '',
   }) async {
+    if (prescriptionId != null) {
+      final prescription = await VaultTable(client, 'prescriptions')
+          .select()
+          .eq('prescription_id', prescriptionId)
+          .eq('status', 'available')
+          .maybeSingle();
+      if (prescription == null) throw StateError('Ordonnance indisponible.');
+      await client
+          .schema('ientier')
+          .rpc(
+            'vault_prescription_reference',
+            params: {'p_prescription_id': prescriptionId},
+          );
+    }
     final result = await client
         .schema('ientier')
         .rpc(

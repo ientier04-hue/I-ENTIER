@@ -1,3 +1,4 @@
+import '../privacy/vault_table.dart';
 import 'dart:math';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -70,14 +71,12 @@ class SupabaseConsultationRepository implements ConsultationRepository {
   @override
   Future<List<ConsultationDocument>> documents(String appointmentId) async {
     _checkUser();
-    final rows = await client
-        .schema('ientier')
-        .from('consultation_documents')
+    final rows = await VaultTable(client, 'consultation_documents')
         .select(
           'document_id,patient_name,provider_name,kind,payload,created_at',
         )
         .eq('appointment_id', appointmentId)
-        .eq('provider_id', userId)
+        .eq('patient_id', userId)
         .order('created_at', ascending: false)
         .limit(100)
         .timeout(const Duration(seconds: 20));
@@ -115,41 +114,9 @@ class SupabaseConsultationRepository implements ConsultationRepository {
     required Map<String, dynamic> payload,
   }) async {
     _checkUser();
-    try {
-      final row = await client
-          .schema('ientier')
-          .rpc(
-            'publish_video_consultation',
-            params: {
-              'p_appointment_id': appointmentId,
-              'p_request_id': requestId,
-              'p_kind': kind.name,
-              'p_payload': payload,
-            },
-          )
-          .timeout(const Duration(seconds: 30));
-      _checkUser();
-      return ConsultationDocument.fromJson(
-        Map<String, dynamic>.from(row as Map),
-      );
-    } on PostgrestException catch (error) {
-      throw ConsultationException(switch (error.message) {
-        'not_allowed' => 'Cette consultation ne vous est plus accessible.',
-        'provider_not_approved' =>
-          'Votre profil professionnel doit être validé.',
-        'slot_unavailable' =>
-          'Ce créneau est déjà occupé. Choisissez un autre horaire.',
-        'exam_unavailable' => 'Un examen sélectionné n’est plus disponible.',
-        'invalid_followup' =>
-          'Choisissez un rendez-vous entre 30 minutes et un an à partir de maintenant.',
-        'request_conflict' =>
-          'Cet envoi a déjà été traité avec un autre contenu.',
-        _ =>
-          error.code == '22023'
-              ? 'Vérifiez les champs saisis.'
-              : 'Envoi impossible. Réessayez.',
-      });
-    }
+    throw const ConsultationException(
+      'Utilisez l’application professionnelle avec une autorisation du patient.',
+    );
   }
 }
 

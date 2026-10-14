@@ -1,3 +1,4 @@
+import 'privacy/vault_table.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -220,7 +221,7 @@ class SupabaseMobileClinicCommunityRepository
     required String patientNote,
     required AppointmentPaymentMethod paymentMethod,
   }) async {
-    await client
+    final appointmentId = await client
         .schema('ientier')
         .rpc(
           'book_mobile_clinic_appointment',
@@ -230,10 +231,14 @@ class SupabaseMobileClinicCommunityRepository
             'p_service_id': service.id,
             'p_patient_name': patientName.trim(),
             'p_scheduled_at': scheduledAt.toUtc().toIso8601String(),
-            'p_patient_note': patientNote.trim(),
+            'p_patient_note': '',
             'p_payment_method': paymentMethod.storageValue,
           },
         );
+    await VaultTable(client, 'appointment_notes').upsert({
+      'appointment_id': appointmentId.toString(),
+      'patient_note': patientNote.trim(),
+    });
   }
 }
 
