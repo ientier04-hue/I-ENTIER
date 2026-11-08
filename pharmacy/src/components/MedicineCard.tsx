@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useReducer, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Cart, Product } from '../cart';
-import { formatPrice, inStockPharmacyOffers, preferredPharmacyOffer } from '../catalog';
+import { availablePharmacyOffers, formatPrice, isOrderableOffer, preferredPharmacyOffer } from '../catalog';
 import type { Pharmacy } from '../pharmacies';
-import { MedicineDetails, type HeroRect } from './MedicineDetails';
+import { medicineOverlay } from '../medicineOverlay';
+import { MedicineDetails } from './MedicineDetails';
 import { MedicineFormatPicker, medicinePresentations } from './MedicineFormatPicker';
 import { MotionCard, MotionPressable, SelectionPulse } from './Motion';
 import { Icon } from './Overview';
@@ -18,6 +19,7 @@ type Props = {
   cart: Cart;
   busy: boolean;
   favorite: boolean;
+  favoriteReady: boolean;
   onFavorite: () => void;
   onOpenCart: () => void;
   onAdjust: (product: Product, delta: number) => string | null;
@@ -45,41 +47,40 @@ function ChoiceRow({ label, value, icon, onPress, actionLabel }: {
     : <View style={st.choice}>{body}</View>;
 }
 
-export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onOpenCart, onAdjust, inCart = false, pharmacies,
+export function MedicineCard({ variants, cart, busy, favorite, favoriteReady, onFavorite, onOpenCart, onAdjust, inCart = false, pharmacies,
   distances, pharmacyFavorites, index = 0 }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [picker, setPicker] = useState<'format' | 'pharmacy' | 'available' | null>(null);
-  const [details, setDetails] = useState<HeroRect | null>(null);
+  const [selection, setSelection] = useState<Product | null>(null);
+  const [overlay, dispatch] = useReducer(medicineOverlay, { kind: 'closed' });
   const photoRef = useRef<View>(null);
   const presentations = useMemo(() => medicinePresentations(variants), [variants]);
-  const selected = variants.find(v => v.product_id === selectedId);
-  const formatProduct = selected ?? variants.find(v => v.stock_quantity > 0 && v.selling_price > 0)
-    ?? variants.find(v => v.stock_quantity > 0) ?? variants[0];
-  const offers = inStockPharmacyOffers(variants, formatProduct);
-  const p = inCart ? formatProduct : offers.find(offer => offer.product_id === selectedId)
-    ?? preferredPharmacyOffer(offers, distances) ?? formatProduct;
-  const showSeller = inCart || offers.length > 0;
+  const selectedOffers = selection ? availablePharmacyOffers(variants, selection) : [];
+  const offers = selectedOffers.length ? selectedOffers : availablePharmacyOffers(variants, variants[0]);
+  const p = inCart ? variants[0] : offers.find(offer => offer.product_id === selection?.product_id)
+    ?? preferredPharmacyOffer(offers, distances) ?? variants[0];
   const pharmacy = pharmacies.get(p.pharmacy_id);
   const seller = pharmacy?.display_name || p.pharmacy_name;
   const format = [p.dosage_form, p.strength, p.pack_size].filter(Boolean).join(' · ');
   const multipleFormats = !inCart && presentations.length > 1;
   const multiplePharmacies = !inCart && offers.length > 1;
+  if ((overlay.kind === 'format' && !multipleFormats) || (overlay.kind === 'pharmacy' && !multiplePharmacies)) {
+    dispatch({ type: 'close' });
+  }
   const quantity = cart[p.product_id] || 0;
-  const inStock = Number(p.stock_quantity) > 0;
-  const canAdd = !busy && quantity < Number(p.stock_quantity) && Number(p.selling_price) > 0;
-  const alternatives = multiplePharmacies && Number(p.selling_price) <= 0
-    ? offers.filter(offer => offer.pharmacy_id !== p.pharmacy_id && Number(offer.selling_price) > 0
-      && Number(offer.stock_quantity) >= (cart[offer.product_id] || 0) + 1)
-    : [];
-  const seeOffersLabel = alternatives.length === 1 ? 'Voir l’offre' : 'Voir les offres';
+  const available = isOrderableOffer(p);
+  const canAdd = !busy && available && quantity < p.stock_quantity;
   const addLabel = ['Ajouter', p.name, p.dosage_form, p.strength].filter(Boolean).join(' ');
 
   function openDetails() {
-    photoRef.current?.measureInWindow((x, y, width, height) => setDetails({ x, y, width, height }));
+    if (!photoRef.current) return;
+    const request = Symbol();
+    dispatch({ type: 'measure', request });
+    photoRef.current.measureInWindow((x, y, width, height) =>
+      dispatch({ type: 'measured', request, origin: { x, y, width, height } }));
   }
+  function closeOverlay() { dispatch({ type: 'close' }); }
   function selectOffer(offer: Product) {
-    setSelectedId(offer.product_id);
-    setPicker(null);
+    setSelection(offer);
+    closeOverlay();
   }
 
   return <CardContainer {...(Platform.OS === 'web' ? {} : { index })} testID="medicine-card" style={[st.card, inCart && st.cartCard]}>
@@ -93,7 +94,7 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onOpe
         </View>
       </Pressable>
       <MotionPressable accessibilityRole="button" accessibilityLabel={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-        accessibilityState={{ selected: favorite }} onPress={onFavorite} style={[st.heart, favorite && st.heartActive]}>
+        accessibilityState={{ selected: favorite, disabled: !favoriteReady }} disabled={!favoriteReady} onPress={onFavorite} style={[st.heart, favorite && st.heartActive]}>
         <SelectionPulse active={favorite}><Icon name="heart" size={21} color={favorite ? '#A63650' : '#455E50'} filled={favorite}/></SelectionPulse>
       </MotionPressable>
     </View>
@@ -101,19 +102,19 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onOpe
     <View style={st.choices}>
       {(!!format || multipleFormats) && <>
         <ChoiceRow label="Format" value={format || 'Non renseigné'} icon="pill"
-          onPress={multipleFormats ? () => setPicker('format') : undefined} actionLabel={`Choisir le format de ${p.name}`}/>
-        {showSeller && <View style={st.divider}/>}
+          onPress={multipleFormats ? () => dispatch({ type: 'openPicker', picker: 'format' }) : undefined} actionLabel={`Choisir le format de ${p.name}`}/>
+        <View style={st.divider}/>
       </>}
-      {showSeller && <ChoiceRow label={multiplePharmacies ? `${offers.length} pharmacies` : 'Pharmacie'} value={seller} icon="store"
-        onPress={multiplePharmacies ? () => setPicker('pharmacy') : undefined} actionLabel={`Voir les ${offers.length} pharmacies`}/>}
+      <ChoiceRow label={multiplePharmacies ? `${offers.length} pharmacies` : 'Pharmacie'} value={seller} icon="store"
+        onPress={multiplePharmacies ? () => dispatch({ type: 'openPicker', picker: 'pharmacy' }) : undefined} actionLabel={`Voir les ${offers.length} pharmacies`}/>
     </View>
 
     <View style={st.purchase}>
       <View style={st.priceBlock}>
-        {showSeller && <Text style={st.price}>{formatPrice(p)}</Text>}
+        <Text style={st.price}>{formatPrice(p)}</Text>
         <View style={st.status}>
-          <View style={[st.dot, !inStock && st.soldOutDot]}/>
-          <Text style={[st.statusText, !inStock && st.soldOutText]}>{inStock ? 'En stock' : 'En rupture'}</Text>
+          <View style={[st.dot, !available && st.soldOutDot]}/>
+          <Text style={[st.statusText, !available && st.soldOutText]}>{available ? 'En stock' : 'Indisponible'}</Text>
         </View>
       </View>
       {quantity > 0 ? <View style={st.stepper}>
@@ -122,14 +123,8 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onOpe
         <Text accessibilityLiveRegion="polite" style={st.qty}>{quantity}</Text>
         <MotionPressable accessibilityRole="button" accessibilityLabel={addLabel} disabled={!canAdd}
           onPress={() => onAdjust(p, 1)} style={[st.step, !canAdd && st.disabled]}><Text style={st.stepText}>+</Text></MotionPressable>
-      </View> : alternatives.length > 0 ? <MotionPressable accessibilityRole="button"
-        accessibilityLabel={`${seeOffersLabel} pour ${p.name} dans une autre pharmacie`}
-        onPress={() => setPicker('available')} style={st.add}>
-        <Icon name="store" color="#E0F9BC" size={18}/>
-        <Text style={st.addText}>{seeOffersLabel}</Text>
-      </MotionPressable> : <MotionPressable accessibilityRole="button" accessibilityLabel={addLabel} disabled={!canAdd}
+      </View> : <MotionPressable accessibilityRole="button" accessibilityLabel={addLabel} disabled={!canAdd}
         onPress={() => onAdjust(p, 1)} style={[st.add, !canAdd && st.unavailable]}>
-        <Icon name="bag" color={canAdd ? '#E0F9BC' : '#69736D'} size={18}/>
         <Text style={[st.addText, !canAdd && st.soldOutText]}>Ajouter</Text>
       </MotionPressable>}
       {!inCart && <MotionPressable accessibilityRole="button" accessibilityLabel="Ouvrir le panier"
@@ -140,14 +135,13 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onOpe
         disabled={busy} onPress={() => onAdjust(p, -quantity)} style={st.remove}><Icon name="close" size={19}/></MotionPressable>}
     </View>
 
-    {picker === 'format' && multipleFormats && <MedicineFormatPicker product={p} presentations={presentations}
-      distances={distances} onSelect={selectOffer} onClose={() => setPicker(null)}/>}
-    {(picker === 'pharmacy' || picker === 'available') && multiplePharmacies && <PharmacyOffersModal product={p}
-      offers={picker === 'available' && alternatives.length > 0 ? alternatives : offers}
-      pharmacies={pharmacies} distances={distances} onSelect={selectOffer} onClose={() => setPicker(null)}/>}
-    {details && <MedicineDetails product={p} variants={variants} origin={details}
-      cart={cart} busy={busy} favorite={favorite} onFavorite={onFavorite}
-      onAdjust={onAdjust} onSelect={setSelectedId} onClose={() => setDetails(null)}
+    {overlay.kind === 'format' && <MedicineFormatPicker product={p} presentations={presentations}
+      distances={distances} onSelect={selectOffer} onClose={closeOverlay}/>}
+    {overlay.kind === 'pharmacy' && <PharmacyOffersModal product={p} offers={offers}
+      pharmacies={pharmacies} distances={distances} onSelect={selectOffer} onClose={closeOverlay}/>}
+    {overlay.kind === 'details' && <MedicineDetails product={p} variants={variants} origin={overlay.origin}
+      cart={cart} busy={busy} favorite={favorite} favoriteReady={favoriteReady} onFavorite={onFavorite}
+      onAdjust={onAdjust} onSelect={setSelection} onClose={closeOverlay}
       inCart={inCart} pharmacies={pharmacies} distances={distances}
       pharmacyFavorites={pharmacyFavorites} onOpenCart={onOpenCart}/>}
   </CardContainer>;

@@ -21,11 +21,6 @@ export function PharmacyOffersModal({ product, offers, pharmacies, distances, on
   const wide = useWindowDimensions().width >= 650;
   const reduceMotion = useReducedMotion();
   const presentation = [product.dosage_form, product.strength, product.pack_size].filter(Boolean).join(' · ');
-  const purchasable = (offer: Product) => offer.stock_quantity > 0 && offer.selling_price > 0;
-  const orderedOffers = [...offers].sort((a, b) =>
-    Number(purchasable(b)) - Number(purchasable(a)) ||
-    Number(b.stock_quantity > 0) - Number(a.stock_quantity > 0)
-  );
 
   return <Modal transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={onClose}
     statusBarTranslucent navigationBarTranslucent>
@@ -48,7 +43,7 @@ export function PharmacyOffersModal({ product, offers, pharmacies, distances, on
             </View>
           </View>
           <View style={st.rows} accessibilityRole="radiogroup" accessibilityLabel="Pharmacies">
-            {orderedOffers.map(offer => {
+            {offers.map(offer => {
               const selected = offer.product_id === product.product_id;
               const pharmacy = pharmacies.get(offer.pharmacy_id);
               const name = pharmacy?.display_name || offer.pharmacy_name;
@@ -56,7 +51,7 @@ export function PharmacyOffersModal({ product, offers, pharmacies, distances, on
               const location = [distance && `≈ ${distance}`, pharmacy?.address].filter(Boolean).join(' · ');
               const price = formatPrice(offer);
               return <Pressable key={offer.pharmacy_id} accessible accessibilityRole="radio" aria-checked={selected}
-                accessibilityLabel={[name, price, offer.stock_quantity > 0 ? 'en stock' : 'indisponible', location].filter(Boolean).join(', ')}
+                accessibilityLabel={[name, price, 'en stock', location].filter(Boolean).join(', ')}
                 onPress={() => onSelect(offer)} style={({ pressed }) => [st.row, selected && st.selected, pressed && st.pressed]}>
                 <View style={st.identity}>
                   <View style={st.info}>

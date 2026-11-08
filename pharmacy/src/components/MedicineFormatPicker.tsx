@@ -2,7 +2,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensio
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Product } from '../cart';
-import { matchingPharmacyOffers, preferredPharmacyOffer } from '../catalog';
+import { availablePharmacyOffers, preferredPharmacyOffer } from '../catalog';
 import { Icon } from './Overview';
 
 export function medicinePresentations(variants: Product[]): Product[][] {
@@ -10,7 +10,7 @@ export function medicinePresentations(variants: Product[]): Product[][] {
   const seen = new Set<string>();
   for (const variant of variants) {
     if (seen.has(variant.product_id)) continue;
-    const offers = matchingPharmacyOffers(variants, variant);
+    const offers = availablePharmacyOffers(variants, variant);
     if (offers.every(offer => seen.has(offer.product_id))) continue;
     presentations.push(offers);
     for (const offer of offers) seen.add(offer.product_id);
@@ -54,16 +54,12 @@ export function MedicineFormatPicker({ product, presentations, distances, onSele
               {presentations.map(offers => {
                 const sample = offers[0];
                 const selected = offers.some(offer => offer.product_id === product.product_id);
-                const available = offers.filter(offer => offer.stock_quantity > 0);
-                const samePharmacy = available.find(offer => offer.pharmacy_id === product.pharmacy_id && offer.selling_price > 0);
-                const next = selected && product.stock_quantity > 0 ? product
-                  : samePharmacy ?? preferredPharmacyOffer(available, distances) ?? sample;
+                const next = offers.find(offer => offer.pharmacy_id === product.pharmacy_id)
+                  ?? preferredPharmacyOffer(offers, distances);
                 const format = [sample.dosage_form, sample.strength].filter(Boolean).join(' · ');
                 const title = format || sample.pack_size || sample.name;
                 const pack = format ? sample.pack_size : '';
-                const availability = available.length
-                  ? `Disponible dans ${available.length} pharmacie${available.length > 1 ? 's' : ''}`
-                  : 'En rupture';
+                const availability = `Disponible dans ${offers.length} pharmacie${offers.length > 1 ? 's' : ''}`;
                 return (
                   <Pressable key={sample.product_id} accessibilityRole="radio" aria-checked={selected}
                     accessibilityLabel={[title, pack, availability].filter(Boolean).join(', ')}
@@ -74,7 +70,7 @@ export function MedicineFormatPicker({ product, presentations, distances, onSele
                     <View style={st.format}>
                       <Text style={st.form}>{title}</Text>
                       {!!pack && <Text style={st.pack}>{pack}</Text>}
-                      <Text style={[st.stock, !available.length && st.unavailable]}>{availability}</Text>
+                      <Text style={st.stock}>{availability}</Text>
                     </View>
                   </Pressable>
                 );
@@ -107,5 +103,4 @@ const st = StyleSheet.create({
   form: { color: '#193B2D', fontSize: 16, fontWeight: '700' },
   pack: { color: '#435D50', fontSize: 14 },
   stock: { color: '#226346', fontSize: 12, fontWeight: '500', marginTop: 2 },
-  unavailable: { color: '#706D65' },
 });

@@ -1,4 +1,6 @@
 import { Stack } from "expo-router";
+import { GuestProvider } from "../useGuestAccess";
+
 export default function Layout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return <GuestProvider><Stack screenOptions={{ headerShown: false }} /></GuestProvider>;
 }

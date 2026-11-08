@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseVariant, groupMedicines, groupMedicineOffers, inStockPharmacyOffers, matchingPharmacyOffers, preferredPharmacyOffer } from './catalog';
+import { availablePharmacyOffers, chooseVariant, groupMedicines, groupMedicineOffers, isOrderableOffer, preferredPharmacyOffer } from './catalog';
 import { changeQuantity, orderLines, type Product } from './cart';
 const tablet: Product = {product_id:'tablet',medicine_id:'m',pharmacy_id:'p',pharmacy_name:'Pharmacie',name:'Analgine',active_ingredient:'Acétaminophène',category:'Douleur',strength:'500 mg',dosage_form:'Comprimé',pack_size:'20 comprimés',selling_price:830,currency:'HTG',stock_quantity:3,requires_prescription:false};
 const syrup: Product = {...tablet,product_id:'syrup',dosage_form:'Sirop',strength:'160 mg/5 ml',pack_size:'120 ml',stock_quantity:1};
@@ -28,7 +28,7 @@ test('one medicine card contains pharmacy offers for only the selected presentat
   const otherSyrup = {...syrup, product_id:'other-syrup', pharmacy_id:'other'};
   const groups = groupMedicineOffers([tablet, syrup, otherTablet, otherSyrup]);
   assert.equal(groups.length, 1);
-  assert.deepEqual(matchingPharmacyOffers(groups[0], tablet).map(p => p.product_id), ['tablet', 'other-tablet']);
+  assert.deepEqual(availablePharmacyOffers(groups[0], tablet).map(p => p.product_id), ['tablet', 'other-tablet']);
   assert.equal(chooseVariant(groups[0], otherTablet, 'dosage_form', 'Sirop').product_id, 'other-syrup');
   const cart = changeQuantity({}, otherTablet, 1, groups[0]);
   assert.deepEqual(orderLines(cart, groups[0]), [{product_id:'other-tablet', quantity:1}]);
@@ -38,7 +38,7 @@ test('one medicine card contains pharmacy offers for only the selected presentat
 test('pharmacies with another variant or unrelated legacy products are not merged into an offer', () => {
   const known = {...tablet, variant_id:'variant-1'};
   const different = {...tablet, product_id:'different', pharmacy_id:'other', variant_id:'variant-2'};
-  assert.deepEqual(matchingPharmacyOffers([known, different], known), [known]);
+  assert.deepEqual(availablePharmacyOffers([known, different], known), [known]);
   const legacy = {...tablet, medicine_id:null, product_id:'legacy'};
   assert.equal(groupMedicineOffers([tablet, legacy]).length, 2);
 });
@@ -53,11 +53,18 @@ test('default pharmacy is nearest when known, otherwise cheapest, with available
   assert.equal(preferredPharmacyOffer([{...near, selling_price:0}, cheap], new Map()), cheap);
 });
 
-test('only counts pharmacies stocking the exact presentation, including stock awaiting a price', () => {
+test('only counts pharmacies with a purchasable offer for the selected presentation', () => {
   const soldOut = {...tablet, stock_quantity:0};
-  const unpriced = {...tablet, pharmacy_id:'second', product_id:'unpriced', selling_price:0};
-  const restocked = {...tablet, product_id:'in-stock'};
-  assert.deepEqual(inStockPharmacyOffers([soldOut, syrup, unpriced], tablet), [unpriced]);
-  assert.deepEqual(inStockPharmacyOffers([soldOut, restocked], tablet), [restocked]);
-  assert.deepEqual(inStockPharmacyOffers([soldOut, syrup], tablet), []);
+  const unpriced = {...tablet, product_id:'unpriced', selling_price:0};
+  const otherSeller = {...tablet, pharmacy_id:'second', product_id:'second-tablet'};
+  assert.deepEqual(availablePharmacyOffers([soldOut, syrup, unpriced], tablet), []);
+  assert.deepEqual(availablePharmacyOffers([unpriced, soldOut, otherSeller, tablet], tablet), [otherSeller, tablet]);
+});
+
+test('a format or medicine without a purchasable offer disappears and returns when restocked', () => {
+  const otherMedicine = {...syrup, product_id:'other', medicine_id:'other', stock_quantity:0};
+  const cards = (products: Product[]) => groupMedicineOffers(products.filter(isOrderableOffer));
+  assert.deepEqual(cards([drops, tablet, otherMedicine]), [[tablet]]);
+  const restocked = {...otherMedicine, stock_quantity:1};
+  assert.deepEqual(cards([drops, tablet, restocked]), [[tablet], [restocked]]);
 });

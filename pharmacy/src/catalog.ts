@@ -6,6 +6,9 @@ export function medicineKey(product: Product) {
 export function medicineOfferKey(product: Product) {
   return product.medicine_id || product.medicine_slug || product.product_id;
 }
+export function isOrderableOffer(product: Product) {
+  return product.stock_quantity > 0 && product.selling_price > 0;
+}
 export function groupMedicineOffers(products: Product[]) {
   const groups = new Map<string, Product[]>();
   for (const variants of groupMedicines(products)) {
@@ -16,28 +19,21 @@ export function groupMedicineOffers(products: Product[]) {
   }
   return [...groups.values()];
 }
-export function matchingPharmacyOffers(variants: Product[], current: Product) {
+export function availablePharmacyOffers(variants: Product[], current: Product) {
   const offers = new Map<string, Product>();
   for (const product of variants) {
+    if (!isOrderableOffer(product) || offers.has(product.pharmacy_id)) continue;
     const matches = product.variant_id && current.variant_id
       ? product.variant_id === current.variant_id
       : (product.dosage_form || '') === (current.dosage_form || '')
         && (product.strength || '') === (current.strength || '') && product.pack_size === current.pack_size;
-    if (!matches) continue;
-    const existing = offers.get(product.pharmacy_id);
-    if (!existing || (existing.stock_quantity <= 0 && product.stock_quantity > 0)) {
-      offers.set(product.pharmacy_id, product);
-    }
+    if (matches) offers.set(product.pharmacy_id, product);
   }
   return [...offers.values()];
 }
-export function inStockPharmacyOffers(variants: Product[], current: Product) {
-  return matchingPharmacyOffers(variants, current).filter(product => product.stock_quantity > 0);
-}
 export function preferredPharmacyOffer(offers: Product[], distances: Map<string, number | null>) {
   return [...offers].sort((a, b) => {
-    const available = (p: Product) => Number(p.stock_quantity) > 0 && Number(p.selling_price) > 0;
-    const stockOrder = Number(available(b)) - Number(available(a));
+    const stockOrder = Number(isOrderableOffer(b)) - Number(isOrderableOffer(a));
     if (stockOrder) return stockOrder;
     const aDistance = distances.get(a.pharmacy_id) ?? Infinity;
     const bDistance = distances.get(b.pharmacy_id) ?? Infinity;

@@ -18,6 +18,8 @@ Catalogue publié, recherche et catégories, pharmacies, panier limité à une p
 
 L’ouverture réutilise la session locale ou crée automatiquement une session invitée Supabase. Aucun écran de connexion ni inscription n’est affiché. Le mode anonymous_users doit être activé dans Supabase Auth (déjà activé sur le projet actuel). Les règles RLS existantes continuent de protéger les documents et commandes par visiteur. La session est conservée sur l’appareil ; effacer son stockage fait perdre l’accès au dossier invité. Aucun jeton ni identifiant patient n’est transmis dans l’URL. La session invitée n’importe pas automatiquement le dossier du compte Flutter.
 
+La [carte des parcours et transitions](docs/parcours.md) indique où sont gérés les états du catalogue, des commandes, des favoris et du dossier patient.
+
 ## Vérification et export
 
 ```sh

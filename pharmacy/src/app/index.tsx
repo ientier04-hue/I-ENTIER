@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  AppState,
   Linking,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -15,31 +15,20 @@ import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
 import * as Location from "expo-location";
-import { Session } from "@supabase/supabase-js";
-import { db, supabase, ensureGuestSession } from "../api";
-import { router, useLocalSearchParams } from "expo-router";
-import { Cart, Product, changeQuantity, orderLines } from "../cart";
+import { db, supabase } from "../api";
+import { router, useIsFocused, useLocalSearchParams } from "expo-router";
+import { Cart, Product, changeQuantity, orderLines, removeMissingProducts } from "../cart";
 import { styles as s } from "../theme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useStoredFavorites } from "../useStoredFavorites";
+import { useGuestAccess } from "../useGuestAccess";
+import { usePharmacyCatalog } from "../usePharmacyCatalog";
+import { usePatientFile } from "../usePatientFile";
 import { MedicineCard } from "../components/MedicineCard";
-import { groupMedicineOffers, medicineKey, medicineOfferKey } from "../catalog";
-import { compareDistance, distanceKm, type Coordinates, type Pharmacy, type PharmacyRating } from "../pharmacies";
+import { groupMedicineOffers, isOrderableOffer, medicineKey, medicineOfferKey } from "../catalog";
+import { compareDistance, distanceKm, type Coordinates } from "../pharmacies";
 import { PharmacyCard } from "../components/PharmacyCard";
 import { OrderProgress, Icon } from "../components/Overview";
 
-type Prescription = {
-  prescription_id: string;
-  file_name: string;
-  storage_path: string;
-  transcription?: string;
-  doctor_name_snapshot: string;
-};
-type Order = {
-  order_id: string;
-  order_number: string;
-  status: string;
-  total_amount: number;
-};
 const tabs = [
   "Médicaments",
   "Favoris",
@@ -77,7 +66,21 @@ function Button({
 function Emblem() {
   return <View accessible={false} style={s.emblem}><View style={s.crossH}/><View style={s.crossV}/></View>;
 }
+type Operation = 'order' | 'upload' | 'openDocument' | 'directions' | 'call';
+
 export default function App() {
+  const guest = useGuestAccess();
+  return <PharmacyHome key={guest.access.generation} {...guest}/>;
+}
+
+function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: ReturnType<typeof useGuestAccess>) {
+  const mounted = useRef(false);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const isCurrent = useCallback(() => mounted.current && sameGuest(), [sameGuest]);
+  const { uid } = access;
   const { width } = useWindowDimensions();
   const desktop = width >= 850;
   const params = useLocalSearchParams<{ tab?: string; q?: string; view?: string }>();
@@ -89,6 +92,11 @@ export default function App() {
   const purchaseView = params.tab === "Commandes" || params.view === "orders"
     ? "orders"
     : "cart";
+  const focused = useIsFocused();
+  const visiblePage = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    visiblePage.current = focused ? (tab === 'Panier' ? purchaseView : tab) : null;
+  }, [focused, tab, purchaseView]);
   const scroll = useRef<ScrollView>(null);
   const setTab = (value: Tab | "Commandes") => {
     router.setParams({
@@ -104,69 +112,46 @@ export default function App() {
   const [pharmacyMode, setPharmacyMode] = useState<'all' | 'nearby' | 'favorites'>('all');
   const [position, setPosition] = useState<Coordinates | null>(null);
   const [locating, setLocating] = useState(false);
-  const locationRequest = useRef(false);
-  const [pharmacyFavorites, setPharmacyFavorites] = useState<string[]>([]);
-  const [pharmacyFavoritesOwner, setPharmacyFavoritesOwner] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [favoritesOwner, setFavoritesOwner] = useState<string | null>(null);
+  const locationRequest = useRef(0);
   const [category, setCategory] = useState("Tous");
-  const [products, setProducts] = useState<Product[]>([]);
-  const [pharmacies, setPharmacies] = useState<Pharmacy[]>([]);
-  const [ratings, setRatings] = useState<Record<string, PharmacyRating>>({});
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [cart, setCart] = useState<Cart>({});
+  const cartRef = useRef(cart);
   const [note, setNote] = useState("");
-  const [session, setSession] = useState<Session | null>(null);
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const lock = useRef(false);
-  const previousUser = useRef<string | undefined>(undefined);
-  const uid = session?.user.id;
-  useEffect(() => {
-    let active = true;
-    if (uid) AsyncStorage.getItem(`medicine-favorites:${uid}`).then(value => {
-      if (!active) return;
-      const parsed: unknown = value ? JSON.parse(value) : [];
-      setFavorites(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
-      setFavoritesOwner(uid);
-    }).catch(() => { if (active) setFavoritesOwner(uid); });
-    return () => { active = false; };
-  }, [uid]);
-  useEffect(() => {
-    if (uid && favoritesOwner === uid) AsyncStorage.setItem(`medicine-favorites:${uid}`, JSON.stringify(favorites)).catch(() => setMessage('Impossible de conserver les favoris.'));
-  }, [favorites, favoritesOwner, uid]);
+  const [operation, setOperation] = useState<Operation | null>(null);
+  const lock = useRef<Operation | null>(null);
+  const busy = operation !== null;
+  const { products, pharmacies, ratings, phase, refresh, ratePharmacy } = usePharmacyCatalog(uid, isCurrent, setMessage);
+  const loading = access.phase === 'connecting' || (!!uid && phase === 'loading');
+  const { prescriptions, orders, status: fileStatus, error: fileError, retry: retryFile, ensureProfile, addPrescription } =
+    usePatientFile(uid, tab, purchaseView, isCurrent);
+  const medicineSaved = useStoredFavorites(uid ? `medicine-favorites:${uid}` : null, setMessage, 'Impossible de conserver les favoris.');
+  const pharmacySaved = useStoredFavorites(uid ? `pharmacy-favorites:${uid}` : null, setMessage, 'Impossible de conserver les pharmacies favorites.');
+  const favorites = medicineSaved.favorites;
+  const pharmacyFavorites = pharmacySaved.favorites;
   const toggleFavorite = (variants: Product[]) => {
-    if (favoritesOwner !== uid) return;
     const keys = products.filter(p => medicineOfferKey(p) === medicineOfferKey(variants[0])).map(medicineKey);
-    setFavorites(current => keys.some(key => current.includes(key))
-      ? current.filter(id => !keys.includes(id)) : [...current, ...new Set(keys)]);
+    medicineSaved.toggle(keys);
   };
-  useEffect(() => {
-    let active = true;
-    if (uid) AsyncStorage.getItem(`pharmacy-favorites:${uid}`).then(value => {
-      if (!active) return;
-      const parsed: unknown = value ? JSON.parse(value) : [];
-      setPharmacyFavorites(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
-      setPharmacyFavoritesOwner(uid);
-    }).catch(() => { if (active) { setPharmacyFavorites([]); setPharmacyFavoritesOwner(uid); } });
-    return () => { active = false; };
-  }, [uid]);
-  useEffect(() => {
-    if (uid && pharmacyFavoritesOwner === uid) AsyncStorage.setItem(`pharmacy-favorites:${uid}`, JSON.stringify(pharmacyFavorites)).catch(() => setMessage('Impossible de conserver les pharmacies favorites.'));
-  }, [pharmacyFavorites, pharmacyFavoritesOwner, uid]);
-  const togglePharmacyFavorite = (id: string) => {
-    if (!uid || pharmacyFavoritesOwner !== uid) return;
-    setPharmacyFavorites(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]);
-  };
+  function updateCart(next: Cart) {
+    cartRef.current = next;
+    setCart(next);
+  }
+  function selectPharmacies(mode: 'all' | 'favorites', pharmacyId: string | null = null) {
+    locationRequest.current++;
+    setLocating(false);
+    setPharmacyMode(mode);
+    setPharmacyFilter(pharmacyId);
+    setMessage('');
+  }
   async function locate() {
-    if (locationRequest.current) return;
-    locationRequest.current = true;
+    const id = ++locationRequest.current;
+    const currentRequest = () => isCurrent() && locationRequest.current === id;
     setLocating(true);
     setMessage('');
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
+      if (!currentRequest()) return;
       if (permission.status !== 'granted') throw new Error('Localisation non autorisée. Vous pouvez choisir une pharmacie ou vos favoris.');
       let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
@@ -174,146 +159,34 @@ export default function App() {
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
           new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Position indisponible. Réessayez.')), 15000); }),
         ]);
+        if (!currentRequest()) return;
         setPosition(current.coords);
         setPharmacyMode('nearby');
         setPharmacyFilter(null);
       } finally { clearTimeout(timeout); }
     } catch (error) {
-      setMessage(error instanceof Error && /Localisation non autorisée|Position indisponible/.test(error.message) ? error.message : 'Position indisponible. Réessayez.');
+      if (currentRequest()) setMessage(error instanceof Error && /Localisation non autorisée|Position indisponible/.test(error.message) ? error.message : 'Position indisponible. Réessayez.');
     } finally {
-      locationRequest.current = false;
-      setLocating(false);
+      if (currentRequest()) setLocating(false);
     }
   }
-  async function run(task: () => Promise<void>) {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
+  async function run(kind: Operation, task: () => Promise<void>) {
+    if (lock.current || !isCurrent()) return;
+    lock.current = kind;
+    setOperation(kind);
     setMessage("");
     try {
       await task();
     } catch (e) {
-      setMessage(
-        e instanceof Error ? e.message : "Une erreur est survenue. Réessayez.",
-      );
+      if (isCurrent()) setMessage(e instanceof Error ? e.message : "Une erreur est survenue. Réessayez.");
     } finally {
-      lock.current = false;
-      setBusy(false);
+      lock.current = null;
+      if (isCurrent()) setOperation(null);
     }
   }
-  const loadRatings = useCallback(async (ids: string[]) => {
-    if (!ids.length || !uid) return;
-    const { data, error } = await db.rpc('pharmacy_rating_summaries', { p_pharmacy_ids: ids });
-    if (error) throw new Error('Impossible de charger les notes des pharmacies.');
-    if (previousUser.current !== uid) return;
-    setRatings(current => ({ ...current, ...Object.fromEntries((data as PharmacyRating[] || []).map(rating => [rating.pharmacy_id, rating])) }));
-  }, [uid, setRatings]);
-  async function ratePharmacy(pharmacyId: string, rating: number) {
-    if (!uid || !Number.isInteger(rating) || rating < 1 || rating > 5) throw new Error('Choisissez une note de 1 à 5.');
-    const { error } = await db.from('pharmacy_ratings').upsert({ pharmacy_id: pharmacyId, user_id: uid, rating }, { onConflict: 'pharmacy_id,user_id' });
-    if (error) throw new Error('Impossible d’enregistrer la note. Réessayez.');
-    try { await loadRatings([pharmacyId]); }
-    catch { setMessage('Note enregistrée. Actualisez pour voir la moyenne.'); }
-  }
-  const refresh = useCallback(async () => {
-    try {
-      const [catalog, locations] = await Promise.all([
-        db.from("v_public_medicine_products").select("*").order("name"),
-        db
-          .from("pharmacies")
-          .select("pharmacy_id,display_name,address,phone,opening_hours,latitude,longitude,delivery_available,photo_url")
-          .eq("public_enabled", true)
-          .eq("operational_status", "active")
-          .order("display_name"),
-      ]);
-      if (catalog.error || locations.error)
-        throw new Error("Impossible de charger la pharmacie.");
-      if (previousUser.current !== uid) return;
-      setProducts(catalog.data || []);
-      setPharmacies(locations.data || []);
-      await loadRatings((locations.data || []).map(p => p.pharmacy_id));
-    } finally {
-      setLoading(false);
-    }
-  }, [loadRatings, uid, setProducts, setPharmacies, setLoading]);
-  useEffect(() => {
-    const updateSession = (value: Session | null) => {
-      if (previousUser.current !== value?.user.id) {
-        setFavorites([]); setFavoritesOwner(null);
-        setPharmacyFavorites([]); setPharmacyFavoritesOwner(null);
-        setPharmacyMode('all'); setPharmacyFilter(null); setPosition(null);
-        setCart({}); setPrescriptions([]); setOrders([]);
-        setProducts([]); setPharmacies([]); setRatings({}); setNote(''); setMessage('');
-        setLoading(Boolean(value));
-        previousUser.current = value?.user.id;
-      }
-      setSession(value);
-    };
-    ensureGuestSession().then(updateSession).catch(() => {
-      setLoading(false);
-      setMessage('Pharmacie indisponible. Réessayez.');
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event, value) => updateSession(value));
-    const appState = AppState.addEventListener("change", (state) => {
-      if (state === "active") supabase.auth.startAutoRefresh();
-      else supabase.auth.stopAutoRefresh();
-    });
-    return () => {
-      data.subscription.unsubscribe();
-      appState.remove();
-    };
-  }, []);
-  useEffect(() => {
-    if (uid) refresh().catch((e) => setMessage(e.message));
-  }, [uid, refresh]);
-  useEffect(() => {
-    let active = true;
-    if (uid)
-      Promise.resolve(
-        db
-          .from("patient_profiles")
-          .upsert(
-            { patient_id: uid },
-            { onConflict: "patient_id", ignoreDuplicates: true },
-          ),
-      )
-        .then(({ error }) => {
-          if (error) throw new Error("Impossible de préparer votre dossier.");
-          return Promise.all([
-            db
-              .from("prescriptions")
-              .select(
-                "prescription_id,file_name,storage_path,doctor_name_snapshot,transcription",
-              )
-              .eq("patient_id", uid)
-              .eq("status", "available")
-              .order("created_at", { ascending: false }),
-            db
-              .from("pharmacy_orders")
-              .select("order_id,order_number,status,total_amount")
-              .eq("patient_id", uid)
-              .order("created_at", { ascending: false }),
-          ]);
-        })
-        .then(([rx, history]) => {
-          if (!active) return;
-          if (rx.error || history.error) {
-            setMessage("Impossible de charger votre dossier.");
-            return;
-          }
-          setPrescriptions(rx.data || []);
-          setOrders(history.data || []);
-        })
-        .catch((e) => {
-          if (active) setMessage(e.message);
-        });
-    return () => {
-      active = false;
-    };
-  }, [uid, tab, purchaseView]);
   function adjust(p: Product, delta: number) {
     try {
-      setCart(changeQuantity(cart, p, delta, products));
+      updateCart(changeQuantity(cartRef.current, p, delta, products));
       setMessage("");
       return null;
     } catch (e) {
@@ -321,20 +194,31 @@ export default function App() {
       return (e as Error).message;
     }
   }
-  async function upload() {
-    if (!uid) throw new Error('Veuillez réessayer dans un instant.');
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-      base64: true,
-    });
-    if (result.canceled) return;
-    const file = result.assets[0];
+  const pickerRequest = useRef<symbol | null>(null);
+  async function pickPrescription() {
+    if (!uid || lock.current || (Platform.OS !== 'web' && pickerRequest.current)) return;
+    // Some browsers omit cancellation. A waiting file dialog must not lock checkout.
+    const request = Symbol();
+    pickerRequest.current = request;
+    const stillPicking = () => pickerRequest.current === request && isCurrent() && visiblePage.current === 'Ordonnances';
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, base64: true });
+      if (!result.canceled && stillPicking()) await run('upload', () => upload(result.assets[0]));
+    } catch {
+      if (stillPicking()) setMessage('Impossible d’ouvrir la galerie. Réessayez.');
+    } finally {
+      if (pickerRequest.current === request) pickerRequest.current = null;
+    }
+  }
+  async function upload(file: ImagePicker.ImagePickerAsset) {
+    if (!uid || !isCurrent()) return;
     const bytes = file.base64
       ? Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0)).buffer
       : await (await fetch(file.uri)).arrayBuffer();
     if (bytes.byteLength > 10 * 1024 * 1024)
       throw new Error("Image trop volumineuse (10 Mo maximum).");
+    await ensureProfile();
+    if (!isCurrent()) return;
     const id = Crypto.randomUUID();
     const extension =
       file.mimeType === "image/png"
@@ -347,6 +231,7 @@ export default function App() {
       .from("prescriptions")
       .upload(path, bytes, { contentType: file.mimeType || "image/jpeg" });
     if (error) throw new Error("Impossible d’enregistrer l’image.");
+    if (!isCurrent()) return;
     const record = {
       prescription_id: id,
       patient_id: uid,
@@ -357,16 +242,49 @@ export default function App() {
     };
     const saved = await db.from("prescriptions").insert(record);
     if (saved.error) {
-      await supabase.storage.from("prescriptions").remove([path]);
+      // A transport failure may have happened after the insert committed.
+      if (saved.status >= 400 && saved.status < 500 && saved.status !== 409 && isCurrent())
+        await supabase.storage.from("prescriptions").remove([path]);
       throw new Error("Impossible d’enregistrer l’ordonnance.");
     }
-    setPrescriptions((previous) => [
-      { ...record, doctor_name_snapshot: "" },
-      ...previous,
-    ]);
+    if (!isCurrent()) return;
+    addPrescription({ ...record, doctor_name_snapshot: "" });
     setMessage("Ordonnance ajoutée.");
   }
   const selected = products.filter((p) => cart[p.product_id]);
+  function checkout() {
+    if (!uid || !selected.length) return;
+    void run('order', async () => {
+      const lines = orderLines(cartRef.current, products);
+      await ensureProfile();
+      if (!isCurrent()) return;
+      const { data, error, status } = await db.rpc('place_pharmacy_order', {
+        p_pharmacy_id: selected[0].pharmacy_id,
+        p_items: lines,
+        p_prescription_id: null,
+        p_customer_name: '',
+        p_customer_phone: '',
+        p_note: note.trim(),
+      });
+      if (error) {
+        throw new Error(!status || status >= 500
+          ? 'Envoi non confirmé. Vérifiez Mes commandes avant de réessayer.'
+          : 'Commande refusée. Vérifiez la disponibilité des produits.');
+      }
+      if (!isCurrent()) return;
+      updateCart({});
+      setNote('');
+      if (visiblePage.current === 'cart') setTab('Commandes');
+      else if (visiblePage.current === 'orders') retryFile();
+      setMessage(`Commande ${data || ''} transmise.`);
+    });
+  }
+  const hasMissingLines = selected.length < Object.keys(cart).length;
+  const availableProducts = useMemo(() => products.filter(isOrderableOffer), [products]);
+  const favoriteMedicines = useMemo(() => {
+    const savedKeys = new Set(favorites);
+    return new Set(products.filter(p => savedKeys.has(medicineKey(p))).map(medicineOfferKey));
+  }, [favorites, products]);
   const total = selected.reduce(
     (sum, p) => sum + Number(p.selling_price) * cart[p.product_id],
     0,
@@ -379,7 +297,7 @@ export default function App() {
   const matchesPharmacyMode = (id: string) => pharmacyMode !== 'favorites' || pharmacyFavorites.includes(id);
   const visiblePharmacies = pharmacies.filter(p => matchesPharmacyMode(p.pharmacy_id)).sort((a, b) => comparePharmacies(a.pharmacy_id, b.pharmacy_id)).filter(p => normalized(`${p.display_name} ${p.address}`).includes(normalized(pharmacyQuery)));
   const filteredPharmacy = pharmacies.find(p => p.pharmacy_id === pharmacyFilter);
-  const visible = products.filter(
+  const visible = availableProducts.filter(
     (p) =>
       matchesPharmacyMode(p.pharmacy_id) &&
       (!pharmacyFilter || p.pharmacy_id === pharmacyFilter) &&
@@ -387,14 +305,15 @@ export default function App() {
       normalized(`${p.name} ${p.active_ingredient} ${p.pharmacy_name} ${p.laboratory || ""} ${p.strength || ""} ${p.dosage_form || ""}`).includes(normalized(query)),
   );
   const groups = groupMedicineOffers([...visible].sort((a, b) => comparePharmacies(a.pharmacy_id, b.pharmacy_id)));
-  const favoriteGroups = groupMedicineOffers(products).filter(group => group.some(p => favorites.includes(medicineKey(p))));
+  const favoriteGroups = groupMedicineOffers(availableProducts.filter(p => favoriteMedicines.has(medicineOfferKey(p))));
+  const waitingForFavorites = pharmacyMode === 'favorites' && !!uid && !pharmacySaved.ready;
   const renderMedicine = (variants: Product[], inCart = false, index = 0) => <MedicineCard
     key={inCart ? variants[0].product_id : medicineOfferKey(variants[0])}
     pharmacies={pharmacyById}
     distances={distances}
     pharmacyFavorites={pharmacyFavorites}
-    index={index} variants={variants} cart={cart} busy={busy} inCart={inCart}
-    favorite={products.some(p => medicineOfferKey(p) === medicineOfferKey(variants[0]) && favorites.includes(medicineKey(p)))}
+    favoriteReady={medicineSaved.ready} index={index} variants={variants} cart={cart} busy={busy} inCart={inCart}
+    favorite={favoriteMedicines.has(medicineOfferKey(variants[0]))}
     onFavorite={() => toggleFavorite(variants)} onAdjust={adjust}
     onOpenCart={() => setTab('Panier')}
   />;
@@ -402,13 +321,16 @@ export default function App() {
     { value: 'all', label: 'Toutes', icon: 'store' },
     { value: 'nearby', label: locating ? 'Localisation…' : 'À proximité', icon: 'pin' },
     { value: 'favorites', label: 'Mes pharmacies', icon: 'star' },
-  ] as const).map(item => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: pharmacyMode === item.value, disabled: locating }} disabled={locating} onPress={() => {
+  ] as const).map(item => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: pharmacyMode === item.value, disabled: item.value === 'nearby' && locating }} disabled={item.value === 'nearby' && locating} onPress={() => {
     if (item.value === 'nearby') { void locate(); return; }
-    setPharmacyMode(item.value); setPharmacyFilter(null); setMessage('');
+    selectPharmacies(item.value);
   }} style={[s.pharmacyChip, pharmacyMode === item.value && s.pharmacyChipActive]}>
     <Icon name={item.icon} size={16} color={pharmacyMode === item.value ? '#F5F8EF' : '#52675A'}/>
     <Text style={[s.pharmacyChipText, pharmacyMode === item.value && s.pharmacyChipTextActive]}>{item.label}</Text>
   </Pressable>)}</View>;
+  const fileFeedback = fileStatus === 'error' ? <View style={s.card}>
+    <Text accessibilityRole="alert" style={s.message}>{fileError}</Text><Button title="Réessayer" secondary onPress={retryFile}/>
+  </View> : (fileStatus === 'loading' || access.phase === 'connecting') ? <ActivityIndicator color="#242C26"/> : null;
   return (
     <SafeAreaView style={s.root}>
       <StatusBar style="dark" />
@@ -440,10 +362,7 @@ export default function App() {
               accessibilityRole="tab"
               accessibilityState={{ selected: tab === t }}
               key={t}
-              onPress={() => {
-                setTab(t);
-                setMessage("");
-              }}
+              onPress={() => setTab(t)}
               style={[s.tab, tab === t && s.activeTab]}
             >
               <Text style={[s.tabText, tab === t && s.activeTabText]}>
@@ -452,6 +371,14 @@ export default function App() {
             </Pressable>
           ))}
         </ScrollView>}
+        {access.phase === 'unavailable' && <View style={s.card}>
+          <Text accessibilityRole="alert" style={s.message}>Pharmacie indisponible. Réessayez.</Text>
+          <Button title="Réessayer" secondary onPress={retrySession}/>
+        </View>}
+        {uid && phase === 'failed' && (tab === 'Médicaments' || tab === 'Pharmacies' || tab === 'Favoris') && <View style={s.card}>
+          <Text accessibilityRole="alert" style={s.message}>Impossible de charger la pharmacie.</Text>
+          {tab !== 'Médicaments' && <Button title="Actualiser" secondary onPress={refresh}/>}
+        </View>}
         {!!message && (
           <Text accessibilityRole="alert" style={s.message}>
             {message}
@@ -476,7 +403,7 @@ export default function App() {
                 >
                   {[
                     "Tous",
-                    ...new Set(products.map((p) => p.category || "Autres")),
+                    ...new Set(availableProducts.map((p) => p.category || "Autres")),
                   ].map((c) => (
                     <Button
                       key={c}
@@ -491,43 +418,44 @@ export default function App() {
                   <Button
                     title="Actualiser"
                     secondary
-                    disabled={busy}
-                    onPress={() => run(async () => { await ensureGuestSession(); await refresh(); })}
+                    disabled={busy || loading || phase === 'refreshing'}
+                    onPress={uid ? refresh : retrySession}
                   />
                 </View>
-                {loading ? (
+                {loading || waitingForFavorites ? (
                   <ActivityIndicator color="#242C26" />
                 ) : (
                   <View style={s.grid}>
                     {groups.map((group, index) => renderMedicine(group, false, index))}
                   </View>
                 )}
-                {!loading && !visible.length && (
-                  <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucun médicament dans vos pharmacies favorites' : query || pharmacyFilter || category !== 'Tous' ? 'Aucun résultat' : 'Aucun médicament disponible'}</Text>{(!!query || !!pharmacyFilter || category !== 'Tous' || pharmacyMode !== 'all') && <Button title="Réinitialiser les filtres" secondary onPress={() => {setQuery('');setCategory('Tous');setPharmacyFilter(null);setPharmacyMode('all');}}/>}</View>
+                {uid && phase === 'ready' && !waitingForFavorites && !visible.length && (
+                  <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucun médicament dans vos pharmacies favorites' : query || pharmacyFilter || category !== 'Tous' ? 'Aucun résultat' : 'Aucun médicament disponible'}</Text>{(!!query || !!pharmacyFilter || category !== 'Tous' || pharmacyMode !== 'all') && <Button title="Réinitialiser les filtres" secondary onPress={() => {setQuery('');setCategory('Tous');selectPharmacies('all');}}/>}</View>
                 )}
               </>
             )}
             {tab === "Favoris" && <>
               <Text style={s.heading}>Mes favoris</Text>
               <View style={s.grid}>{favoriteGroups.map((group, index) => renderMedicine(group, false, index))}</View>
-              {!favoriteGroups.length && <Text style={s.empty}>Aucun favori pour le moment.</Text>}
+              {(loading || (!!uid && !medicineSaved.ready)) && <ActivityIndicator color="#242C26"/>}
+              {uid && phase === 'ready' && medicineSaved.ready && !favoriteGroups.length && <Text style={s.empty}>Aucun favori pour le moment.</Text>}
             </>}
             {tab === "Pharmacies" && (
               <>
                 <View style={s.header}><Text style={s.heading}>Les pharmacies</Text><Text style={s.muted}>{loading ? '…' : visiblePharmacies.length}</Text></View>
                 <View style={s.searchRow}><TextInput style={[s.input,s.searchInput]} accessibilityLabel="Rechercher une pharmacie" placeholder="Nom, ville ou quartier" value={pharmacyQuery} onChangeText={setPharmacyQuery} returnKeyType="search"/>{!!pharmacyQuery && <Pressable style={s.clearSearch} accessibilityRole="button" accessibilityLabel="Effacer la recherche de pharmacie" onPress={() => setPharmacyQuery('')}><Text style={s.clearText}>×</Text></Pressable>}</View>
                 {pharmacyFilters}
-                {loading && <ActivityIndicator color="#202923"/>}
+                {(loading || waitingForFavorites) && <ActivityIndicator color="#202923"/>}
                 <View style={s.grid}>{visiblePharmacies.map((p, index) => <PharmacyCard index={index} key={p.pharmacy_id}
                   pharmacy={p} distance={distances.get(p.pharmacy_id) ?? null}
-                  favorite={pharmacyFavorites.includes(p.pharmacy_id)} favoriteReady={!!uid && pharmacyFavoritesOwner === uid}
-                  onFavorite={() => togglePharmacyFavorite(p.pharmacy_id)} rating={ratings[p.pharmacy_id]}
+                  favorite={pharmacyFavorites.includes(p.pharmacy_id)} favoriteReady={pharmacySaved.ready}
+                  onFavorite={() => pharmacySaved.toggle([p.pharmacy_id])} rating={ratings[p.pharmacy_id]}
                   onRate={value => ratePharmacy(p.pharmacy_id, value)} busy={busy}
-                  onOpen={() => {setPharmacyFilter(p.pharmacy_id);setPharmacyMode('all');setQuery('');setCategory('Tous');setTab('Médicaments');}}
-                  onDirections={() => run(async () => {await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address + ' ' + p.display_name)}`);})}
-                  onCall={() => run(async () => {await Linking.openURL(`tel:${p.phone.replace(/[^+0-9]/g, '')}`);})}
+                  onOpen={() => {selectPharmacies('all', p.pharmacy_id);setQuery('');setCategory('Tous');setTab('Médicaments');}}
+                  onDirections={() => run('directions', async () => {await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address + ' ' + p.display_name)}`);})}
+                  onCall={() => run('call', async () => {await Linking.openURL(`tel:${p.phone.replace(/[^+0-9]/g, '')}`);})}
                 />)}</View>
-                {!loading && !visiblePharmacies.length && <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucune pharmacie favorite' : pharmacyQuery ? 'Aucune pharmacie trouvée' : 'Aucune pharmacie disponible'}</Text>{!!pharmacyQuery && <Button title="Effacer la recherche" secondary onPress={() => setPharmacyQuery('')}/>}</View>}
+                {uid && phase === 'ready' && !waitingForFavorites && !visiblePharmacies.length && <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucune pharmacie favorite' : pharmacyQuery ? 'Aucune pharmacie trouvée' : 'Aucune pharmacie disponible'}</Text>{!!pharmacyQuery && <Button title="Effacer la recherche" secondary onPress={() => setPharmacyQuery('')}/>}</View>}
               </>
             )}
             {tab === "Ordonnances" && (
@@ -536,8 +464,8 @@ export default function App() {
                     <Text style={s.heading}>Mes ordonnances</Text>
                     <Button
                       title="Ajouter"
-                      disabled={busy}
-                      onPress={() => run(upload)}
+                      disabled={busy || !uid}
+                      onPress={pickPrescription}
                     />
                   </View>
                   {prescriptions.map((p) => (
@@ -552,7 +480,7 @@ export default function App() {
                           title="Ouvrir"
                           secondary
                           onPress={() =>
-                            run(async () => {
+                            run('openDocument', async () => {
                               const [bucket, ...parts] =
                                 p.storage_path.split("/");
                               const { data, error } = await supabase.storage
@@ -560,14 +488,15 @@ export default function App() {
                                 .createSignedUrl(parts.join("/"), 60);
                               if (error)
                                 throw new Error("Document indisponible.");
-                              await Linking.openURL(data.signedUrl);
+                              if (isCurrent() && visiblePage.current === 'Ordonnances') await Linking.openURL(data.signedUrl);
                             })
                           }
                         />
                       )}
                     </View>
                   ))}
-                  {!prescriptions.length && (
+                  {fileFeedback}
+                  {fileStatus === 'ready' && !prescriptions.length && (
                     <Text style={s.empty}>Aucune ordonnance.</Text>
                   )}
                 </>
@@ -600,7 +529,8 @@ export default function App() {
                       <Text style={s.price}>{money(o.total_amount)}</Text>
                     </View>
                   ))}
-                  {!orders.length && (
+                  {fileFeedback}
+                  {fileStatus === 'ready' && !orders.length && (
                     <Text style={s.empty}>Aucune commande.</Text>
                   )}
                 </>
@@ -609,9 +539,11 @@ export default function App() {
               <>
                 <Text style={s.heading}>Mon panier</Text>
                 {selected.map(p => renderMedicine([p], true))}
-                {!selected.length ? (
+                {hasMissingLines && <Button title="Retirer les produits indisponibles" secondary disabled={busy}
+                  onPress={() => updateCart(removeMissingProducts(cartRef.current, products))}/>}
+                {!Object.keys(cart).length ? (
                   <View style={s.card}><Text style={s.heading}>Votre panier est vide.</Text><Button title="Parcourir les médicaments" onPress={() => setTab('Médicaments')}/></View>
-                ) : (
+                ) : selected.length > 0 && (
                   <View style={s.card}>
                     <Text style={s.price}>
                       {money(total, selected[0]?.currency)}
@@ -621,45 +553,16 @@ export default function App() {
                       accessibilityLabel="Note à la pharmacie"
                       maxLength={500}
                       value={note}
+                      editable={operation !== "order"}
                       onChangeText={setNote}
                       style={s.input}
                     />
                     <Button
                       title={
-                        busy ? "Envoi…" : "Commander"
+                        operation === "order" ? "Envoi…" : "Commander"
                       }
-                      disabled={busy}
-                      onPress={() => {
-                        if (!uid) {
-                          setMessage('Veuillez réessayer dans un instant.');
-                          return;
-                        }
-                        run(async () => {
-                          const lines = orderLines(
-                            cart,
-                            products,
-                          );
-                          const { data, error } = await db.rpc(
-                            "place_pharmacy_order",
-                            {
-                              p_pharmacy_id: selected[0].pharmacy_id,
-                              p_items: lines,
-                              p_prescription_id: null,
-                              p_customer_name: "",
-                              p_customer_phone: "",
-                              p_note: note.trim(),
-                            },
-                          );
-                          if (error)
-                            throw new Error(
-                              "Commande refusée. Vérifiez la disponibilité des produits.",
-                            );
-                          setCart({});
-                          setNote("");
-                          setTab("Commandes");
-                          setMessage(`Commande ${data || ""} transmise.`);
-                        });
-                      }}
+                      disabled={busy || hasMissingLines}
+                      onPress={checkout}
                     />
                   </View>
                 )}
