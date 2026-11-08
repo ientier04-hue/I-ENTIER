@@ -25,7 +25,7 @@ export function Icon({ name, color = ink, size = 22, filled = false }: { name: I
     document: 'M14 3H5v18h14V8L14 3v5h5M8 12h8M8 16h5',
     bag: 'M5 7h14l2 14H3L5 7M8 8V6a4 4 0 018 0v2',
     cart: 'M2 4h3l2.5 11h11l2.5-8H6M10 20a1 1 0 1 0-2 0 1 1 0 0 0 2 0ZM19 20a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z',
-    pill: 'M9 4a6 6 0 018 8l-6 7a6 6 0 01-8-8l6-7M7 8l9 8',
+    pill: 'M12.5 4.5a4.95 4.95 0 0 1 7 7l-8 8a4.95 4.95 0 0 1-7-7l8-8ZM8.5 8.5l7 7',
   };
   return <Svg width={size} height={size} viewBox="0 0 24 24"><Path d={paths[name]} fill={filled ? color : 'none'} stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"/></Svg>;
 }

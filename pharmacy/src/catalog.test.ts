@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseVariant, groupMedicines, groupMedicineOffers, matchingPharmacyOffers, preferredPharmacyOffer } from './catalog';
+import { chooseVariant, groupMedicines, groupMedicineOffers, inStockPharmacyOffers, matchingPharmacyOffers, preferredPharmacyOffer } from './catalog';
 import { changeQuantity, orderLines, type Product } from './cart';
 const tablet: Product = {product_id:'tablet',medicine_id:'m',pharmacy_id:'p',pharmacy_name:'Pharmacie',name:'Analgine',active_ingredient:'Acétaminophène',category:'Douleur',strength:'500 mg',dosage_form:'Comprimé',pack_size:'20 comprimés',selling_price:830,currency:'HTG',stock_quantity:3,requires_prescription:false};
 const syrup: Product = {...tablet,product_id:'syrup',dosage_form:'Sirop',strength:'160 mg/5 ml',pack_size:'120 ml',stock_quantity:1};
@@ -51,4 +51,13 @@ test('default pharmacy is nearest when known, otherwise cheapest, with available
   assert.equal(preferredPharmacyOffer([cheap, near], new Map([['near', 0]])), near);
   assert.equal(preferredPharmacyOffer([{...near, stock_quantity:0}, cheap], new Map([['near', 0.2]])), cheap);
   assert.equal(preferredPharmacyOffer([{...near, selling_price:0}, cheap], new Map()), cheap);
+});
+
+test('only counts pharmacies stocking the exact presentation, including stock awaiting a price', () => {
+  const soldOut = {...tablet, stock_quantity:0};
+  const unpriced = {...tablet, pharmacy_id:'second', product_id:'unpriced', selling_price:0};
+  const restocked = {...tablet, product_id:'in-stock'};
+  assert.deepEqual(inStockPharmacyOffers([soldOut, syrup, unpriced], tablet), [unpriced]);
+  assert.deepEqual(inStockPharmacyOffers([soldOut, restocked], tablet), [restocked]);
+  assert.deepEqual(inStockPharmacyOffers([soldOut, syrup], tablet), []);
 });

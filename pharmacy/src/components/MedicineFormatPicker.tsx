@@ -54,15 +54,16 @@ export function MedicineFormatPicker({ product, presentations, distances, onSele
               {presentations.map(offers => {
                 const sample = offers[0];
                 const selected = offers.some(offer => offer.product_id === product.product_id);
-                const available = offers.filter(offer => offer.stock_quantity > 0 && offer.selling_price > 0);
-                const samePharmacy = available.find(offer => offer.pharmacy_id === product.pharmacy_id);
-                const next = selected ? product : samePharmacy ?? preferredPharmacyOffer(offers, distances);
+                const available = offers.filter(offer => offer.stock_quantity > 0);
+                const samePharmacy = available.find(offer => offer.pharmacy_id === product.pharmacy_id && offer.selling_price > 0);
+                const next = selected && product.stock_quantity > 0 ? product
+                  : samePharmacy ?? preferredPharmacyOffer(available, distances) ?? sample;
                 const format = [sample.dosage_form, sample.strength].filter(Boolean).join(' · ');
                 const title = format || sample.pack_size || sample.name;
                 const pack = format ? sample.pack_size : '';
                 const availability = available.length
                   ? `Disponible dans ${available.length} pharmacie${available.length > 1 ? 's' : ''}`
-                  : offers.some(offer => offer.stock_quantity > 0) ? 'Prix à confirmer' : 'En rupture';
+                  : 'En rupture';
                 return (
                   <Pressable key={sample.product_id} accessibilityRole="radio" aria-checked={selected}
                     accessibilityLabel={[title, pack, availability].filter(Boolean).join(', ')}

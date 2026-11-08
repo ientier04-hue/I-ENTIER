@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Cart, Product } from '../cart';
-import { chooseVariant, formatPrice, matchingPharmacyOffers } from '../catalog';
+import { chooseVariant, formatPrice, inStockPharmacyOffers, preferredPharmacyOffer } from '../catalog';
 import type { Pharmacy } from '../pharmacies';
 import { Icon } from './Overview';
 import { PharmacyIdentity } from './PharmacyIdentity';
@@ -35,7 +35,8 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
   const quantity = cart[p.product_id] || 0;
   const unavailable = Number(p.stock_quantity) <= 0 || Number(p.selling_price) <= 0;
   const cannotAdd = busy || unavailable || quantity >= Number(p.stock_quantity);
-  const offers = matchingPharmacyOffers(variants, p);
+  const offers = inStockPharmacyOffers(variants, p);
+  const showSeller = inCart || p.stock_quantity > 0;
   const pharmacy = pharmacies.get(p.pharmacy_id);
 
   useEffect(() => {
@@ -117,10 +118,13 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
               return <View key={field} style={st.variantGroup}>
                 <Text style={st.label}>{({ dosage_form: 'Forme', strength: 'Dosage', pack_size: 'Conditionnement' })[field]}</Text>
                 <View style={st.choices}>{values.map(value => {
-                  const candidate = chooseVariant(variants, p, field, value!);
+                  const variant = chooseVariant(variants, p, field, value!);
+                  const candidate = variant.stock_quantity > 0 || inCart ? variant
+                    : preferredPharmacyOffer(inStockPharmacyOffers(variants, variant), distances) ?? variant;
+                  const packPrice = inCart || candidate.stock_quantity > 0 ? formatPrice(candidate) : 'En rupture';
                   const selected = p[field] === value;
-                  return <Pressable key={value} accessibilityRole="radio" accessibilityLabel={`${value}${field === 'pack_size' ? `, ${formatPrice(candidate)}` : ''}`} accessibilityState={{ checked: selected, disabled: inCart }} disabled={inCart} onPress={() => select(candidate.product_id)} style={[st.choice, field === 'pack_size' && st.packChoice, selected && st.selectedChoice]}>
-                    {field === 'pack_size' && <><View style={[st.radio, selected && st.radioSelected]}>{selected && <View style={st.radioDot}/>}</View><Text style={st.packPrice}>{formatPrice(candidate)}</Text></>}
+                  return <Pressable key={value} accessibilityRole="radio" accessibilityLabel={`${value}${field === 'pack_size' ? `, ${packPrice}` : ''}`} accessibilityState={{ checked: selected, disabled: inCart }} disabled={inCart} onPress={() => select(candidate.product_id)} style={[st.choice, field === 'pack_size' && st.packChoice, selected && st.selectedChoice]}>
+                    {field === 'pack_size' && <><View style={[st.radio, selected && st.radioSelected]}>{selected && <View style={st.radioDot}/>}</View><Text style={st.packPrice}>{packPrice}</Text></>}
                     <Text style={[st.choiceText, selected && st.selectedText]}>{value}</Text>
                   </Pressable>;
                 })}</View>
@@ -130,14 +134,14 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
               {([{ key: 'details', label: 'Détails' }, { key: 'pharmacies', label: `Pharmacies · ${offers.length}` }] as const).map(item => <Pressable key={item.key} accessibilityRole="tab" accessibilityState={{ selected: section === item.key }} onPress={() => setSection(item.key)} style={[st.tab, section === item.key && st.activeTab]}><Text style={[st.tabText, section === item.key && st.selectedText]}>{item.label}</Text></Pressable>)}
             </View>
             {section === 'details' ? <View>{fields.filter(([, value]) => !!value).map(([label, value]) => <View key={label} style={st.infoRow}><Text style={st.infoLabel}>{label}</Text><Text style={st.infoValue}>{value}</Text></View>)}</View> : <View style={st.offerList}>{offers.map(offer => identity(offer, true))}</View>}
-            {identity(p)}
-            {section === 'pharmacies' && !!pharmacy?.opening_hours && <View style={st.infoRow}><Text style={st.infoLabel}>Horaires</Text><Text style={st.infoValue}>{pharmacy.opening_hours}</Text></View>}
+            {showSeller && identity(p)}
+            {showSeller && section === 'pharmacies' && !!pharmacy?.opening_hours && <View style={st.infoRow}><Text style={st.infoLabel}>Horaires</Text><Text style={st.infoValue}>{pharmacy.opening_hours}</Text></View>}
           </View>
         </ScrollView>
         <View style={st.footer}>
           {!!feedback && <Text accessibilityRole="alert" style={st.error}>{feedback}</Text>}
           <View style={st.footerRow}>
-            <View style={st.total}><Text style={st.muted}>{quantity ? `Panier · ${quantity}` : 'Prix'}</Text><Text style={st.price}>{formatPrice({ ...p, selling_price: Number(p.selling_price) * Math.max(quantity, 1) })}</Text></View>
+            <View style={st.total}>{showSeller && <Text style={st.muted}>{quantity ? `Panier · ${quantity}` : 'Prix'}</Text>}<Text style={st.price}>{showSeller ? formatPrice({ ...p, selling_price: Number(p.selling_price) * Math.max(quantity, 1) }) : 'En rupture'}</Text></View>
             <Pressable accessibilityRole="button" accessibilityLabel={`Ajouter ${p.name} au panier`} disabled={cannotAdd} onPress={() => adjust(1)} style={({ pressed }) => [st.addButton, cannotAdd && st.disabled, pressed && st.pressed]}><Icon name="bag" size={19} color="#FFFFFF"/><Text style={st.addText}>{unavailable ? 'Indisponible' : 'Ajouter au panier'}</Text></Pressable>
           </View>
         </View>

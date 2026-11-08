@@ -23,9 +23,16 @@ export function matchingPharmacyOffers(variants: Product[], current: Product) {
       ? product.variant_id === current.variant_id
       : (product.dosage_form || '') === (current.dosage_form || '')
         && (product.strength || '') === (current.strength || '') && product.pack_size === current.pack_size;
-    if (matches && !offers.has(product.pharmacy_id)) offers.set(product.pharmacy_id, product);
+    if (!matches) continue;
+    const existing = offers.get(product.pharmacy_id);
+    if (!existing || (existing.stock_quantity <= 0 && product.stock_quantity > 0)) {
+      offers.set(product.pharmacy_id, product);
+    }
   }
   return [...offers.values()];
+}
+export function inStockPharmacyOffers(variants: Product[], current: Product) {
+  return matchingPharmacyOffers(variants, current).filter(product => product.stock_quantity > 0);
 }
 export function preferredPharmacyOffer(offers: Product[], distances: Map<string, number | null>) {
   return [...offers].sort((a, b) => {
