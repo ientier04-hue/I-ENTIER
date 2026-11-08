@@ -2,15 +2,16 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDistance } from '../pharmacies';
 import { Icon } from './Overview';
 
-export function PharmacyIdentity({ name, address, distance, delivery, favorite, onFavorite, disabled = false, compact = false, offerPrice, offerCount = 0, selected = false, onSelect }: {
+export function PharmacyIdentity({ name, address, distance, delivery, favorite, onOpenCart, compact = false, offerPrice, offerCount = 0, selected = false, onSelect }: {
   name: string; address?: string; distance: number | null; delivery?: boolean | null;
-  favorite: boolean; onFavorite: () => void; disabled?: boolean; compact?: boolean;
+  favorite: boolean; onOpenCart?: () => void; compact?: boolean;
   offerPrice?: string; offerCount?: number; selected?: boolean; onSelect?: () => void;
 }) {
   const distanceLabel = formatDistance(distance);
   const deliveryLabel = delivery === true ? 'Livraison disponible' : delivery === false ? 'Livraison indisponible' : 'Livraison non renseignée';
-  const favoriteButton = <Pressable accessibilityRole="button" accessibilityLabel={`${favorite ? 'Retirer' : 'Ajouter'} ${name} ${favorite ? 'des' : 'aux'} pharmacies favorites`} accessibilityState={{ selected: favorite, disabled }} disabled={disabled} onPress={onFavorite} style={st.favorite}>
-    <Icon name="star" size={compact ? 17 : 21} color={favorite ? '#96701D' : '#919985'} filled={favorite}/>
+  const cartButton = onOpenCart && <Pressable accessibilityRole="button" accessibilityLabel="Ouvrir le panier"
+    onPress={onOpenCart} style={st.cartShortcut}>
+    <Icon name="cart" size={compact ? 19 : 22} color="#245B47"/>
   </Pressable>;
   const showsCount = compact && offerCount > 1;
   if (compact) return <View style={[st.compact, selected && st.compactSelected]}>
@@ -34,7 +35,7 @@ export function PharmacyIdentity({ name, address, distance, delivery, favorite, 
       <Icon name={delivery === false ? 'truckOff' : 'truck'} size={18} color={delivery === true ? '#42754B' : '#8D9585'}/>
       {delivery == null && <Text style={st.unknownDelivery}>?</Text>}
     </View>
-    {favoriteButton}
+    {cartButton}
   </View>;
   return <View style={st.container}>
     <View style={st.identity}>
@@ -46,7 +47,7 @@ export function PharmacyIdentity({ name, address, distance, delivery, favorite, 
           {!!address && <Text numberOfLines={1} style={st.address}>{address}</Text>}
         </View>
       </View>
-      {favoriteButton}
+      {cartButton}
     </View>
     <View style={st.badges}>
       {favorite && <View style={st.favoriteBadge}><Text style={st.favoriteText}>Favorite</Text></View>}
@@ -78,7 +79,7 @@ const st = StyleSheet.create({
   distance: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   distanceText: { color: '#52675A', fontSize: 11, fontWeight: '600' },
   address: { color: '#818876', fontSize: 11, flexShrink: 1 },
-  favorite: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  cartShortcut: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingLeft: 3 },
   favoriteBadge: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: '#F4EBCF' },
   favoriteText: { color: '#8A6927', fontSize: 10, fontWeight: '600' },

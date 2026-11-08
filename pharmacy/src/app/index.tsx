@@ -393,11 +393,10 @@ export default function App() {
     pharmacies={pharmacyById}
     distances={distances}
     pharmacyFavorites={pharmacyFavorites}
-    pharmacyFavoritesReady={!!uid && pharmacyFavoritesOwner === uid}
-    onPharmacyFavorite={togglePharmacyFavorite}
     index={index} variants={variants} cart={cart} busy={busy} inCart={inCart}
     favorite={products.some(p => medicineOfferKey(p) === medicineOfferKey(variants[0]) && favorites.includes(medicineKey(p)))}
     onFavorite={() => toggleFavorite(variants)} onAdjust={adjust}
+    onOpenCart={() => setTab('Panier')}
   />;
   const pharmacyFilters = <View style={s.pharmacyFilters}>{([
     { value: 'all', label: 'Toutes', icon: 'store' },

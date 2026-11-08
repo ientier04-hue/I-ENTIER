@@ -14,10 +14,10 @@ type Props = {
   favorite: boolean; onFavorite: () => void; onSelect: (id: string) => void;
   onAdjust: (product: Product, delta: number) => string | null; onClose: () => void;
   inCart: boolean; pharmacies: Map<string, Pharmacy>; distances: Map<string, number | null>;
-  pharmacyFavorites: string[]; onPharmacyFavorite: (id: string) => void; pharmacyFavoritesReady: boolean;
+  pharmacyFavorites: string[]; onOpenCart: () => void;
 };
 
-export function MedicineDetails({ product: p, variants, origin, cart, busy, favorite, onFavorite, onSelect, onAdjust, onClose, inCart, pharmacies, distances, pharmacyFavorites, onPharmacyFavorite, pharmacyFavoritesReady }: Props) {
+export function MedicineDetails({ product: p, variants, origin, cart, busy, favorite, onFavorite, onSelect, onAdjust, onClose, inCart, pharmacies, distances, pharmacyFavorites, onOpenCart }: Props) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 700;
@@ -67,6 +67,10 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
     setReady(true);
     Animated.timing(progress, { toValue: 0, duration: reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start(({ finished }) => { if (finished) onClose(); });
   }
+  function openCart() {
+    onClose();
+    onOpenCart();
+  }
   function adjust(delta: number) { setFeedback(onAdjust(p, delta)); }
   function select(id: string) { onSelect(id); setFeedback(null); }
   const identity = (product: Product, compact = false) => {
@@ -74,7 +78,7 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
     return <PharmacyIdentity key={product.product_id} compact={compact}
       name={location?.display_name || product.pharmacy_name} address={location?.address}
       distance={distances.get(product.pharmacy_id) ?? null} delivery={location?.delivery_available}
-      favorite={pharmacyFavorites.includes(product.pharmacy_id)} onFavorite={() => onPharmacyFavorite(product.pharmacy_id)} disabled={!pharmacyFavoritesReady}
+      favorite={pharmacyFavorites.includes(product.pharmacy_id)} onOpenCart={inCart ? undefined : openCart}
       selected={product.product_id === p.product_id} offerPrice={compact ? (Number(product.stock_quantity) > 0 ? formatPrice(product) : 'Indisponible') : undefined}
       onSelect={compact && !inCart ? () => select(product.product_id) : undefined}/>;
   };
