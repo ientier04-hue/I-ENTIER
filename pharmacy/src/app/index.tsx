@@ -388,14 +388,14 @@ export default function App() {
   );
   const groups = groupMedicineOffers([...visible].sort((a, b) => comparePharmacies(a.pharmacy_id, b.pharmacy_id)));
   const favoriteGroups = groupMedicineOffers(products).filter(group => group.some(p => favorites.includes(medicineKey(p))));
-  const renderMedicine = (variants: Product[], inCart = false) => <MedicineCard
+  const renderMedicine = (variants: Product[], inCart = false, index = 0) => <MedicineCard
     key={inCart ? variants[0].product_id : medicineOfferKey(variants[0])}
     pharmacies={pharmacyById}
     distances={distances}
     pharmacyFavorites={pharmacyFavorites}
     pharmacyFavoritesReady={!!uid && pharmacyFavoritesOwner === uid}
     onPharmacyFavorite={togglePharmacyFavorite}
-    variants={variants} cart={cart} busy={busy} inCart={inCart}
+    index={index} variants={variants} cart={cart} busy={busy} inCart={inCart}
     favorite={products.some(p => medicineOfferKey(p) === medicineOfferKey(variants[0]) && favorites.includes(medicineKey(p)))}
     onFavorite={() => toggleFavorite(variants)} onAdjust={adjust}
   />;
@@ -500,7 +500,7 @@ export default function App() {
                   <ActivityIndicator color="#242C26" />
                 ) : (
                   <View style={s.grid}>
-                    {groups.map(group => renderMedicine(group))}
+                    {groups.map((group, index) => renderMedicine(group, false, index))}
                   </View>
                 )}
                 {!loading && !visible.length && (
@@ -510,7 +510,7 @@ export default function App() {
             )}
             {tab === "Favoris" && <>
               <Text style={s.heading}>Mes favoris</Text>
-              <View style={s.grid}>{favoriteGroups.map(group => renderMedicine(group))}</View>
+              <View style={s.grid}>{favoriteGroups.map((group, index) => renderMedicine(group, false, index))}</View>
               {!favoriteGroups.length && <Text style={s.empty}>Aucun favori pour le moment.</Text>}
             </>}
             {tab === "Pharmacies" && (
@@ -519,7 +519,7 @@ export default function App() {
                 <View style={s.searchRow}><TextInput style={[s.input,s.searchInput]} accessibilityLabel="Rechercher une pharmacie" placeholder="Nom, ville ou quartier" value={pharmacyQuery} onChangeText={setPharmacyQuery} returnKeyType="search"/>{!!pharmacyQuery && <Pressable style={s.clearSearch} accessibilityRole="button" accessibilityLabel="Effacer la recherche de pharmacie" onPress={() => setPharmacyQuery('')}><Text style={s.clearText}>×</Text></Pressable>}</View>
                 {pharmacyFilters}
                 {loading && <ActivityIndicator color="#202923"/>}
-                <View style={s.grid}>{visiblePharmacies.map((p) => <PharmacyCard key={p.pharmacy_id}
+                <View style={s.grid}>{visiblePharmacies.map((p, index) => <PharmacyCard index={index} key={p.pharmacy_id}
                   pharmacy={p} distance={distances.get(p.pharmacy_id) ?? null}
                   favorite={pharmacyFavorites.includes(p.pharmacy_id)} favoriteReady={!!uid && pharmacyFavoritesOwner === uid}
                   onFavorite={() => togglePharmacyFavorite(p.pharmacy_id)} rating={ratings[p.pharmacy_id]}

@@ -3,6 +3,8 @@ import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } fr
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { formatDistance, type Pharmacy, type PharmacyRating } from '../pharmacies';
 import { Icon } from './Overview';
+import { MotionCard, MotionPressable, SelectionPulse } from './Motion';
+import { useReducedMotion } from 'react-native-reanimated';
 
 function PharmacyPlaceholder() {
   return <Svg width="100%" height="100%" viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice" accessibilityLabel="Illustration de pharmacie">
@@ -35,11 +37,12 @@ function Stars({ value, size = 21 }: { value: number; size?: number }) {
     <View style={{position:'absolute',left:0,top:0,width:size*Math.max(0,Math.min(1,value-i)),height:size,overflow:'hidden'}}><Icon name="star" color="#E5B331" size={size} filled/></View>
   </View>)}</View>;
 }
-export function PharmacyCard({ pharmacy, distance, favorite, favoriteReady, onFavorite, rating, onRate, onOpen, onDirections, onCall, busy }: {
+export function PharmacyCard({ pharmacy, distance, favorite, favoriteReady, onFavorite, rating, onRate, onOpen, onDirections, onCall, busy, index = 0 }: {
   pharmacy: Pharmacy; distance: number | null; favorite: boolean; favoriteReady: boolean;
   onFavorite: () => void; rating?: PharmacyRating; onRate: (value: number) => Promise<void>;
-  onOpen: () => void; onDirections: () => void; onCall: () => void; busy: boolean;
+  onOpen: () => void; onDirections: () => void; onCall: () => void; busy: boolean; index?: number;
 }) {
+  const reduceMotion = useReducedMotion();
   const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
   const [draft, setDraft] = useState(0);
@@ -58,22 +61,22 @@ export function PharmacyCard({ pharmacy, distance, favorite, favoriteReady, onFa
   }
   const average = Number(rating?.average_rating || 0);
   const count = Number(rating?.rating_count || 0);
-  return <View style={st.card}>
+  return <MotionCard index={index} style={st.card}>
     <View style={st.photo}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Voir les médicaments de ${pharmacy.display_name}`} onPress={onOpen} style={StyleSheet.absoluteFill}>
+      <MotionPressable accessibilityRole="button" accessibilityLabel={`Voir les médicaments de ${pharmacy.display_name}`} onPress={onOpen} style={StyleSheet.absoluteFill}>
         {pharmacy.photo_url && failedPhoto !== pharmacy.photo_url ? <Image source={{uri:pharmacy.photo_url}} resizeMode="cover" accessibilityLabel={pharmacy.display_name} style={st.image} onError={() => setFailedPhoto(pharmacy.photo_url || null)}/> : <PharmacyPlaceholder/>}
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${favorite ? 'Retirer' : 'Ajouter'} ${pharmacy.display_name} ${favorite ? 'des' : 'aux'} favoris`} accessibilityState={{selected:favorite,disabled:!favoriteReady}} disabled={!favoriteReady} onPress={onFavorite} style={[st.bookmark, favorite && st.bookmarkActive]}><Icon name="bookmark" size={23} color={favorite ? '#246B56' : '#FFFFFF'} filled={favorite}/></Pressable>
+      </MotionPressable>
+      <MotionPressable accessibilityRole="button" accessibilityLabel={`${favorite ? 'Retirer' : 'Ajouter'} ${pharmacy.display_name} ${favorite ? 'des' : 'aux'} favoris`} accessibilityState={{selected:favorite,disabled:!favoriteReady}} disabled={!favoriteReady} onPress={onFavorite} style={[st.bookmark, favorite && st.bookmarkActive]}><SelectionPulse active={favorite}><Icon name="bookmark" size={23} color={favorite ? '#246B56' : '#FFFFFF'} filled={favorite}/></SelectionPulse></MotionPressable>
     </View>
     <View style={st.body}>
-      <Pressable accessibilityRole="button" onPress={onOpen}><Text style={st.name}>{pharmacy.display_name}</Text></Pressable>
+      <MotionPressable accessibilityRole="button" onPress={onOpen}><Text style={st.name}>{pharmacy.display_name}</Text></MotionPressable>
       {!!pharmacy.address && <Text numberOfLines={2} style={st.address}>{pharmacy.address}</Text>}
       <View style={st.ratingRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel={count ? `Note ${average} sur 5, ${count} avis. Noter ${pharmacy.display_name}` : `Noter ${pharmacy.display_name}`} disabled={!rating} onPress={openRating} style={st.ratingButton}>
+        <MotionPressable accessibilityRole="button" accessibilityLabel={count ? `Note ${average} sur 5, ${count} avis. Noter ${pharmacy.display_name}` : `Noter ${pharmacy.display_name}`} disabled={!rating} onPress={openRating} style={st.ratingButton}>
           <Stars value={average}/>
           <Text style={st.ratingText}>{!rating ? '—' : count ? <><Text style={st.ratingValue}>{average.toLocaleString('fr-FR',{maximumFractionDigits:1})}</Text> <Text style={st.count}>({count})</Text></> : 'Aucun avis'}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" disabled={!rating} onPress={openRating} style={st.rateLink}><Text style={st.rateLinkText}>{rating?.my_rating ? 'Modifier' : 'Noter'}</Text></Pressable>
+        </MotionPressable>
+        <MotionPressable accessibilityRole="button" disabled={!rating} onPress={openRating} style={st.rateLink}><Text style={st.rateLinkText}>{rating?.my_rating ? 'Modifier' : 'Noter'}</Text></MotionPressable>
       </View>
       <View style={st.meta}>
         {distanceLabel && <View style={st.metaItem}><Icon name="pin" size={18} color="#8C9587"/><Text style={st.metaText}>≈ {distanceLabel}</Text></View>}
@@ -82,24 +85,24 @@ export function PharmacyCard({ pharmacy, distance, favorite, favoriteReady, onFa
       </View>
       {!!pharmacy.opening_hours && <Text style={st.hours}>{pharmacy.opening_hours}</Text>}
       <View style={st.actions}>
-        <Pressable accessibilityRole="button" onPress={onOpen} style={st.catalog}><Text style={st.catalogText}>Voir les médicaments</Text><Text style={st.arrow}>↗</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Itinéraire vers ${pharmacy.display_name}`} disabled={busy || !pharmacy.address} onPress={onDirections} style={[st.actionIcon,!pharmacy.address && st.disabled]}><Icon name="directions" size={21} color="#52675A"/></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Appeler ${pharmacy.display_name}`} disabled={busy || !pharmacy.phone} onPress={onCall} style={[st.actionIcon,!pharmacy.phone && st.disabled]}><Icon name="phone" size={19} color="#52675A"/></Pressable>
+        <MotionPressable accessibilityRole="button" onPress={onOpen} style={st.catalog}><Text style={st.catalogText}>Voir les médicaments</Text><Text style={st.arrow}>↗</Text></MotionPressable>
+        <MotionPressable accessibilityRole="button" accessibilityLabel={`Itinéraire vers ${pharmacy.display_name}`} disabled={busy || !pharmacy.address} onPress={onDirections} style={[st.actionIcon,!pharmacy.address && st.disabled]}><Icon name="directions" size={21} color="#52675A"/></MotionPressable>
+        <MotionPressable accessibilityRole="button" accessibilityLabel={`Appeler ${pharmacy.display_name}`} disabled={busy || !pharmacy.phone} onPress={onCall} style={[st.actionIcon,!pharmacy.phone && st.disabled]}><Icon name="phone" size={19} color="#52675A"/></MotionPressable>
       </View>
     </View>
-    <Modal visible={rateOpen} transparent animationType="slide" onRequestClose={closeRating}>
+    <Modal visible={rateOpen} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={closeRating}>
       <View style={st.overlay}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Fermer la notation" onPress={closeRating}/>
         <View style={st.sheet} accessibilityViewIsModal>
-          <View style={st.sheetHeader}><Text style={st.sheetTitle}>Votre note</Text><Pressable accessibilityRole="button" accessibilityLabel="Fermer" disabled={saving} onPress={closeRating} style={st.actionIcon}><Icon name="close"/></Pressable></View>
+          <View style={st.sheetHeader}><Text style={st.sheetTitle}>Votre note</Text><MotionPressable accessibilityRole="button" accessibilityLabel="Fermer" disabled={saving} onPress={closeRating} style={st.actionIcon}><Icon name="close"/></MotionPressable></View>
           <Text style={st.sheetName}>{pharmacy.display_name}</Text>
-          <View style={st.rateStars}>{[1,2,3,4,5].map(value => <Pressable key={value} accessibilityRole="radio" accessibilityLabel={`${value} étoile${value > 1 ? 's' : ''}`} accessibilityState={{checked:draft===value,disabled:saving}} disabled={saving} onPress={() => setDraft(value)} style={st.starTarget}><Icon name="star" size={34} color="#E5B331" filled={value<=draft}/></Pressable>)}</View>
+          <View style={st.rateStars}>{[1,2,3,4,5].map(value => <MotionPressable key={value} accessibilityRole="radio" accessibilityLabel={`${value} étoile${value > 1 ? 's' : ''}`} accessibilityState={{checked:draft===value,disabled:saving}} disabled={saving} onPress={() => setDraft(value)} style={st.starTarget}><SelectionPulse active={value<=draft}><Icon name="star" size={34} color="#E5B331" filled={value<=draft}/></SelectionPulse></MotionPressable>)}</View>
           {!!error && <Text accessibilityRole="alert" style={st.error}>{error}</Text>}
-          <Pressable accessibilityRole="button" accessibilityLabel="Enregistrer la note" disabled={!draft || saving} onPress={() => void save()} style={[st.submit,(!draft || saving) && st.disabled]}>{saving ? <ActivityIndicator color="#FFFFFF"/> : <Text style={st.submitText}>Enregistrer</Text>}</Pressable>
+          <MotionPressable accessibilityRole="button" accessibilityLabel="Enregistrer la note" disabled={!draft || saving} onPress={() => void save()} style={[st.submit,(!draft || saving) && st.disabled]}>{saving ? <ActivityIndicator color="#FFFFFF"/> : <Text style={st.submitText}>Enregistrer</Text>}</MotionPressable>
         </View>
       </View>
     </Modal>
-  </View>;
+  </MotionCard>;
 }
 const st = StyleSheet.create({
   card:{flex:1,flexBasis:320,maxWidth:500,minWidth:0,padding:12,borderRadius:32,backgroundColor:'#FFFFFF',borderWidth:1,borderColor:'#E7EDDF'},

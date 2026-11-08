@@ -2,21 +2,32 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDistance } from '../pharmacies';
 import { Icon } from './Overview';
 
-export function PharmacyIdentity({ name, address, distance, delivery, favorite, onFavorite, disabled = false, compact = false, offerPrice, selected = false, onSelect }: {
+export function PharmacyIdentity({ name, address, distance, delivery, favorite, onFavorite, disabled = false, compact = false, offerPrice, offerCount = 0, selected = false, onSelect }: {
   name: string; address?: string; distance: number | null; delivery?: boolean | null;
   favorite: boolean; onFavorite: () => void; disabled?: boolean; compact?: boolean;
-  offerPrice?: string; selected?: boolean; onSelect?: () => void;
+  offerPrice?: string; offerCount?: number; selected?: boolean; onSelect?: () => void;
 }) {
   const distanceLabel = formatDistance(distance);
   const deliveryLabel = delivery === true ? 'Livraison disponible' : delivery === false ? 'Livraison indisponible' : 'Livraison non renseignée';
   const favoriteButton = <Pressable accessibilityRole="button" accessibilityLabel={`${favorite ? 'Retirer' : 'Ajouter'} ${name} ${favorite ? 'des' : 'aux'} pharmacies favorites`} accessibilityState={{ selected: favorite, disabled }} disabled={disabled} onPress={onFavorite} style={st.favorite}>
     <Icon name="star" size={compact ? 17 : 21} color={favorite ? '#96701D' : '#919985'} filled={favorite}/>
   </Pressable>;
+  const showsCount = compact && offerCount > 1;
   if (compact) return <View style={[st.compact, selected && st.compactSelected]}>
-    <Pressable onPress={onSelect} disabled={!onSelect} accessibilityRole={onSelect ? 'radio' : undefined} accessibilityState={onSelect ? { checked: selected } : undefined} accessibilityLabel={`${name}${distanceLabel ? `, à environ ${distanceLabel}` : ''}${offerPrice ? `, ${offerPrice}` : ''}`} style={st.offer}>
-      {selected && onSelect ? <Text style={st.offerCheck}>✓</Text> : <Icon name="store" size={15} color="#52675A"/>}
-      <Text numberOfLines={1} style={st.compactName}>{name}</Text>
-      {distanceLabel && <Text style={st.distanceText}>≈ {distanceLabel}</Text>}
+    <Pressable onPress={onSelect} disabled={!onSelect}
+      accessibilityRole={showsCount ? 'button' : onSelect ? 'radio' : undefined}
+      accessibilityState={onSelect && !showsCount ? { checked: selected } : undefined}
+      accessibilityLabel={showsCount ? `Voir les ${offerCount} pharmacies` : `${name}${distanceLabel ? `, à environ ${distanceLabel}` : ''}${offerPrice ? `, ${offerPrice}` : ''}`}
+      style={[st.offer, showsCount && st.countButton]}>
+      {showsCount ? <>
+        <Icon name="store" size={17} color="#DDFBA2"/>
+        <Text style={st.countText}>{offerCount} pharmacies</Text>
+        <Icon name="chevron" size={14} color="#DDFBA2"/>
+      </> : <>
+        {selected && onSelect ? <Text style={st.offerCheck}>✓</Text> : <Icon name="store" size={15} color="#52675A"/>}
+        <Text numberOfLines={1} style={st.compactName}>{name}</Text>
+      </>}
+      {distanceLabel && !showsCount && <Text style={st.distanceText}>≈ {distanceLabel}</Text>}
       {!!offerPrice && <Text style={st.offerPrice}>{offerPrice}</Text>}
     </Pressable>
     <View accessible accessibilityLabel={deliveryLabel} style={st.compactDelivery}>
@@ -51,6 +62,8 @@ const st = StyleSheet.create({
   compact: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, borderRadius: 10, paddingLeft: 6 },
   compactSelected: { backgroundColor: '#F3F6EB' },
   offer: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  countButton: { backgroundColor: '#175842', borderRadius: 12, paddingHorizontal: 12, justifyContent: 'space-between' },
+  countText: { flex: 1, color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   offerPrice: { fontSize: 11, fontWeight: '600', color: '#35472B' },
   offerCheck: { width: 15, fontSize: 14, color: '#52675A', fontWeight: '700', textAlign: 'center' },
   compactName: { flex: 1, minWidth: 0, color: '#526744', fontSize: 12, fontWeight: '500' },

@@ -1,25 +1,29 @@
 import React, { useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { MotionCard, MotionPressable, SelectionPulse } from './Motion';
+import { useReducedMotion } from 'react-native-reanimated';
 import { ProductPhoto } from './ProductPhoto';
 import { MedicineDetails, type HeroRect } from './MedicineDetails';
 import type { Cart, Product } from '../cart';
 import { chooseVariant, formatPrice, matchingPharmacyOffers, preferredPharmacyOffer } from '../catalog';
 import { Icon } from './Overview';
 import { PharmacyIdentity } from './PharmacyIdentity';
-import { formatDistance, type Pharmacy } from '../pharmacies';
+import type { Pharmacy } from '../pharmacies';
+import { PharmacyOffersModal } from './PharmacyOffersModal';
 
 function Quantity({ product, quantity, busy, onAdjust }: { product: Product; quantity: number; busy: boolean; onAdjust: (p: Product, delta: number) => void }) {
   return <View style={st.quantity}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Retirer un ${product.name}`} disabled={busy || quantity === 0} onPress={() => onAdjust(product, -1)} style={[st.step, (busy || quantity === 0) && st.disabled]}><Text style={st.stepText}>−</Text></Pressable>
+    <MotionPressable accessibilityRole="button" accessibilityLabel={`Retirer un ${product.name}`} disabled={busy || quantity === 0} onPress={() => onAdjust(product, -1)} style={[st.step, (busy || quantity === 0) && st.disabled]}><Text style={st.stepText}>−</Text></MotionPressable>
     <Text accessibilityLiveRegion="polite" style={st.quantityText}>{quantity}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Ajouter ${product.name} ${product.dosage_form || ''} ${product.strength || ''}`} disabled={busy || quantity >= Number(product.stock_quantity) || Number(product.selling_price) <= 0} onPress={() => onAdjust(product, 1)} style={[st.step, (busy || quantity >= Number(product.stock_quantity) || Number(product.selling_price) <= 0) && st.disabled]}><Text style={st.stepText}>+</Text></Pressable>
+    <MotionPressable accessibilityRole="button" accessibilityLabel={`Ajouter ${product.name} ${product.dosage_form || ''} ${product.strength || ''}`} disabled={busy || quantity >= Number(product.stock_quantity) || Number(product.selling_price) <= 0} onPress={() => onAdjust(product, 1)} style={[st.step, (busy || quantity >= Number(product.stock_quantity) || Number(product.selling_price) <= 0) && st.disabled]}><Text style={st.stepText}>+</Text></MotionPressable>
   </View>;
 }
-export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onAdjust, inCart = false, pharmacies, distances, pharmacyFavorites, onPharmacyFavorite, pharmacyFavoritesReady }: {
+export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onAdjust, inCart = false, pharmacies, distances, pharmacyFavorites, onPharmacyFavorite, pharmacyFavoritesReady, index = 0 }: {
   variants: Product[]; cart: Cart; busy: boolean; favorite: boolean;
-  onFavorite: () => void; onAdjust: (product: Product, delta: number) => string | null; inCart?: boolean;
+  onFavorite: () => void; onAdjust: (product: Product, delta: number) => string | null; inCart?: boolean; index?: number;
   pharmacies: Map<string, Pharmacy>; distances: Map<string, number | null>; pharmacyFavorites: string[]; onPharmacyFavorite: (id: string) => void; pharmacyFavoritesReady: boolean;
 }) {
+  const reduceMotion = useReducedMotion();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [picker, setPicker] = useState<'dosage_form' | 'strength' | 'pack_size' | null>(null);
   const [details, setDetails] = useState<HeroRect | null>(null);
@@ -31,50 +35,46 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onAdj
   const p = variants.find(v => v.product_id === selectedId)
     || preferredPharmacyOffer(matchingPharmacyOffers(variants, variants[0]), distances) || variants[0];
   const offers = matchingPharmacyOffers(variants, p);
-  const otherOffers = offers.filter(offer => offer.product_id !== p.product_id);
-  const pharmacyName = pharmacies.get(p.pharmacy_id)?.display_name || p.pharmacy_name;
-  const pharmacyIdentity = (product: Product, compact = false) => {
-    const pharmacy = pharmacies.get(product.pharmacy_id);
-    return <PharmacyIdentity key={product.product_id} compact={compact}
-      name={pharmacy?.display_name || product.pharmacy_name} address={pharmacy?.address}
-      distance={distances.get(product.pharmacy_id) ?? null} delivery={pharmacy?.delivery_available}
-      favorite={pharmacyFavorites.includes(product.pharmacy_id)} onFavorite={() => onPharmacyFavorite(product.pharmacy_id)} disabled={!pharmacyFavoritesReady}
-      selected={compact && product.product_id === p.product_id}/>;
-  };
+  const pharmacy = pharmacies.get(p.pharmacy_id);
+  const pharmacyName = pharmacy?.display_name || p.pharmacy_name;
+  const offerCount = inCart ? 0 : offers.length;
   const options = (field: 'dosage_form' | 'strength' | 'pack_size') => [...new Set(variants
     .filter(v => field === 'dosage_form' || (v.dosage_form === p.dosage_form && (field !== 'pack_size' || v.strength === p.strength)))
     .map(v => v[field] || '').filter(Boolean))];
   const labels = { dosage_form: 'Forme', strength: 'Dosage', pack_size: 'Conditionnement' };
-  const selectors = <View style={st.selectors}>{(['dosage_form', 'strength', 'pack_size'] as const).map(field => p[field] ? <Pressable key={field} accessibilityRole="button" accessibilityLabel={`${labels[field]} : ${p[field]}`} disabled={inCart || options(field).length < 2} onPress={() => setPicker(field)} style={st.selector}>
+  const selectors = <View style={st.selectors}>{(['dosage_form', 'strength', 'pack_size'] as const).map(field => p[field] ? <MotionPressable key={field} accessibilityRole="button" accessibilityLabel={`${labels[field]} : ${p[field]}`} disabled={inCart || options(field).length < 2} onPress={() => setPicker(field)} style={st.selector}>
     <Text style={st.selectorText}>{p[field]}</Text>{!inCart && options(field).length > 1 && <Icon name="chevron" size={14} color="#777F76"/>}
-  </Pressable> : null)}</View>;
-  const heart = <Pressable accessibilityRole="button" accessibilityLabel={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} accessibilityState={{selected: favorite}} onPress={onFavorite} style={st.iconButton}><Icon name="heart" color={favorite ? '#D85B73' : '#8D958B'} size={24}/>{favorite && <View style={st.favoriteDot}/>}</Pressable>;
-  return <View style={[st.card, inCart && st.cartCard]}>
+  </MotionPressable> : null)}</View>;
+  const heart = <MotionPressable accessibilityRole="button" accessibilityLabel={favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'} accessibilityState={{selected: favorite}} onPress={onFavorite} style={st.iconButton}><SelectionPulse active={favorite}><Icon name="heart" color={favorite ? '#D85B73' : '#8D958B'} size={24}/></SelectionPulse>{favorite && <View style={st.favoriteDot}/>}</MotionPressable>;
+  return <MotionCard index={index} style={[st.card, inCart && st.cartCard]}>
     <View style={st.cardHeader}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Voir ${p.name}`} onPress={openDetails}><View ref={photoRef} collapsable={false}><ProductPhoto product={p}/></View></Pressable>
       <View style={st.content}>
-        <View style={st.between}><Pressable accessibilityRole="button" style={st.nameLink} onPress={openDetails}><Text style={st.name}>{p.name}</Text></Pressable>{heart}</View>
+        <View style={st.between}><MotionPressable accessibilityRole="button" style={st.nameLink} onPress={openDetails}><Text style={st.name}>{p.name}</Text></MotionPressable>{heart}</View>
         {!!p.laboratory && <Text style={st.laboratory}>{p.laboratory}</Text>}
       </View>
     </View>
     <View style={st.purchaseRow}>
       <View style={st.priceAndOffers}><Text style={st.price}>{formatPrice(p)}</Text>
-        <View style={st.pricePharmacy}><Text numberOfLines={1} style={st.pricePharmacyName}>{pharmacyName}</Text>
-        {otherOffers.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`${allOffers ? 'Masquer' : 'Afficher'} ${otherOffers.length} autre${otherOffers.length > 1 ? 's' : ''} pharmacie${otherOffers.length > 1 ? 's' : ''}`} accessibilityState={{ expanded: allOffers }} onPress={() => setAllOffers(value => !value)} style={st.moreOffers}><Text style={st.moreOffersText}>{`${allOffers ? '−' : '+'} ${otherOffers.length} Pharmacie${otherOffers.length > 1 ? 's' : ''}`}</Text></Pressable>}
-        </View>
+        <Text numberOfLines={2} style={st.pricePharmacyName}>{pharmacyName}</Text>
       </View>
       <Quantity product={p} quantity={cart[p.product_id] || 0} busy={busy} onAdjust={onAdjust}/>
     </View>
-    {allOffers && otherOffers.length > 0 && <View style={st.otherOffers}>{otherOffers.map(offer => <Pressable key={offer.product_id} accessibilityRole="button" accessibilityLabel={`Choisir ${offer.pharmacy_name}, ${formatPrice(offer)}`} onPress={() => { setSelectedId(offer.product_id); setAllOffers(false); }} style={st.otherOffer}>
-      <Text numberOfLines={1} style={st.otherOfferName}>{pharmacies.get(offer.pharmacy_id)?.display_name || offer.pharmacy_name}</Text>
-      <Text style={st.pharmacyDistance}>{formatDistance(distances.get(offer.pharmacy_id) ?? null)}</Text>
-      <Text style={st.otherOfferPrice}>{Number(offer.stock_quantity) > 0 ? formatPrice(offer) : 'Indisponible'}</Text>
-    </Pressable>)}</View>}
     {selectors}
-    <View style={st.offers}>{pharmacyIdentity(p, true)}</View>
+    <View style={st.offers}>
+      <PharmacyIdentity compact selected
+        name={pharmacyName} distance={distances.get(p.pharmacy_id) ?? null} delivery={pharmacy?.delivery_available}
+        favorite={pharmacyFavorites.includes(p.pharmacy_id)} onFavorite={() => onPharmacyFavorite(p.pharmacy_id)}
+        disabled={!pharmacyFavoritesReady} offerCount={offerCount}
+        onSelect={offerCount > 1 ? () => setAllOffers(true) : undefined}/>
+    </View>
+    {allOffers && offerCount > 1 && <PharmacyOffersModal
+      product={p} offers={offers} pharmacies={pharmacies} distances={distances}
+      onClose={() => setAllOffers(false)}
+      onSelect={offer => { setSelectedId(offer.product_id); setAllOffers(false); }}/>}
     {(Number(p.stock_quantity) <= 0 || inCart) && <View style={st.between}>
       {Number(p.stock_quantity) <= 0 && <Text style={st.availability}>Indisponible</Text>}
-      {inCart && <Pressable accessibilityRole="button" accessibilityLabel={`Supprimer ${p.name} du panier`} onPress={() => onAdjust(p, -(cart[p.product_id] || 0))} disabled={busy} style={[st.iconButton, st.removeButton]}><Icon name="close" size={20} color="#8D958B"/></Pressable>}
+      {inCart && <MotionPressable accessibilityRole="button" accessibilityLabel={`Supprimer ${p.name} du panier`} onPress={() => onAdjust(p, -(cart[p.product_id] || 0))} disabled={busy} style={[st.iconButton, st.removeButton]}><Icon name="close" size={20} color="#8D958B"/></MotionPressable>}
     </View>}
     {details && <MedicineDetails product={p} variants={variants} origin={details}
       cart={cart} busy={busy} favorite={favorite} onFavorite={onFavorite}
@@ -82,34 +82,26 @@ export function MedicineCard({ variants, cart, busy, favorite, onFavorite, onAdj
       inCart={inCart} pharmacies={pharmacies} distances={distances}
       pharmacyFavorites={pharmacyFavorites} onPharmacyFavorite={onPharmacyFavorite}
       pharmacyFavoritesReady={pharmacyFavoritesReady}/>}
-    <Modal visible={picker !== null} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
+    <Modal visible={picker !== null} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => setPicker(null)}>
       <View style={st.overlay}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Fermer" onPress={() => setPicker(null)}/>
         <View style={st.sheet} accessibilityViewIsModal>
           <View style={st.handle}/>
-          <View style={st.sheetHeader}><Text style={st.sheetTitle}>{picker ? labels[picker] : ''}</Text><Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={() => setPicker(null)} style={st.iconButton}><Icon name="close"/></Pressable></View>
+          <View style={st.sheetHeader}><Text style={st.sheetTitle}>{picker ? labels[picker] : ''}</Text><MotionPressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={() => setPicker(null)} style={st.iconButton}><Icon name="close"/></MotionPressable></View>
           <ScrollView contentContainerStyle={st.sheetBody}>
-            {picker && options(picker).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{checked: p[picker] === value}} onPress={() => { setSelectedId(chooseVariant(variants, p, picker, value).product_id); setPicker(null); }} style={[st.option, p[picker] === value && st.selectedOption]}><Text style={st.selectorText}>{value}</Text>{p[picker] === value && <Text style={st.check}>✓</Text>}</Pressable>)}
+            {picker && options(picker).map(value => <MotionPressable key={value} accessibilityRole="radio" accessibilityState={{checked: p[picker] === value}} onPress={() => { setSelectedId(chooseVariant(variants, p, picker, value).product_id); setPicker(null); }} style={[st.option, p[picker] === value && st.selectedOption]}><Text style={st.selectorText}>{value}</Text>{p[picker] === value && <Text style={st.check}>✓</Text>}</MotionPressable>)}
           </ScrollView>
         </View>
       </View>
     </Modal>
-  </View>;
+  </MotionCard>;
 }
 const st = StyleSheet.create({
   card: { gap:8, padding:18, borderRadius:16, backgroundColor:'#FFFFFF', borderWidth:1, borderColor:'#DDE2D9', flexGrow:1, flexShrink:1, minWidth:0, flexBasis:300, maxWidth:620 },
   offers: { borderTopWidth: 1, borderColor: '#EEF1E7', paddingTop: 4, gap: 2 },
   purchaseRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   priceAndOffers: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
-  pricePharmacy: { flex: 1, minWidth: 0 },
-  pricePharmacyName: { fontSize: 11, fontWeight: '500', color: '#526744' },
-  otherOffers: { gap: 2 },
-  otherOffer: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, borderRadius: 10, backgroundColor: '#F6F5F0' },
-  otherOfferName: { flex: 1, fontSize: 12, color: '#526744' },
-  otherOfferPrice: { fontSize: 12, fontWeight: '600', color: '#35472B' },
-  pharmacyDistance: { fontSize: 11, color: '#52675A' },
-  moreOffers: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 },
-  moreOffersText: { fontSize: 12, color: '#52675A', fontWeight: '500' },
+  pricePharmacyName: { flex: 1, minWidth: 0, fontSize: 11, fontWeight: '500', color: '#526744' },
   cardHeader: {flexDirection:'row',alignItems:'center',gap:10},
   nameLink: {flex:1,minWidth:0},
   removeButton: {marginLeft:'auto'},

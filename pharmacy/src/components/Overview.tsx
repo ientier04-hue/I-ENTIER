@@ -124,6 +124,6 @@ const st = StyleSheet.create({
   orderBadge: {flexDirection:'row',alignItems:'center',gap:8,backgroundColor:'#E0F5F1',padding:10,borderRadius: 12},
   steps: {flexDirection:'row',gap:5},
   step: {height:6,flex:1,borderRadius:4},
-  stock: {position:'absolute',top:12,left:12,flexDirection:'row',gap:6,alignItems:'center',backgroundColor:'#FFFFFF',paddingHorizontal:10,paddingVertical:7,borderRadius: 12,zIndex:2},
+  stock: {flexDirection:'row',gap:6,alignItems:'center',backgroundColor:'#FFFFFF',paddingHorizontal:10,paddingVertical:7,borderRadius: 12},
   stockText: {fontSize:10,fontWeight:'600',color:ink},
 });
