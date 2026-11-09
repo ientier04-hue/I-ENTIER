@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { formatDistance, type Pharmacy, type PharmacyRating } from '../pharmacies';
+import { formatDistance, openingLabel, type Pharmacy, type PharmacyRating } from '../pharmacies';
+import type { PharmacyOpenStatus } from '../pharmacyHours';
 import { Icon } from './Overview';
 import { MotionCard, MotionPressable, SelectionPulse } from './Motion';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -37,8 +38,8 @@ function Stars({ value, size = 21 }: { value: number; size?: number }) {
     <View style={{position:'absolute',left:0,top:0,width:size*Math.max(0,Math.min(1,value-i)),height:size,overflow:'hidden'}}><Icon name="star" color="#E5B331" size={size} filled/></View>
   </View>)}</View>;
 }
-export function PharmacyCard({ pharmacy, distance, favorite, favoriteReady, onFavorite, rating, onRate, onOpen, onDirections, onCall, busy, index = 0 }: {
-  pharmacy: Pharmacy; distance: number | null; favorite: boolean; favoriteReady: boolean;
+export function PharmacyCard({ pharmacy, opening, distance, favorite, favoriteReady, onFavorite, rating, onRate, onOpen, onDirections, onCall, busy, index = 0 }: {
+  pharmacy: Pharmacy; opening?: PharmacyOpenStatus; distance: number | null; favorite: boolean; favoriteReady: boolean;
   onFavorite: () => void; rating?: PharmacyRating; onRate: (value: number) => Promise<void>;
   onOpen: () => void; onDirections: () => void; onCall: () => void; busy: boolean; index?: number;
 }) {
@@ -83,7 +84,7 @@ export function PharmacyCard({ pharmacy, distance, favorite, favoriteReady, onFa
         {distanceLabel && pharmacy.delivery_available != null && <Text style={st.dot}>·</Text>}
         {pharmacy.delivery_available != null && <View style={st.metaItem}><Icon name={pharmacy.delivery_available ? 'truck' : 'truckOff'} size={20} color="#8C9587"/><Text style={st.metaText}>{pharmacy.delivery_available ? 'Livraison' : 'Retrait sur place'}</Text></View>}
       </View>
-      {!!pharmacy.opening_hours && <Text style={st.hours}>{pharmacy.opening_hours}</Text>}
+      {!!pharmacy.opening_hours && <Text style={st.hours}>{[openingLabel(opening), pharmacy.opening_hours].filter(Boolean).join(' · ')}</Text>}
       <View style={st.actions}>
         <MotionPressable accessibilityRole="button" onPress={onOpen} style={st.catalog}><Text style={st.catalogText}>Voir les médicaments</Text><Text style={st.arrow}>↗</Text></MotionPressable>
         <MotionPressable accessibilityRole="button" accessibilityLabel={`Itinéraire vers ${pharmacy.display_name}`} disabled={busy || !pharmacy.address} onPress={onDirections} style={[st.actionIcon,!pharmacy.address && st.disabled]}><Icon name="directions" size={21} color="#52675A"/></MotionPressable>

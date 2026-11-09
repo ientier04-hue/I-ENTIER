@@ -2,8 +2,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensio
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Product } from '../cart';
-import { formatPrice } from '../catalog';
-import { formatDistance, type Pharmacy } from '../pharmacies';
+import { formatPrice, type PharmacyPreferences } from '../catalog';
+import { formatDistance, openingLabel, type Pharmacy } from '../pharmacies';
 import { Icon, StockBadge } from './Overview';
 import { ProductPhoto } from './ProductPhoto';
 
@@ -11,12 +11,12 @@ type Props = {
   product: Product;
   offers: Product[];
   pharmacies: Map<string, Pharmacy>;
-  distances: Map<string, number | null>;
+  preferences: PharmacyPreferences;
   onSelect: (offer: Product) => void;
   onClose: () => void;
 };
 
-export function PharmacyOffersModal({ product, offers, pharmacies, distances, onSelect, onClose }: Props) {
+export function PharmacyOffersModal({ product, offers, pharmacies, preferences, onSelect, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const wide = useWindowDimensions().width >= 650;
   const reduceMotion = useReducedMotion();
@@ -47,8 +47,8 @@ export function PharmacyOffersModal({ product, offers, pharmacies, distances, on
               const selected = offer.product_id === product.product_id;
               const pharmacy = pharmacies.get(offer.pharmacy_id);
               const name = pharmacy?.display_name || offer.pharmacy_name;
-              const distance = formatDistance(distances.get(offer.pharmacy_id) ?? null);
-              const location = [distance && `≈ ${distance}`, pharmacy?.address].filter(Boolean).join(' · ');
+              const distance = formatDistance(preferences.distances.get(offer.pharmacy_id) ?? null);
+              const location = [openingLabel(preferences.openingStatuses.get(offer.pharmacy_id)), distance && `≈ ${distance}`, pharmacy?.address].filter(Boolean).join(' · ');
               const price = formatPrice(offer);
               return <Pressable key={offer.pharmacy_id} accessible accessibilityRole="radio" aria-checked={selected}
                 accessibilityLabel={[name, price, 'en stock', location].filter(Boolean).join(', ')}

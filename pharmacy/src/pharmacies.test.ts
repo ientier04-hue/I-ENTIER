@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareDistance, distanceKm, formatDistance } from './pharmacies';
+import { compareDistance, distanceKm, formatDistance, pharmacyReviewScore } from './pharmacies';
 import { groupMedicines } from './catalog';
 import type { Product } from './cart';
 
@@ -29,4 +29,17 @@ test('missing and invalid coordinates never appear as a nearby pharmacy', () => 
   assert.equal(formatDistance(null), null);
   assert.equal(formatDistance(0.45), '450 m');
   assert.equal(formatDistance(1.24), '1,2 km');
+});
+
+test('reviews distinguish consistently positive ratings from a handful of perfect scores', () => {
+  assert.equal(pharmacyReviewScore(), null);
+  for (const [average, count] of [[5, 2], [3.9, 100], [6, 8], [NaN, 6], [4.7, 3.5], [4.7, Infinity]]) {
+    assert.equal(pharmacyReviewScore({ average_rating: average, rating_count: count }), null);
+  }
+  assert.equal(pharmacyReviewScore({ average_rating: null, rating_count: 0 }), null);
+  assert.ok(pharmacyReviewScore({ average_rating: 4, rating_count: 3 }) !== null);
+
+  const fewPerfect = pharmacyReviewScore({ average_rating: 5, rating_count: 3 });
+  const consistentlyHigh = pharmacyReviewScore({ average_rating: 4.8, rating_count: 50 });
+  assert.ok(fewPerfect !== null && consistentlyHigh !== null && consistentlyHigh > fewPerfect);
 });

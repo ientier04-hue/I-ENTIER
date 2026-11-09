@@ -1,3 +1,9 @@
+import type { PharmacyOpenStatus } from './pharmacyHours';
+
+export function openingLabel(status?: PharmacyOpenStatus) {
+  return status === 'open' ? 'Ouverte' : status === 'closed' ? 'Fermée' : null;
+}
+
 export type Coordinates = { latitude: number; longitude: number };
 export type Pharmacy = {
   pharmacy_id: string;
@@ -40,3 +46,13 @@ export type PharmacyRating = {
   rating_count: number;
   my_rating: number | null;
 };
+
+export function pharmacyReviewScore(rating?: Pick<PharmacyRating, 'average_rating' | 'rating_count'>): number | null {
+  if (!rating) return null;
+  const { average_rating: average, rating_count: count } = rating;
+  if (average === null || !Number.isFinite(average) || average < 4 || average > 5
+    || !Number.isSafeInteger(count) || count < 3) return null;
+
+  // Five prior reviews at 3.5 temper a high average from a small sample.
+  return (average * count + 3.5 * 5) / (count + 5);
+}

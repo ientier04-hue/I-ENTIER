@@ -2,7 +2,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensio
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Product } from '../cart';
-import { availablePharmacyOffers, preferredPharmacyOffer } from '../catalog';
+import { availablePharmacyOffers } from '../catalog';
 import { Icon } from './Overview';
 
 export function medicinePresentations(variants: Product[]): Product[][] {
@@ -21,12 +21,11 @@ export function medicinePresentations(variants: Product[]): Product[][] {
 type Props = {
   product: Product;
   presentations: Product[][];
-  distances: Map<string, number | null>;
   onSelect: (offer: Product) => void;
   onClose: () => void;
 };
 
-export function MedicineFormatPicker({ product, presentations, distances, onSelect, onClose }: Props) {
+export function MedicineFormatPicker({ product, presentations, onSelect, onClose }: Props) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -54,8 +53,6 @@ export function MedicineFormatPicker({ product, presentations, distances, onSele
               {presentations.map(offers => {
                 const sample = offers[0];
                 const selected = offers.some(offer => offer.product_id === product.product_id);
-                const next = offers.find(offer => offer.pharmacy_id === product.pharmacy_id)
-                  ?? preferredPharmacyOffer(offers, distances);
                 const format = [sample.dosage_form, sample.strength].filter(Boolean).join(' · ');
                 const title = format || sample.pack_size || sample.name;
                 const pack = format ? sample.pack_size : '';
@@ -63,7 +60,7 @@ export function MedicineFormatPicker({ product, presentations, distances, onSele
                 return (
                   <Pressable key={sample.product_id} accessibilityRole="radio" aria-checked={selected}
                     accessibilityLabel={[title, pack, availability].filter(Boolean).join(', ')}
-                    onPress={() => onSelect(next)} style={({ pressed }) => [st.row, selected && st.selected, pressed && st.pressed]}>
+                    onPress={() => onSelect(sample)} style={({ pressed }) => [st.row, selected && st.selected, pressed && st.pressed]}>
                     <View style={[st.radio, selected && st.radioSelected]}>
                       {selected && <View style={st.mark}/>}
                     </View>

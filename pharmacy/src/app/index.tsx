@@ -22,11 +22,13 @@ import { styles as s } from "../theme";
 import { useStoredFavorites } from "../useStoredFavorites";
 import { useGuestAccess } from "../useGuestAccess";
 import { usePharmacyCatalog } from "../usePharmacyCatalog";
+import { usePharmacyPurchaseHistory } from "../usePharmacyPurchaseHistory";
+import { usePharmacyOpeningStatuses } from "../usePharmacyOpeningStatuses";
 import { usePatientFile } from "../usePatientFile";
 import { MedicineCard } from "../components/MedicineCard";
 import { PurchaseDialog, type PurchaseDetails } from "../components/PurchaseDialog";
-import { groupMedicineOffers, isOrderableOffer, medicineKey, medicineOfferKey } from "../catalog";
-import { compareDistance, distanceKm, type Coordinates } from "../pharmacies";
+import { comparePharmacyOptions, groupMedicineOffers, isOrderableOffer, medicineKey, medicineOfferKey, type PharmacyPreferences } from "../catalog";
+import { distanceKm, pharmacyReviewScore, type Coordinates } from "../pharmacies";
 import { PharmacyCard } from "../components/PharmacyCard";
 import { OrderProgress, Icon } from "../components/Overview";
 
@@ -40,6 +42,7 @@ const tabs = [
 type Tab = (typeof tabs)[number];
 const money = (value: number, currency = "HTG") =>
   `${Number(value).toLocaleString("fr-FR")} ${currency}`;
+const normalized = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().trim();
 function Button({
   title,
   onPress,
@@ -129,13 +132,18 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
   const lock = useRef<Operation | null>(null);
   const busy = operation !== null;
   const { products, pharmacies, ratings, phase, refresh, ratePharmacy } = usePharmacyCatalog(uid, isCurrent, setMessage);
+  const { history, refreshHistory } = usePharmacyPurchaseHistory(uid, isCurrent);
+  function refreshCatalog() {
+    refresh();
+    refreshHistory();
+  }
   const loading = access.phase === 'connecting' || (!!uid && phase === 'loading');
   const { prescriptions, orders, status: fileStatus, error: fileError, retry: retryFile, ensureProfile, addPrescription } =
     usePatientFile(uid, tab, purchaseView, isCurrent);
   const medicineSaved = useStoredFavorites(uid ? `medicine-favorites:${uid}` : null, setMessage, 'Impossible de conserver les favoris.');
   const pharmacySaved = useStoredFavorites(uid ? `pharmacy-favorites:${uid}` : null, setMessage, 'Impossible de conserver les pharmacies favorites.');
   const favorites = medicineSaved.favorites;
-  const pharmacyFavorites = pharmacySaved.favorites;
+  const pharmacyFavorites = useMemo(() => new Set(pharmacySaved.favorites), [pharmacySaved.favorites]);
   const toggleFavorite = (variants: Product[]) => {
     const keys = products.filter(p => medicineOfferKey(p) === medicineOfferKey(variants[0])).map(medicineKey);
     medicineSaved.toggle(keys);
@@ -292,7 +300,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
         updateCart({});
         setNote('');
       }
-      refresh();
+      refreshCatalog();
       if (origin && visiblePage.current === origin) setTab('Commandes');
       else if (visiblePage.current === 'orders') retryFile();
       setMessage(`Commande ${data || ''} transmise.`);
@@ -308,28 +316,29 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
     (sum, p) => sum + Number(p.selling_price) * cart[p.product_id],
     0,
   );
-  const normalized = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().trim();
-  const pharmacyById = new Map(pharmacies.map(p => [p.pharmacy_id, p]));
-  const distances = new Map(pharmacies.map(p => [p.pharmacy_id, distanceKm(position, p)]));
-  const comparePharmacies = (a: string, b: string) => pharmacyMode === 'nearby'
-    ? compareDistance(distances.get(a) ?? null, distances.get(b) ?? null) : 0;
-  const matchesPharmacyMode = (id: string) => pharmacyMode !== 'favorites' || pharmacyFavorites.includes(id);
-  const visiblePharmacies = pharmacies.filter(p => matchesPharmacyMode(p.pharmacy_id)).sort((a, b) => comparePharmacies(a.pharmacy_id, b.pharmacy_id)).filter(p => normalized(`${p.display_name} ${p.address}`).includes(normalized(pharmacyQuery)));
+  const pharmacyById = useMemo(() => new Map(pharmacies.map(p => [p.pharmacy_id, p])), [pharmacies]);
+  const distances = useMemo(() => new Map(pharmacies.map(p => [p.pharmacy_id, distanceKm(position, p)])), [pharmacies, position]);
+  const openingStatuses = usePharmacyOpeningStatuses(pharmacies);
+  const reviewScores = useMemo(() => new Map(Object.values(ratings).map(r => [r.pharmacy_id, pharmacyReviewScore(r)])), [ratings]);
+  const preferences = useMemo<PharmacyPreferences>(() => ({
+    distances, favorites: pharmacyFavorites, history, preferNearby: pharmacyMode === 'nearby', openingStatuses, reviewScores,
+  }), [distances, pharmacyFavorites, history, pharmacyMode, openingStatuses, reviewScores]);
+  const matchesPharmacyMode = (id: string) => pharmacyMode !== 'favorites' || pharmacyFavorites.has(id);
+  const visiblePharmacies = pharmacies.filter(p => matchesPharmacyMode(p.pharmacy_id) && normalized(`${p.display_name} ${p.address}`).includes(normalized(pharmacyQuery)))
+    .sort((a, b) => comparePharmacyOptions(a.pharmacy_id, b.pharmacy_id, preferences));
   const filteredPharmacy = pharmacies.find(p => p.pharmacy_id === pharmacyFilter);
-  const visible = availableProducts.filter(
+  const groups = useMemo(() => groupMedicineOffers(availableProducts.filter(
     (p) =>
       (!pharmacyFilter || p.pharmacy_id === pharmacyFilter) &&
       (category === "Tous" || (p.category || "Autres") === category) &&
       normalized(`${p.name} ${p.active_ingredient} ${p.pharmacy_name} ${p.laboratory || ""} ${p.strength || ""} ${p.dosage_form || ""}`).includes(normalized(query)),
-  );
-  const groups = groupMedicineOffers(visible);
-  const favoriteGroups = groupMedicineOffers(availableProducts.filter(p => favoriteMedicines.has(medicineOfferKey(p))));
+  )), [availableProducts, pharmacyFilter, category, query]);
+  const favoriteGroups = useMemo(() => groupMedicineOffers(availableProducts.filter(p => favoriteMedicines.has(medicineOfferKey(p)))), [availableProducts, favoriteMedicines]);
   const waitingForFavorites = pharmacyMode === 'favorites' && !!uid && !pharmacySaved.ready;
   const renderMedicine = (variants: Product[], inCart = false, index = 0) => <MedicineCard
     key={inCart ? variants[0].product_id : medicineOfferKey(variants[0])}
     pharmacies={pharmacyById}
-    distances={distances}
-    pharmacyFavorites={pharmacyFavorites}
+    preferences={preferences}
     favoriteReady={medicineSaved.ready} index={index} variants={variants} cart={cart} busy={busy} inCart={inCart}
     favorite={favoriteMedicines.has(medicineOfferKey(variants[0]))}
     onFavorite={() => toggleFavorite(variants)} onAdjust={adjust}
@@ -426,7 +435,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
         </View>}
         {uid && phase === 'failed' && (tab === 'Médicaments' || tab === 'Pharmacies' || tab === 'Favoris') && <View style={s.card}>
           <Text accessibilityRole="alert" style={s.message}>Impossible de charger la pharmacie.</Text>
-          {tab !== 'Médicaments' && <Button title="Actualiser" secondary onPress={refresh}/>}
+          {tab !== 'Médicaments' && <Button title="Actualiser" secondary onPress={refreshCatalog}/>}
         </View>}
         {!!message && !purchaseOffer && (
           <Text accessibilityRole="alert" style={s.message}>
@@ -462,7 +471,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
                     {groups.map((group, index) => renderMedicine(group, false, index))}
                   </View>
                 )}
-                {uid && phase === 'ready' && !visible.length && (
+                {uid && phase === 'ready' && !groups.length && (
                   <View style={s.card}><Text style={s.heading}>{query || pharmacyFilter || category !== 'Tous' ? 'Aucun résultat' : 'Aucun médicament disponible'}</Text>{(!!query || !!pharmacyFilter || category !== 'Tous') && <Button title="Réinitialiser les filtres" secondary onPress={() => {setQuery('');setCategory('Tous');setPharmacyFilter(null);}}/>}</View>
                 )}
               </>
@@ -480,8 +489,8 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
                 {pharmacyFilters}
                 {(loading || waitingForFavorites) && <ActivityIndicator color="#202923"/>}
                 <View style={s.grid}>{visiblePharmacies.map((p, index) => <PharmacyCard index={index} key={p.pharmacy_id}
-                  pharmacy={p} distance={distances.get(p.pharmacy_id) ?? null}
-                  favorite={pharmacyFavorites.includes(p.pharmacy_id)} favoriteReady={pharmacySaved.ready}
+                  pharmacy={p} opening={openingStatuses.get(p.pharmacy_id)} distance={distances.get(p.pharmacy_id) ?? null}
+                  favorite={pharmacyFavorites.has(p.pharmacy_id)} favoriteReady={pharmacySaved.ready}
                   onFavorite={() => pharmacySaved.toggle([p.pharmacy_id])} rating={ratings[p.pharmacy_id]}
                   onRate={value => ratePharmacy(p.pharmacy_id, value)} busy={busy}
                   onOpen={() => {selectPharmacies('all', p.pharmacy_id);setQuery('');setCategory('Tous');setTab('Médicaments');}}

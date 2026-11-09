@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Cart, Product } from '../cart';
-import { availablePharmacyOffers, chooseVariant, formatPrice, isOrderableOffer } from '../catalog';
-import type { Pharmacy } from '../pharmacies';
+import { chooseVariant, formatPrice, isOrderableOffer, type PharmacyPreferences } from '../catalog';
+import { openingLabel, type Pharmacy } from '../pharmacies';
 import type { HeroRect } from '../medicineOverlay';
 import { Icon } from './Overview';
 import { PharmacyIdentity } from './PharmacyIdentity';
@@ -11,14 +11,17 @@ import { AddToCartButton } from './AddToCartButton';
 import { ProductPhoto } from './ProductPhoto';
 
 type Props = {
-  product: Product; variants: Product[]; origin: HeroRect; cart: Cart; busy: boolean;
-  favorite: boolean; favoriteReady: boolean; onFavorite: () => void; onSelect: (product: Product) => void;
+  product: Product; variants: Product[]; offers: Product[]; origin: HeroRect; cart: Cart; busy: boolean;
+  favorite: boolean; favoriteReady: boolean; onFavorite: () => void;
+  onSelectPharmacy: (offer: Product) => void; onSelectFormat: (presentation: Product) => void;
+  offerForFormat: (presentation: Product) => Product;
   onAdjust: (product: Product, delta: number) => string | null; onClose: () => void;
-  inCart: boolean; pharmacies: Map<string, Pharmacy>; distances: Map<string, number | null>;
-  pharmacyFavorites: string[]; onBuy: (product: Product) => void;
+  inCart: boolean; pharmacies: Map<string, Pharmacy>; preferences: PharmacyPreferences;
+  onBuy: (product: Product) => void;
 };
 
-export function MedicineDetails({ product: p, variants, origin, cart, busy, favorite, favoriteReady, onFavorite, onSelect, onAdjust, onClose, inCart, pharmacies, distances, pharmacyFavorites, onBuy }: Props) {
+export function MedicineDetails({ product: p, variants, offers, origin, cart, busy, favorite, favoriteReady, onFavorite,
+  onSelectPharmacy, onSelectFormat, offerForFormat, onAdjust, onClose, inCart, pharmacies, preferences, onBuy }: Props) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 700;
@@ -37,7 +40,6 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
   const quantity = cart[p.product_id] || 0;
   const unavailable = !isOrderableOffer(p);
   const cannotAdd = busy || unavailable || quantity >= Number(p.stock_quantity);
-  const offers = availablePharmacyOffers(variants, p);
   const showOffers = offers.length > 0 && section === 'pharmacies';
   const pharmacy = pharmacies.get(p.pharmacy_id);
 
@@ -71,17 +73,17 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
     Animated.timing(progress, { toValue: 0, duration: reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start(({ finished }) => { if (finished) onClose(); });
   }
   function adjust(delta: number) { setFeedback(onAdjust(p, delta)); }
-  function select(product: Product) { onSelect(product); setFeedback(null); }
   const identity = (product: Product, compact = false) => {
     const location = pharmacies.get(product.pharmacy_id);
     return <PharmacyIdentity key={product.product_id} compact={compact}
       name={location?.display_name || product.pharmacy_name} address={location?.address}
-      distance={distances.get(product.pharmacy_id) ?? null} delivery={location?.delivery_available}
-      favorite={pharmacyFavorites.includes(product.pharmacy_id)}
+      opening={openingLabel(preferences.openingStatuses.get(product.pharmacy_id))}
+      distance={preferences.distances.get(product.pharmacy_id) ?? null} delivery={location?.delivery_available}
+      favorite={preferences.favorites.has(product.pharmacy_id)}
       cartButton={!inCart && <AddToCartButton product={product} quantity={cart[product.product_id] || 0} busy={busy}
         onAdd={() => setFeedback(onAdjust(product, 1))}/>}
       selected={product.product_id === p.product_id} offerPrice={compact ? formatPrice(product) : undefined}
-      onSelect={compact && !inCart ? () => select(product) : undefined}/>;
+      onSelect={compact && !inCart ? () => { onSelectPharmacy(product); setFeedback(null); } : undefined}/>;
   };
   const fields = [
     ['Principe actif', p.active_ingredient], ['Catégorie', p.category], ['Laboratoire', p.laboratory],
@@ -125,9 +127,9 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
                 <Text style={st.label}>{({ dosage_form: 'Forme', strength: 'Dosage', pack_size: 'Conditionnement' })[field]}</Text>
                 <View style={st.choices}>{values.map(value => {
                   const candidate = chooseVariant(variants, p, field, value!);
-                  const packPrice = formatPrice(candidate);
+                  const packPrice = field === 'pack_size' ? formatPrice(inCart ? p : offerForFormat(candidate)) : '';
                   const selected = p[field] === value;
-                  return <Pressable key={value} accessibilityRole="radio" accessibilityLabel={`${value}${field === 'pack_size' ? `, ${packPrice}` : ''}`} accessibilityState={{ checked: selected, disabled: inCart }} disabled={inCart} onPress={() => select(candidate)} style={[st.choice, field === 'pack_size' && st.packChoice, selected && st.selectedChoice]}>
+                  return <Pressable key={value} accessibilityRole="radio" accessibilityLabel={`${value}${field === 'pack_size' ? `, ${packPrice}` : ''}`} accessibilityState={{ checked: selected, disabled: inCart }} disabled={inCart} onPress={() => { onSelectFormat(candidate); setFeedback(null); }} style={[st.choice, field === 'pack_size' && st.packChoice, selected && st.selectedChoice]}>
                     {field === 'pack_size' && <><View style={[st.radio, selected && st.radioSelected]}>{selected && <View style={st.radioDot}/>}</View><Text style={st.packPrice}>{packPrice}</Text></>}
                     <Text style={[st.choiceText, selected && st.selectedText]}>{value}</Text>
                   </Pressable>;

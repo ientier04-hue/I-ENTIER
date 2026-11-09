@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDistance } from '../pharmacies';
 import { Icon } from './Overview';
 
-export function PharmacyIdentity({ name, address, distance, delivery, favorite, cartButton, compact = false, offerPrice, offerCount = 0, selected = false, onSelect }: {
-  name: string; address?: string; distance: number | null; delivery?: boolean | null;
+export function PharmacyIdentity({ name, address, opening, distance, delivery, favorite, cartButton, compact = false, offerPrice, offerCount = 0, selected = false, onSelect }: {
+  name: string; address?: string; opening: string | null; distance: number | null; delivery?: boolean | null;
   favorite: boolean; cartButton?: ReactNode; compact?: boolean;
   offerPrice?: string; offerCount?: number; selected?: boolean; onSelect?: () => void;
 }) {
@@ -15,7 +15,7 @@ export function PharmacyIdentity({ name, address, distance, delivery, favorite, 
     <Pressable onPress={onSelect} disabled={!onSelect}
       accessibilityRole={showsCount ? 'button' : onSelect ? 'radio' : undefined}
       accessibilityState={onSelect && !showsCount ? { checked: selected } : undefined}
-      accessibilityLabel={showsCount ? `Voir les ${offerCount} pharmacies` : `${name}${distanceLabel ? `, à environ ${distanceLabel}` : ''}${offerPrice ? `, ${offerPrice}` : ''}`}
+      accessibilityLabel={showsCount ? `Voir les ${offerCount} pharmacies` : [name, opening, distanceLabel && `à environ ${distanceLabel}`, offerPrice].filter(Boolean).join(', ')}
       style={[st.offer, showsCount && st.countButton]}>
       {showsCount ? <>
         <Icon name="store" size={17} color="#DDFBA2"/>
@@ -23,7 +23,10 @@ export function PharmacyIdentity({ name, address, distance, delivery, favorite, 
         <Icon name="chevron" size={14} color="#DDFBA2"/>
       </> : <>
         {selected && onSelect ? <Text style={st.offerCheck}>✓</Text> : <Icon name="store" size={15} color="#52675A"/>}
-        <Text numberOfLines={1} style={st.compactName}>{name}</Text>
+        <View style={st.compactTitle}>
+          <Text numberOfLines={1} style={st.compactName}>{name}</Text>
+          {!!opening && <Text style={st.distanceText}>{opening}</Text>}
+        </View>
       </>}
       {distanceLabel && !showsCount && <Text style={st.distanceText}>≈ {distanceLabel}</Text>}
       {!!offerPrice && <Text style={st.offerPrice}>{offerPrice}</Text>}
@@ -40,6 +43,7 @@ export function PharmacyIdentity({ name, address, distance, delivery, favorite, 
       <View style={st.text}>
         <Text style={st.name}>{name}</Text>
         <View style={st.meta}>
+          {!!opening && <Text style={st.distanceText}>{opening}</Text>}
           {distanceLabel && <View accessible accessibilityLabel={`À environ ${distanceLabel}, à vol d’oiseau`} style={st.distance}><Icon name="pin" size={13} color="#52675A"/><Text style={st.distanceText}>≈ {distanceLabel}</Text></View>}
           {!!address && <Text numberOfLines={1} style={st.address}>{address}</Text>}
         </View>
@@ -64,7 +68,8 @@ const st = StyleSheet.create({
   countText: { flex: 1, color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   offerPrice: { fontSize: 11, fontWeight: '600', color: '#35472B' },
   offerCheck: { width: 15, fontSize: 14, color: '#52675A', fontWeight: '700', textAlign: 'center' },
-  compactName: { flex: 1, minWidth: 0, color: '#526744', fontSize: 12, fontWeight: '500' },
+  compactTitle: { flex: 1, minWidth: 0 },
+  compactName: { color: '#526744', fontSize: 12, fontWeight: '500' },
   compactDelivery: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   unknownDelivery: { position: 'absolute', right: -2, top: -3, color: '#8D9585', backgroundColor: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   container: { backgroundColor: '#F3F6EB', borderRadius: 17, padding: 12, gap: 7 },
