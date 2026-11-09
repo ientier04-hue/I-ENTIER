@@ -331,6 +331,22 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
   const fileFeedback = fileStatus === 'error' ? <View style={s.card}>
     <Text accessibilityRole="alert" style={s.message}>{fileError}</Text><Button title="Réessayer" secondary onPress={retryFile}/>
   </View> : (fileStatus === 'loading' || access.phase === 'connecting') ? <ActivityIndicator color="#242C26"/> : null;
+  const medicineSearch = <View style={s.medicineSearch}>
+    <View style={[s.searchRow, s.medicineSearchField]}>
+      <TextInput
+        accessibilityLabel="Rechercher un médicament"
+        placeholder={desktop ? "Rechercher…" : "Rechercher un médicament…"}
+        value={query}
+        onChangeText={setQuery}
+        style={[s.input, s.searchInput]}
+        returnKeyType="search"
+      />
+      {!!query && <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => setQuery('')} style={s.clearSearch}><Text style={s.clearText}>×</Text></Pressable>}
+    </View>
+    <Pressable accessibilityRole="button" accessibilityLabel="Scanner une ordonnance" onPress={() => router.push('/scan')} style={s.scanButton}>
+      <Icon name="scan" color="#246B56" size={25}/>
+    </Pressable>
+  </View>;
   return (
     <SafeAreaView style={s.root}>
       <StatusBar style="dark" />
@@ -352,25 +368,22 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
             onPress={() => setTab("Panier")}
           />
         </View>
-        {desktop && <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={s.tabs}
-        >
-          {tabs.map((t) => (
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === t }}
-              key={t}
-              onPress={() => setTab(t)}
-              style={[s.tab, tab === t && s.activeTab]}
-            >
-              <Text style={[s.tabText, tab === t && s.activeTabText]}>
-                {t}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>}
+        {desktop && <View style={s.catalogNavRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catalogTabs}>
+            {tabs.map((t) => (
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === t }}
+                key={t}
+                onPress={() => setTab(t)}
+                style={[s.tab, s.catalogTab, tab === t && s.activeTab]}
+              >
+                <Text style={[s.tabText, tab === t && s.activeTabText]}>{t}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {tab === 'Médicaments' && <View style={s.medicineSearchDesktop}>{medicineSearch}</View>}
+        </View>}
         {access.phase === 'unavailable' && <View style={s.card}>
           <Text accessibilityRole="alert" style={s.message}>Pharmacie indisponible. Réessayez.</Text>
           <Button title="Réessayer" secondary onPress={retrySession}/>
@@ -387,12 +400,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
         <>
             {tab === "Médicaments" && (
               <>
-                <View style={{flexDirection:"row",alignItems:"center",gap:10}}><View style={[s.searchRow,{flex:1}]}><TextInput
-                  accessibilityLabel="Rechercher un médicament" placeholder="Rechercher un médicament…"
-                  value={query} onChangeText={setQuery} style={[s.input, s.searchInput]} returnKeyType="search"
-                />{!!query && <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => setQuery('')} style={s.clearSearch}><Text style={s.clearText}>×</Text></Pressable>}</View>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Scanner une ordonnance" onPress={() => router.push('/scan')} style={s.scanButton}><Icon name="scan" color="#246B56" size={25}/></Pressable>
-                </View>
+                {!desktop && medicineSearch}
                 {pharmacyFilters}
                 {!!filteredPharmacy && <Button title={`${filteredPharmacy.display_name}  ×`} secondary onPress={() => setPharmacyFilter(null)}/>}
                 <Text style={s.heading}>Catégories</Text>
@@ -413,15 +421,6 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
                     />
                   ))}
                 </ScrollView>
-                <View style={s.header}>
-                  <Text style={s.heading}>{groups.length} médicament{groups.length > 1 ? "s" : ""}</Text>
-                  <Button
-                    title="Actualiser"
-                    secondary
-                    disabled={busy || loading || phase === 'refreshing'}
-                    onPress={uid ? refresh : retrySession}
-                  />
-                </View>
                 {loading || waitingForFavorites ? (
                   <ActivityIndicator color="#242C26" />
                 ) : (
