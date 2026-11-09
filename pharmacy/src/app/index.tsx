@@ -24,7 +24,7 @@ import { useGuestAccess } from "../useGuestAccess";
 import { usePharmacyCatalog } from "../usePharmacyCatalog";
 import { usePatientFile } from "../usePatientFile";
 import { MedicineCard } from "../components/MedicineCard";
-import { PurchaseDialog } from "../components/PurchaseDialog";
+import { PurchaseDialog, type PurchaseDetails } from "../components/PurchaseDialog";
 import { groupMedicineOffers, isOrderableOffer, medicineKey, medicineOfferKey } from "../catalog";
 import { compareDistance, distanceKm, type Coordinates } from "../pharmacies";
 import { PharmacyCard } from "../components/PharmacyCard";
@@ -260,7 +260,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
   }
   const selected = products.filter((p) => cart[p.product_id]);
   const purchaseOffer = purchaseId ? products.find(p => p.product_id === purchaseId) : undefined;
-  function checkout(direct?: { offer: Product; quantity: number }) {
+  function checkout(direct?: PurchaseDetails & { offer: Product }) {
     const pharmacy = direct?.offer ?? selected[0];
     if (!uid || !pharmacy) return;
     const origin = visiblePage.current;
@@ -268,13 +268,17 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
       const lines = orderLines(direct ? { [direct.offer.product_id]: direct.quantity } : cartRef.current, products);
       await ensureProfile();
       if (!isCurrent()) return;
+      const contact = direct?.whatsappContact ?? '';
+      const isUsername = contact.startsWith('@');
+      let orderNote = direct ? `Moyen de paiement choisi : ${direct.paymentMethod}` : note.trim();
+      if (isUsername) orderNote += `\nWhatsApp : ${contact}`;
       const { data, error, status } = await db.rpc('place_pharmacy_order', {
         p_pharmacy_id: pharmacy.pharmacy_id,
         p_items: lines,
         p_prescription_id: null,
         p_customer_name: '',
-        p_customer_phone: '',
-        p_note: direct ? '' : note.trim(),
+        p_customer_phone: isUsername ? '' : contact,
+        p_note: orderNote,
       });
       if (error) {
         throw new Error(!status || status >= 500
@@ -609,7 +613,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
       {focused && purchaseOffer && <PurchaseDialog key={purchaseOffer.product_id} product={purchaseOffer}
         busy={busy} error={message}
         onClose={() => { if (!lock.current) { setPurchaseId(null); setMessage(''); } }}
-        onConfirm={quantity => checkout({ offer: purchaseOffer, quantity })}/>}
+        onConfirm={details => checkout({ offer: purchaseOffer, ...details })}/>}
     </SafeAreaView>
   );
 }
