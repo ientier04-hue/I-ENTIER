@@ -5,6 +5,7 @@ import { availablePharmacyOffers, formatPrice, isOrderableOffer, preferredPharma
 import type { Pharmacy } from '../pharmacies';
 import { medicineOverlay } from '../medicineOverlay';
 import { MedicineDetails } from './MedicineDetails';
+import { AddToCartButton } from './AddToCartButton';
 import { MedicineFormatPicker, medicinePresentations } from './MedicineFormatPicker';
 import { MotionCard, MotionPressable, SelectionPulse } from './Motion';
 import { Icon } from './Overview';
@@ -21,7 +22,7 @@ type Props = {
   favorite: boolean;
   favoriteReady: boolean;
   onFavorite: () => void;
-  onOpenCart: () => void;
+  onBuy: (product: Product) => void;
   onAdjust: (product: Product, delta: number) => string | null;
   inCart?: boolean;
   index?: number;
@@ -47,7 +48,7 @@ function ChoiceRow({ label, value, icon, onPress, actionLabel }: {
     : <View style={st.choice}>{body}</View>;
 }
 
-export function MedicineCard({ variants, cart, busy, favorite, favoriteReady, onFavorite, onOpenCart, onAdjust, inCart = false, pharmacies,
+export function MedicineCard({ variants, cart, busy, favorite, favoriteReady, onFavorite, onBuy, onAdjust, inCart = false, pharmacies,
   distances, pharmacyFavorites, index = 0 }: Props) {
   const [selection, setSelection] = useState<Product | null>(null);
   const [overlay, dispatch] = useReducer(medicineOverlay, { kind: 'closed' });
@@ -117,20 +118,17 @@ export function MedicineCard({ variants, cart, busy, favorite, favoriteReady, on
           <Text style={[st.statusText, !available && st.soldOutText]}>{available ? 'En stock' : 'Indisponible'}</Text>
         </View>
       </View>
-      {quantity > 0 ? <View style={st.stepper}>
+      {inCart ? <View style={st.stepper}>
         <MotionPressable accessibilityRole="button" accessibilityLabel={`Retirer un ${p.name}`} disabled={busy}
           onPress={() => onAdjust(p, -1)} style={st.step}><Text style={st.stepText}>−</Text></MotionPressable>
         <Text accessibilityLiveRegion="polite" style={st.qty}>{quantity}</Text>
         <MotionPressable accessibilityRole="button" accessibilityLabel={addLabel} disabled={!canAdd}
           onPress={() => onAdjust(p, 1)} style={[st.step, !canAdd && st.disabled]}><Text style={st.stepText}>+</Text></MotionPressable>
-      </View> : <MotionPressable accessibilityRole="button" accessibilityLabel={addLabel} disabled={!canAdd}
-        onPress={() => onAdjust(p, 1)} style={[st.add, !canAdd && st.unavailable]}>
-        <Text style={[st.addText, !canAdd && st.soldOutText]}>Ajouter</Text>
+      </View> : <MotionPressable accessibilityRole="button" accessibilityLabel={`Acheter ${p.name}`} disabled={busy || !available}
+        onPress={() => onBuy(p)} style={[st.add, (busy || !available) && st.unavailable]}>
+        <Text style={[st.addText, (busy || !available) && st.soldOutText]}>Acheter</Text>
       </MotionPressable>}
-      {!inCart && <MotionPressable accessibilityRole="button" accessibilityLabel="Ouvrir le panier"
-        onPress={onOpenCart} style={st.cartShortcut}>
-        <Icon name="cart" size={22} color="#245B47"/>
-      </MotionPressable>}
+      {!inCart && <AddToCartButton product={p} quantity={quantity} busy={busy} onAdd={() => onAdjust(p, 1)}/>}
       {inCart && <MotionPressable accessibilityRole="button" accessibilityLabel={`Supprimer ${p.name} du panier`}
         disabled={busy} onPress={() => onAdjust(p, -quantity)} style={st.remove}><Icon name="close" size={19}/></MotionPressable>}
     </View>
@@ -143,7 +141,7 @@ export function MedicineCard({ variants, cart, busy, favorite, favoriteReady, on
       cart={cart} busy={busy} favorite={favorite} favoriteReady={favoriteReady} onFavorite={onFavorite}
       onAdjust={onAdjust} onSelect={setSelection} onClose={closeOverlay}
       inCart={inCart} pharmacies={pharmacies} distances={distances}
-      pharmacyFavorites={pharmacyFavorites} onOpenCart={onOpenCart}/>}
+      pharmacyFavorites={pharmacyFavorites} onBuy={onBuy}/>}
   </CardContainer>;
 }
 
@@ -157,7 +155,6 @@ const st = StyleSheet.create({
   lab: { fontSize: 10, fontWeight: '700', lineHeight: 15, textTransform: 'uppercase', letterSpacing: 1, color: '#596E5D' },
   heart: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   heartActive: { backgroundColor: '#FFF0F3' },
-  cartShortcut: { width: 44, height: 44, marginLeft: 'auto', borderRadius: 14, backgroundColor: '#F2F6EF', alignItems: 'center', justifyContent: 'center' },
   choices: { borderRadius: 16, paddingHorizontal: 12, backgroundColor: '#F2F6EF', marginTop: 'auto' },
   choice: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
   field: { flex: 1, gap: 2 },

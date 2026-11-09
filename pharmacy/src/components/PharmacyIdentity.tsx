@@ -1,18 +1,15 @@
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDistance } from '../pharmacies';
 import { Icon } from './Overview';
 
-export function PharmacyIdentity({ name, address, distance, delivery, favorite, onOpenCart, compact = false, offerPrice, offerCount = 0, selected = false, onSelect }: {
+export function PharmacyIdentity({ name, address, distance, delivery, favorite, cartButton, compact = false, offerPrice, offerCount = 0, selected = false, onSelect }: {
   name: string; address?: string; distance: number | null; delivery?: boolean | null;
-  favorite: boolean; onOpenCart?: () => void; compact?: boolean;
+  favorite: boolean; cartButton?: ReactNode; compact?: boolean;
   offerPrice?: string; offerCount?: number; selected?: boolean; onSelect?: () => void;
 }) {
   const distanceLabel = formatDistance(distance);
   const deliveryLabel = delivery === true ? 'Livraison disponible' : delivery === false ? 'Livraison indisponible' : 'Livraison non renseignée';
-  const cartButton = onOpenCart && <Pressable accessibilityRole="button" accessibilityLabel="Ouvrir le panier"
-    onPress={onOpenCart} style={st.cartShortcut}>
-    <Icon name="cart" size={compact ? 19 : 22} color="#245B47"/>
-  </Pressable>;
   const showsCount = compact && offerCount > 1;
   if (compact) return <View style={[st.compact, selected && st.compactSelected]}>
     <Pressable onPress={onSelect} disabled={!onSelect}
@@ -79,7 +76,6 @@ const st = StyleSheet.create({
   distance: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   distanceText: { color: '#52675A', fontSize: 11, fontWeight: '600' },
   address: { color: '#818876', fontSize: 11, flexShrink: 1 },
-  cartShortcut: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingLeft: 3 },
   favoriteBadge: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: '#F4EBCF' },
   favoriteText: { color: '#8A6927', fontSize: 10, fontWeight: '600' },

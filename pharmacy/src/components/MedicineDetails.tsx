@@ -7,6 +7,7 @@ import type { Pharmacy } from '../pharmacies';
 import type { HeroRect } from '../medicineOverlay';
 import { Icon } from './Overview';
 import { PharmacyIdentity } from './PharmacyIdentity';
+import { AddToCartButton } from './AddToCartButton';
 import { ProductPhoto } from './ProductPhoto';
 
 type Props = {
@@ -14,10 +15,10 @@ type Props = {
   favorite: boolean; favoriteReady: boolean; onFavorite: () => void; onSelect: (product: Product) => void;
   onAdjust: (product: Product, delta: number) => string | null; onClose: () => void;
   inCart: boolean; pharmacies: Map<string, Pharmacy>; distances: Map<string, number | null>;
-  pharmacyFavorites: string[]; onOpenCart: () => void;
+  pharmacyFavorites: string[]; onBuy: (product: Product) => void;
 };
 
-export function MedicineDetails({ product: p, variants, origin, cart, busy, favorite, favoriteReady, onFavorite, onSelect, onAdjust, onClose, inCart, pharmacies, distances, pharmacyFavorites, onOpenCart }: Props) {
+export function MedicineDetails({ product: p, variants, origin, cart, busy, favorite, favoriteReady, onFavorite, onSelect, onAdjust, onClose, inCart, pharmacies, distances, pharmacyFavorites, onBuy }: Props) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 700;
@@ -32,6 +33,7 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
   const [section, setSection] = useState<'details' | 'pharmacies'>('details');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [purchaseAfterDismiss, setPurchaseAfterDismiss] = useState<Product | null>(null);
   const quantity = cart[p.product_id] || 0;
   const unavailable = !isOrderableOffer(p);
   const cannotAdd = busy || unavailable || quantity >= Number(p.stock_quantity);
@@ -68,10 +70,6 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
     setReady(true);
     Animated.timing(progress, { toValue: 0, duration: reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start(({ finished }) => { if (finished) onClose(); });
   }
-  function openCart() {
-    onClose();
-    onOpenCart();
-  }
   function adjust(delta: number) { setFeedback(onAdjust(p, delta)); }
   function select(product: Product) { onSelect(product); setFeedback(null); }
   const identity = (product: Product, compact = false) => {
@@ -79,7 +77,9 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
     return <PharmacyIdentity key={product.product_id} compact={compact}
       name={location?.display_name || product.pharmacy_name} address={location?.address}
       distance={distances.get(product.pharmacy_id) ?? null} delivery={location?.delivery_available}
-      favorite={pharmacyFavorites.includes(product.pharmacy_id)} onOpenCart={inCart ? undefined : openCart}
+      favorite={pharmacyFavorites.includes(product.pharmacy_id)}
+      cartButton={!inCart && <AddToCartButton product={product} quantity={cart[product.product_id] || 0} busy={busy}
+        onAdd={() => setFeedback(onAdjust(product, 1))}/>}
       selected={product.product_id === p.product_id} offerPrice={compact ? formatPrice(product) : undefined}
       onSelect={compact && !inCart ? () => select(product) : undefined}/>;
   };
@@ -89,7 +89,13 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
     ['Disponibilité', unavailable ? 'Indisponible' : `${p.stock_quantity} en stock`],
     ['Ordonnance', p.requires_prescription ? 'Requise' : 'Non requise'],
   ];
-  return <Modal transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={close} onShow={measurePhoto}>
+  function openPurchase(offer: Product) {
+    onClose();
+    onBuy(offer);
+  }
+  return <Modal transparent animationType="none" visible={!purchaseAfterDismiss}
+    onDismiss={() => { if (purchaseAfterDismiss) openPurchase(purchaseAfterDismiss); }}
+    statusBarTranslucent navigationBarTranslucent onRequestClose={close} onShow={measurePhoto}>
     <View ref={root} style={st.overlay} collapsable={false}>
       <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, { opacity: progress }]}/>
       <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Fermer les détails" onPress={close}/>
@@ -106,11 +112,11 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
           <View style={st.body}>
             <View style={st.titleRow}>
               <View style={st.titleCopy}><Text style={st.name}>{p.name}</Text>{!!p.laboratory && <Text style={st.muted}>{p.laboratory}</Text>}</View>
-              <View style={st.quantity}>
+              {inCart && <View style={st.quantity}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Retirer un ${p.name}`} disabled={busy || quantity === 0} onPress={() => adjust(-1)} style={[st.step, (busy || quantity === 0) && st.disabled]}><Text style={st.stepText}>−</Text></Pressable>
                 <Text accessibilityLiveRegion="polite" style={st.quantityText}>{quantity}</Text>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Ajouter un ${p.name}`} disabled={cannotAdd} onPress={() => adjust(1)} style={[st.step, cannotAdd && st.disabled]}><Text style={st.stepText}>+</Text></Pressable>
-              </View>
+              </View>}
             </View>
             {(['dosage_form', 'strength', 'pack_size'] as const).map(field => {
               const values = [...new Set(variants.filter(v => field === 'dosage_form' || (v.dosage_form === p.dosage_form && (field !== 'pack_size' || v.strength === p.strength))).map(v => v[field]).filter(Boolean))];
@@ -139,8 +145,11 @@ export function MedicineDetails({ product: p, variants, origin, cart, busy, favo
         <View style={st.footer}>
           {!!feedback && <Text accessibilityRole="alert" style={st.error}>{feedback}</Text>}
           <View style={st.footerRow}>
-            <View style={st.total}><Text style={st.muted}>{quantity ? `Panier · ${quantity}` : 'Prix'}</Text><Text style={st.price}>{formatPrice({ ...p, selling_price: Number(p.selling_price) * Math.max(quantity, 1) })}</Text></View>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Ajouter ${p.name} au panier`} disabled={cannotAdd} onPress={() => adjust(1)} style={({ pressed }) => [st.addButton, cannotAdd && st.disabled, pressed && st.pressed]}><Text style={st.addText}>{unavailable ? 'Indisponible' : 'Ajouter au panier'}</Text></Pressable>
+            <View style={st.total}><Text style={st.muted}>{inCart ? `Panier · ${quantity}` : 'Prix'}</Text><Text style={st.price}>{inCart ? formatPrice({ ...p, selling_price: Number(p.selling_price) * quantity }) : formatPrice(p)}</Text></View>
+            {!inCart && <Pressable accessibilityRole="button" accessibilityLabel={`Acheter ${p.name}`} disabled={busy || unavailable}
+              onPress={() => Platform.OS === 'ios' ? setPurchaseAfterDismiss(p) : openPurchase(p)} style={({ pressed }) => [st.addButton, (busy || unavailable) && st.disabled, pressed && st.pressed]}>
+              <Text style={st.addText}>{unavailable ? 'Indisponible' : 'Acheter'}</Text>
+            </Pressable>}
           </View>
         </View>
       </Animated.View>

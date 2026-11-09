@@ -24,6 +24,7 @@ import { useGuestAccess } from "../useGuestAccess";
 import { usePharmacyCatalog } from "../usePharmacyCatalog";
 import { usePatientFile } from "../usePatientFile";
 import { MedicineCard } from "../components/MedicineCard";
+import { PurchaseDialog } from "../components/PurchaseDialog";
 import { groupMedicineOffers, isOrderableOffer, medicineKey, medicineOfferKey } from "../catalog";
 import { compareDistance, distanceKm, type Coordinates } from "../pharmacies";
 import { PharmacyCard } from "../components/PharmacyCard";
@@ -101,6 +102,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
   }, [focused, tab, purchaseView]);
   const scroll = useRef<ScrollView>(null);
   const [searchExpanded, setSearchExpanded] = useState(false);
+  const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const setTab = (value: Tab | "Commandes") => {
     router.setParams({
       tab: value === "Commandes" ? "Panier" : value,
@@ -108,6 +110,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
     });
     setMessage('');
     setSearchExpanded(false);
+    setPurchaseId(null);
   };
   useEffect(() => { scroll.current?.scrollTo({ y: 0, animated: false }); }, [tab, purchaseView]);
   const [query, setQuery] = useState(params.q || "");
@@ -256,19 +259,22 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
     setMessage("Ordonnance ajoutée.");
   }
   const selected = products.filter((p) => cart[p.product_id]);
-  function checkout() {
-    if (!uid || !selected.length) return;
+  const purchaseOffer = purchaseId ? products.find(p => p.product_id === purchaseId) : undefined;
+  function checkout(direct?: { offer: Product; quantity: number }) {
+    const pharmacy = direct?.offer ?? selected[0];
+    if (!uid || !pharmacy) return;
+    const origin = visiblePage.current;
     void run('order', async () => {
-      const lines = orderLines(cartRef.current, products);
+      const lines = orderLines(direct ? { [direct.offer.product_id]: direct.quantity } : cartRef.current, products);
       await ensureProfile();
       if (!isCurrent()) return;
       const { data, error, status } = await db.rpc('place_pharmacy_order', {
-        p_pharmacy_id: selected[0].pharmacy_id,
+        p_pharmacy_id: pharmacy.pharmacy_id,
         p_items: lines,
         p_prescription_id: null,
         p_customer_name: '',
         p_customer_phone: '',
-        p_note: note.trim(),
+        p_note: direct ? '' : note.trim(),
       });
       if (error) {
         throw new Error(!status || status >= 500
@@ -276,9 +282,14 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
           : 'Commande refusée. Vérifiez la disponibilité des produits.');
       }
       if (!isCurrent()) return;
-      updateCart({});
-      setNote('');
-      if (visiblePage.current === 'cart') setTab('Commandes');
+      if (direct) {
+        setPurchaseId(null);
+      } else {
+        updateCart({});
+        setNote('');
+      }
+      refresh();
+      if (origin && visiblePage.current === origin) setTab('Commandes');
       else if (visiblePage.current === 'orders') retryFile();
       setMessage(`Commande ${data || ''} transmise.`);
     });
@@ -318,7 +329,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
     favoriteReady={medicineSaved.ready} index={index} variants={variants} cart={cart} busy={busy} inCart={inCart}
     favorite={favoriteMedicines.has(medicineOfferKey(variants[0]))}
     onFavorite={() => toggleFavorite(variants)} onAdjust={adjust}
-    onOpenCart={() => setTab('Panier')}
+    onBuy={offer => { setMessage(''); setPurchaseId(offer.product_id); }}
   />;
   const pharmacyFilters = <View style={s.pharmacyFilters}>{([
     { value: 'all', label: 'Toutes', icon: 'store' },
@@ -413,7 +424,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
           <Text accessibilityRole="alert" style={s.message}>Impossible de charger la pharmacie.</Text>
           {tab !== 'Médicaments' && <Button title="Actualiser" secondary onPress={refresh}/>}
         </View>}
-        {!!message && (
+        {!!message && !purchaseOffer && (
           <Text accessibilityRole="alert" style={s.message}>
             {message}
           </Text>
@@ -423,7 +434,6 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
               <>
                 {!desktop && medicineSearch}
                 {!!filteredPharmacy && <Button title={`${filteredPharmacy.display_name}  ×`} secondary onPress={() => setPharmacyFilter(null)}/>}
-                <Text style={s.heading}>Catégories</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -581,7 +591,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
                         operation === "order" ? "Envoi…" : "Commander"
                       }
                       disabled={busy || hasMissingLines}
-                      onPress={checkout}
+                      onPress={() => checkout()}
                     />
                   </View>
                 )}
@@ -596,6 +606,10 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[s.navLabel,tab === t && s.navLabelActive]}>{(['Catalogue','Favoris','Pharmacies','Documents','Panier'] as const)[i]}</Text>
         </Pressable>)}</View>
       </View>}
+      {focused && purchaseOffer && <PurchaseDialog key={purchaseOffer.product_id} product={purchaseOffer}
+        busy={busy} error={message}
+        onClose={() => { if (!lock.current) { setPurchaseId(null); setMessage(''); } }}
+        onConfirm={quantity => checkout({ offer: purchaseOffer, quantity })}/>}
     </SafeAreaView>
   );
 }
