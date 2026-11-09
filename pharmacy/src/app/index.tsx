@@ -83,6 +83,8 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
   const { uid } = access;
   const { width } = useWindowDimensions();
   const desktop = width >= 850;
+  const compactSearch = desktop && width < 950;
+  const searchWidth = Math.min(280, Math.max(220, width - 750));
   const params = useLocalSearchParams<{ tab?: string; q?: string; view?: string }>();
   const tab: Tab = params.tab === "Commandes"
     ? "Panier"
@@ -98,12 +100,14 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
     visiblePage.current = focused ? (tab === 'Panier' ? purchaseView : tab) : null;
   }, [focused, tab, purchaseView]);
   const scroll = useRef<ScrollView>(null);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const setTab = (value: Tab | "Commandes") => {
     router.setParams({
       tab: value === "Commandes" ? "Panier" : value,
       view: value === "Commandes" ? "orders" : value === "Panier" ? "cart" : params.view,
     });
     setMessage('');
+    setSearchExpanded(false);
   };
   useEffect(() => { scroll.current?.scrollTo({ y: 0, animated: false }); }, [tab, purchaseView]);
   const [query, setQuery] = useState(params.q || "");
@@ -299,12 +303,11 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
   const filteredPharmacy = pharmacies.find(p => p.pharmacy_id === pharmacyFilter);
   const visible = availableProducts.filter(
     (p) =>
-      matchesPharmacyMode(p.pharmacy_id) &&
       (!pharmacyFilter || p.pharmacy_id === pharmacyFilter) &&
       (category === "Tous" || (p.category || "Autres") === category) &&
       normalized(`${p.name} ${p.active_ingredient} ${p.pharmacy_name} ${p.laboratory || ""} ${p.strength || ""} ${p.dosage_form || ""}`).includes(normalized(query)),
   );
-  const groups = groupMedicineOffers([...visible].sort((a, b) => comparePharmacies(a.pharmacy_id, b.pharmacy_id)));
+  const groups = groupMedicineOffers(visible);
   const favoriteGroups = groupMedicineOffers(availableProducts.filter(p => favoriteMedicines.has(medicineOfferKey(p))));
   const waitingForFavorites = pharmacyMode === 'favorites' && !!uid && !pharmacySaved.ready;
   const renderMedicine = (variants: Product[], inCart = false, index = 0) => <MedicineCard
@@ -331,22 +334,25 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
   const fileFeedback = fileStatus === 'error' ? <View style={s.card}>
     <Text accessibilityRole="alert" style={s.message}>{fileError}</Text><Button title="Réessayer" secondary onPress={retryFile}/>
   </View> : (fileStatus === 'loading' || access.phase === 'connecting') ? <ActivityIndicator color="#242C26"/> : null;
-  const medicineSearch = <View style={s.medicineSearch}>
+  const medicineSearchField =
     <View style={[s.searchRow, s.medicineSearchField]}>
       <TextInput
         accessibilityLabel="Rechercher un médicament"
         placeholder={desktop ? "Rechercher…" : "Rechercher un médicament…"}
         value={query}
         onChangeText={setQuery}
+        onSubmitEditing={() => { if (compactSearch) setSearchExpanded(false); }}
+        autoFocus={compactSearch && searchExpanded}
         style={[s.input, s.searchInput]}
         returnKeyType="search"
       />
       {!!query && <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => setQuery('')} style={s.clearSearch}><Text style={s.clearText}>×</Text></Pressable>}
-    </View>
+    </View>;
+  const scanButton =
     <Pressable accessibilityRole="button" accessibilityLabel="Scanner une ordonnance" onPress={() => router.push('/scan')} style={s.scanButton}>
       <Icon name="scan" color="#246B56" size={25}/>
-    </Pressable>
-  </View>;
+    </Pressable>;
+  const medicineSearch = <View style={s.medicineSearch}>{medicineSearchField}{scanButton}</View>;
   return (
     <SafeAreaView style={s.root}>
       <StatusBar style="dark" />
@@ -355,7 +361,7 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
         contentContainerStyle={[s.page, desktop && s.pageWide]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={s.header}>
+        <View style={[s.header, desktop && s.topHeader]}>
           <View style={s.brand}>
             <Emblem/>
             <View>
@@ -363,27 +369,42 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
               <Text style={s.brandCaption}>I-ENTIER</Text>
             </View>
           </View>
-          <Button
-            title={`Panier · ${Object.values(cart).reduce((a, b) => a + b, 0)}`}
-            onPress={() => setTab("Panier")}
-          />
+          {desktop && <View style={s.catalogNavRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catalogTabs}>
+              {tabs.map((t) => (
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: tab === t }}
+                  key={t}
+                  onPress={() => setTab(t)}
+                  style={[s.tab, s.catalogTab, tab === t && s.activeTab]}
+                >
+                  <Text style={[s.tabText, tab === t && s.activeTabText]}>{t}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {tab === 'Médicaments' && (compactSearch ? <>
+              <View style={s.medicineSearch}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={searchExpanded ? "Fermer la recherche" : query ? `Ouvrir la recherche : ${query}` : "Ouvrir la recherche"}
+                  accessibilityState={{ expanded: searchExpanded }}
+                  onPress={() => setSearchExpanded(open => !open)}
+                  style={[s.scanButton, !!query && s.searchIconActive]}
+                >
+                  <Icon name="search" color="#246B56" size={24}/>
+                </Pressable>
+                {scanButton}
+              </View>
+              {searchExpanded && <View style={s.searchPopover}>
+                {medicineSearchField}
+                <Pressable accessibilityRole="button" accessibilityLabel="Fermer la recherche" onPress={() => setSearchExpanded(false)} style={s.searchCloseButton}>
+                  <Icon name="close" color="#246B56" size={22}/>
+                </Pressable>
+              </View>}
+            </> : <View style={[s.medicineSearchDesktop, { width: searchWidth }]}>{medicineSearch}</View>)}
+          </View>}
         </View>
-        {desktop && <View style={s.catalogNavRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catalogTabs}>
-            {tabs.map((t) => (
-              <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: tab === t }}
-                key={t}
-                onPress={() => setTab(t)}
-                style={[s.tab, s.catalogTab, tab === t && s.activeTab]}
-              >
-                <Text style={[s.tabText, tab === t && s.activeTabText]}>{t}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-          {tab === 'Médicaments' && <View style={s.medicineSearchDesktop}>{medicineSearch}</View>}
-        </View>}
         {access.phase === 'unavailable' && <View style={s.card}>
           <Text accessibilityRole="alert" style={s.message}>Pharmacie indisponible. Réessayez.</Text>
           <Button title="Réessayer" secondary onPress={retrySession}/>
@@ -401,7 +422,6 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
             {tab === "Médicaments" && (
               <>
                 {!desktop && medicineSearch}
-                {pharmacyFilters}
                 {!!filteredPharmacy && <Button title={`${filteredPharmacy.display_name}  ×`} secondary onPress={() => setPharmacyFilter(null)}/>}
                 <Text style={s.heading}>Catégories</Text>
                 <ScrollView
@@ -421,15 +441,15 @@ function PharmacyHome({ access, retry: retrySession, isCurrent: sameGuest }: Ret
                     />
                   ))}
                 </ScrollView>
-                {loading || waitingForFavorites ? (
+                {loading ? (
                   <ActivityIndicator color="#242C26" />
                 ) : (
                   <View style={s.grid}>
                     {groups.map((group, index) => renderMedicine(group, false, index))}
                   </View>
                 )}
-                {uid && phase === 'ready' && !waitingForFavorites && !visible.length && (
-                  <View style={s.card}><Text style={s.heading}>{pharmacyMode === 'favorites' ? 'Aucun médicament dans vos pharmacies favorites' : query || pharmacyFilter || category !== 'Tous' ? 'Aucun résultat' : 'Aucun médicament disponible'}</Text>{(!!query || !!pharmacyFilter || category !== 'Tous' || pharmacyMode !== 'all') && <Button title="Réinitialiser les filtres" secondary onPress={() => {setQuery('');setCategory('Tous');selectPharmacies('all');}}/>}</View>
+                {uid && phase === 'ready' && !visible.length && (
+                  <View style={s.card}><Text style={s.heading}>{query || pharmacyFilter || category !== 'Tous' ? 'Aucun résultat' : 'Aucun médicament disponible'}</Text>{(!!query || !!pharmacyFilter || category !== 'Tous') && <Button title="Réinitialiser les filtres" secondary onPress={() => {setQuery('');setCategory('Tous');setPharmacyFilter(null);}}/>}</View>
                 )}
               </>
             )}
